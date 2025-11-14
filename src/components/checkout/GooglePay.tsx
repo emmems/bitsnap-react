@@ -2,6 +2,7 @@ import GooglePayButton from '@google-pay/button-react';
 import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
 import { useMutation, useQuery } from "react-query";
 import { isErr } from './lib/err';
+import { Spinner } from '@/src/ui/spinner';
 
 type Props = {
     test?: boolean;
@@ -91,7 +92,7 @@ function GooglePayButtonComponent({ items, style, buttonColor, buttonSizeMode, t
                     }
                 }}
             />
-            {isLoading ? 'Ładowanie...' : null}
+            {isLoading ? <Spinner /> : null}
         </>
     );
 }

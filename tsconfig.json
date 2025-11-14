@@ -8,7 +8,10 @@
     "importHelpers": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "lib": ["es6", "dom"],
+    "lib": [
+      "es6",
+      "dom"
+    ],
     "moduleResolution": "Bundler",
     "noImplicitReturns": true,
     "noUnusedLocals": false,
@@ -19,8 +22,18 @@
     "sourceMap": false,
     "strict": true,
     "target": "ES2019",
-    "allowUmdGlobalAccess": true
+    "allowUmdGlobalAccess": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
 }

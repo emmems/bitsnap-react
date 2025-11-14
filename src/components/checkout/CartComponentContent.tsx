@@ -9,6 +9,7 @@ import LoadingIndicator from "./LoadingIndicator";
 import SingleProduct from "./SingleProduct";
 import { Skeleton } from "./Skeleton";
 import { ApplePayButton, GooglePayButton } from "..";
+import { Spinner } from "@/src/ui/spinner";
 
 const CartComponentContent = ({ className }: { className: string }) => {
   const provider = useCartProvider();
@@ -236,7 +237,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
                 "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed dark:bg-neutral-300 dark:hover:bg-neutral-100 dark:text-neutral-800 hover:bg-neutral-900 text-neutral-200 bg-neutral-800 transition font-bold"
               }
             >
-              {isContinueToCheckoutLoading ? "Ładowanie..." : "Następny krok"}
+              {isContinueToCheckoutLoading ? <Spinner /> : "Następny krok"}
             </button>
             {errMsg.length > 0 && (
               <p className={"text-red-500 text-sm text-center"}>
