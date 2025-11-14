@@ -94,9 +94,6 @@ setProjectID("your-project-id");
 ```tsx
 import {
   Bitsnap,
-  addProductToCart,
-  showCart,
-  hideCart,
 } from "bitsnap-checkout";
 
 // Modern approach using namespace
