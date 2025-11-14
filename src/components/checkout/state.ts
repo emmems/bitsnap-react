@@ -10,7 +10,7 @@ interface CheckoutStore {
 
 export const useCheckoutStore = create<CheckoutStore>((set) => ({
   isCartVisible: false,
-  numberOfProductsInCart: 2,
+  numberOfProductsInCart: 0,
   showCart: () => set((state) => ({ ...state, isCartVisible: true })),
   hideCart: () => set((state) => ({ ...state, isCartVisible: false })),
   setNumberOfProductsInCart: (numberOfProductsInCart: number) => set((state) => ({ ...state, numberOfProductsInCart: numberOfProductsInCart })),

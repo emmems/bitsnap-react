@@ -23,13 +23,18 @@ function BitsnapCart({
   children,
   onVisibleChange,
   className,
+  numberOfProductsInCartOptions,
 }: {
   projectID: string;
   children?: React.ReactNode;
   onVisibleChange?: (isVisible: boolean) => void;
   className?: string;
+  numberOfProductsInCartOptions?: {
+    style?: React.CSSProperties;
+    isVisible?: boolean;
+  };
 }) {
-  const { isCartVisible, showCart, hideCart } = useCheckoutStore();
+  const { isCartVisible, showCart, hideCart, numberOfProductsInCart } = useCheckoutStore();
 
   function sentPostMessageToIframe(msg: unknown) {
     const iframes = document.querySelectorAll("iframe");
@@ -177,12 +182,14 @@ function BitsnapCart({
     }
   }, []);
 
+
   return (
     <>
       <button
         onClick={() => (isCartVisible ? hideCart() : showCart())}
+        style={{ position: "relative" }}
         className={
-          ['bitsnap-checkout', className ?? "relative rounded-full hover:bg-neutral-300 transition p-1"].join(' ')
+          ['bitsnap-checkout', className ?? "rounded-full hover:bg-neutral-300 transition p-1"].join(' ')
         }
       >
         {children ? (
@@ -204,6 +211,29 @@ function BitsnapCart({
             <circle cx="19" cy="21" r="1" />
             <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
           </svg>
+        )}
+        {(numberOfProductsInCartOptions?.isVisible != false) && numberOfProductsInCart > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: -5,
+              right: -5,
+              background: "black",
+              color: "white",
+              borderRadius: "50%",
+              width: "22px",
+              height: "22px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "13px",
+              fontWeight: 600,
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
+              ...numberOfProductsInCartOptions?.style,
+            }}
+          >
+            {numberOfProductsInCart}
+          </div>
         )}
       </button>
       <CartComponent

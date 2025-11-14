@@ -1,5 +1,5 @@
 import { create } from "@bufbuild/protobuf";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect } from "react";
 import {
   AddressSchema,
   BillingAddressSchema,
@@ -20,6 +20,7 @@ import { createPaymentURL, getReferenceIfPossible, injectReferenceToRequestIfNee
 import { SingleProduct } from "./product.details.model";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useCheckoutStore } from "./state";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -133,10 +134,15 @@ function getNewHostIfExist(): string | undefined {
 const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const queryClient = new QueryClient();
 
+  useEffect(() => {
+    updateNumberOfProductsInCart();
+  }, []);
+
   const projectID = getProjectID();
   if (projectID == null) {
     return <></>;
   }
+
 
   const checkoutMethods = getCheckoutMethods(projectID);
 
@@ -290,6 +296,7 @@ function addProducts(products: CartProduct[]) {
     metadata: el.metadata,
   })));
   saveCheckout(checkout);
+  updateNumberOfProductsInCart();
 }
 
 function removeProductFromCheckout(ids: string[]) {
@@ -301,6 +308,7 @@ function removeProductFromCheckout(ids: string[]) {
     ),
   };
   saveCheckout(newCheckout);
+  updateNumberOfProductsInCart();
 }
 
 function saveCheckout(model: Checkout) {
@@ -421,6 +429,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       const empty = structuredClone(emptyCheckout);
       empty.country = getCheckout()?.country;
       saveCheckout(empty);
+      updateNumberOfProductsInCart();
     },
 
     async getAvailableCountries(): Promise<
@@ -536,6 +545,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         return product;
       });
       saveCheckout(checkout);
+      updateNumberOfProductsInCart();
     },
 
     async redirectToNextStep(): Promise<Err | { url: string }> {
@@ -990,3 +1000,14 @@ type ApplePaySessionArgs = {
   email?: string;
   couponCode?: string;
 };
+
+function updateNumberOfProductsInCart() {
+  const checkout = getCheckout();
+  let numberOfProductsInCart = 0;
+  if (checkout == null) {
+    useCheckoutStore.setState((state) => ({ ...state, numberOfProductsInCart }));
+    return
+  }
+  numberOfProductsInCart = checkout.products?.reduce((acc, product) => acc + product.quantity, 0) ?? 0;
+  useCheckoutStore.setState((state) => ({ ...state, numberOfProductsInCart }));
+}
