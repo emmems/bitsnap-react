@@ -1,6 +1,5 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import React from "react";
-import { useMutation, useQuery } from "react-query";
 import { useCartProvider } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
 import { isErr } from "./lib/err";
@@ -10,15 +9,23 @@ import SingleProduct from "./SingleProduct";
 import { Skeleton } from "./Skeleton";
 import { ApplePayButton, GooglePayButton } from "..";
 import { Spinner } from "@/src/ui/spinner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 const CartComponentContent = ({ className }: { className: string }) => {
   const provider = useCartProvider();
-  const { mutateAsync: removeProduct } = useMutation(
-    provider.removeProductFromCart,
-  );
-  const { mutateAsync: updateQuantity } = useMutation(provider.updateQuantity);
-  const { mutateAsync: setCountryAsync } = useMutation(provider.setCountry);
-  const { mutateAsync: clearCart } = useMutation(provider.clearCart);
+
+  const { mutateAsync: removeProduct } = useMutation({
+    mutationFn: provider.removeProductFromCart,
+  });
+  const { mutateAsync: updateQuantity } = useMutation({
+    mutationFn: provider.updateQuantity,
+  });
+  const { mutateAsync: setCountryAsync } = useMutation({
+    mutationFn: provider.setCountry,
+  });
+  const { mutateAsync: clearCart } = useMutation({
+    mutationFn: provider.clearCart,
+  });
 
   const [errMsg, setErrMsg] = React.useState("");
 
@@ -26,19 +33,27 @@ const CartComponentContent = ({ className }: { className: string }) => {
 
   const {
     mutateAsync: continueToCheckoutAsync,
-    isLoading: isContinueToCheckoutLoading,
-  } = useMutation(provider.redirectToNextStep);
+    isPending: isContinueToCheckoutLoading,
+  } = useMutation({
+    mutationFn: provider.redirectToNextStep,
+  });
 
-  const { data: availableCountries } = useQuery(
-    "cart-available-countries",
-    provider.getAvailableCountries,
-  );
-  const { data: isApplePayAvailable } = useQuery("cart-one-click-payment", provider.checkIfApplePayIsAvailable);
-  const { data, isLoading, refetch } = useQuery("cart", provider.getProducts);
-  const { data: countryData, refetch: refetchCountry } = useQuery(
-    "cart-country",
-    provider.getCountry,
-  );
+  const { data: availableCountries } = useQuery({
+    queryKey: ["cart-available-countries"],
+    queryFn: provider.getAvailableCountries,
+  });
+  const { data: isApplePayAvailable } = useQuery({
+    queryKey: ["cart-one-click-payment"],
+    queryFn: provider.checkIfApplePayIsAvailable,
+  });
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["cart"],
+    queryFn: provider.getProducts,
+  });
+  const { data: countryData, refetch: refetchCountry } = useQuery({
+    queryKey: ["cart-country"],
+    queryFn: provider.getCountry,
+  });
 
   const [productsParent] = useAutoAnimate(/* optional config */);
 

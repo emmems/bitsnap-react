@@ -12,18 +12,18 @@ function CartComponent({ isVisible, shouldHide }: Props) {
   const [parent] = useAutoAnimate(/* optional config */);
 
   return (
-    <div ref={parent} className={"z-[999999]"}>
+    <div ref={parent} className={"bitsnap-checkout dark"} style={{ zIndex: 999999 }}>
       {isVisible && (
         <>
           <div
             className={
-              "fixed top-0 right-0 left-0 bottom-0 bg-black/30 cursor-pointer"
+              "fixed top-0 right-0 left-0 bottom-0 bg-black/30 cursor-pointer z-10"
             }
             onClick={shouldHide}
           ></div>
           <div
             className={
-              "fixed top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] dark:bg-neutral-900 bg-neutral-300 dark:text-neutral-200 text-neutral-900 flex flex-col"
+              "fixed z-20 top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] dark:bg-neutral-900 bg-neutral-300 dark:text-neutral-200 text-neutral-900 flex flex-col"
             }
           >
             <div

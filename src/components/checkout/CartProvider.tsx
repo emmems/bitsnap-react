@@ -1,6 +1,5 @@
 import { create } from "@bufbuild/protobuf";
 import { createContext, useContext } from "react";
-import { QueryClient, QueryClientProvider } from "react-query";
 import {
   AddressSchema,
   BillingAddressSchema,
@@ -20,6 +19,7 @@ import { LinkRequest } from "./link.request.schema";
 import { createPaymentURL, getReferenceIfPossible, injectReferenceToRequestIfNeeded } from "./methods";
 import { SingleProduct } from "./product.details.model";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 

@@ -2,7 +2,7 @@ import { cn } from "../../lib/utils";
 import { TriangleAlertIcon, XIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
-import { Button } from "../button";
+import { Button } from "@/src/ui/button";
 
 interface UnsubscribeDialogProps {
     open: boolean;

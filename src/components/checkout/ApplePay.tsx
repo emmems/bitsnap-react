@@ -4,7 +4,7 @@ import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
 import { HOST } from "./constants";
 import { isErr } from "./lib/err";
 import { round } from "./lib/round.number";
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
 
 type AppleButtonType = 'plain' | 'add-money' | 'book' | 'buy' | 'check-out' | 'continue' | 'contribute' | 'donate' | 'order' | 'pay' | 'reload' | 'rent' | 'set-up' | 'subscribe' | 'support' | 'tip' | 'top-up';
 type ColorType = 'black' | 'white' | 'white-outline';
@@ -35,7 +35,10 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
     setPostalCode,
     clearCart,
   } = useCartProvider();
-  const { data: isApplePayAvailable } = useQuery("is-apple-pay-available", checkIfApplePayIsAvailable);
+  const { data: isApplePayAvailable } = useQuery({
+    queryKey: ["is-apple-pay-available"],
+    queryFn: checkIfApplePayIsAvailable,
+  });
   if (isApplePayAvailable != true) {
     return null;
   }

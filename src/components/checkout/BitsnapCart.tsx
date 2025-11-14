@@ -178,12 +178,11 @@ function BitsnapCart({
   }, []);
 
   return (
-    <span className="bitsnap-checkout">
+    <>
       <button
         onClick={() => (isCartVisible ? hideCart() : showCart())}
         className={
-          className ??
-          "relative rounded-full hover:bg-neutral-300 transition p-1"
+          ['bitsnap-checkout', className ?? "relative rounded-full hover:bg-neutral-300 transition p-1"].join(' ')
         }
       >
         {children ? (
@@ -213,7 +212,7 @@ function BitsnapCart({
           hideCart();
         }}
       />
-    </span>
+    </>
   );
 }
 

@@ -1,8 +1,8 @@
 import GooglePayButton from '@google-pay/button-react';
 import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
-import { useMutation, useQuery } from "react-query";
 import { isErr } from './lib/err';
 import { Spinner } from '@/src/ui/spinner';
+import { useQuery, useMutation } from "@tanstack/react-query";
 
 type Props = {
     test?: boolean;
@@ -25,14 +25,21 @@ function GooglePayButtonComponent({ items, style, buttonColor, buttonSizeMode, t
         setPostalCode,
         clearCart,
     } = useCartProvider();
-    const { data: googlePayConfiguration } = useQuery(["get-google-pay-configuration", items.map(el => el.id).join(',')], () => getGooglePayConfiguration({
-        items: items.map(el => ({
-            ...el,
-            id: undefined,
-            productID: el.id,
-        }))
-    }));
-    const { mutateAsync: completeGooglePayPaymentAsync, isLoading } = useMutation(completeGooglePayPayment);
+
+    const { data: googlePayConfiguration } = useQuery({
+        queryKey: ["get-google-pay-configuration", items.map(el => el.id).join(',')],
+        queryFn: () => getGooglePayConfiguration({
+            items: items.map(el => ({
+                ...el,
+                id: undefined,
+                productID: el.id,
+            }))
+        }),
+    });
+
+    const { mutateAsync: completeGooglePayPaymentAsync, isPending } = useMutation({
+        mutationFn: completeGooglePayPayment,
+    });
     if (googlePayConfiguration == null || googlePayConfiguration.isAvailable != true) {
         console.log('google pay configuration is not available', googlePayConfiguration);
         return null;
@@ -92,7 +99,7 @@ function GooglePayButtonComponent({ items, style, buttonColor, buttonSizeMode, t
                     }
                 }}
             />
-            {isLoading ? <Spinner /> : null}
+            {isPending ? <Spinner /> : null}
         </>
     );
 }
