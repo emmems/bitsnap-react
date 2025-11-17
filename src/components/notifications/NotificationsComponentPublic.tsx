@@ -82,9 +82,12 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         groupsProvided: action.value,
-        groups: state.groups.filter(
-          (group) => action.value?.find((g) => g.id === group.id) != null
-        ),
+        groups:
+          action.value != null && action.value.length > 0
+            ? state.groups.filter(
+                (group) => action.value?.find((g) => g.id === group.id) != null
+              )
+            : state.groups,
       };
     }
     case "SET_GROUPS": {
@@ -262,7 +265,15 @@ function NotificationsComponentPublic(
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    dispatch({ type: "SET_PUBLIC_GROUPS", value: props.groups });
+    let preparedGroups = props.groups?.map((el) => {
+      if (el.id.startsWith("group_")) {
+        return el;
+      }
+      el.id = `group_${el.id}`;
+      return el;
+    });
+
+    dispatch({ type: "SET_PUBLIC_GROUPS", value: preparedGroups });
   }, [props.groups]);
 
   const {
