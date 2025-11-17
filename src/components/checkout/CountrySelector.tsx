@@ -1,5 +1,5 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { type MutableRefObject, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 export interface CountrySelectorProps {
     id: string;
@@ -24,7 +24,7 @@ function CountrySelector(
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const mutableRef = ref as MutableRefObject<HTMLDivElement | null>;
+        const mutableRef = ref as RefObject<HTMLDivElement | null>;
 
         const handleClickOutside = (event: MouseEvent) => {
             if (

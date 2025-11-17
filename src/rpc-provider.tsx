@@ -9,19 +9,12 @@ import React, { useState } from "react";
 
 import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
 import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
+import { HOST } from "./components/checkout/constants";
+import { Transport } from "@connectrpc/connect";
 
-const finalTransport = createConnectTransport({
-  baseUrl: "/api/rpc",
-  useBinaryFormat: true,
-  // @ts-ignore
-  fetch: async (input, init?) => {
-    return fetch(input, {
-      ...init,
-      keepalive: false,
-      credentials: "include",
-    });
-  },
-});
+console.log("HOST", HOST);
+let currentFinalTransportHost: string | undefined;
+let finalTransport: Transport | undefined;
 
 // @ts-ignore
 BigInt.prototype.toJSON = function () {
@@ -39,11 +32,27 @@ export const useMutation = um;
 export const RpcProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
+  if (finalTransport == null || currentFinalTransportHost !== HOST) {
+    currentFinalTransportHost = HOST;
+    finalTransport = createConnectTransport({
+      baseUrl: HOST + "/api/rpc",
+      useBinaryFormat: true,
+      // @ts-ignore
+      fetch: async (input, init?) => {
+        return fetch(input, {
+          ...init,
+          keepalive: false,
+          credentials: "include",
+        });
+      },
+    });
+  }
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: { queries: { staleTime: 5000 } },
-      }),
+      })
   );
 
   return (

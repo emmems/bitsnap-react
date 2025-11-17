@@ -143,6 +143,16 @@ export const readNotificationProducts = NotificationsService.method.readNotifica
 export const getNotificationUserSettings = NotificationsService.method.getNotificationUserSettings;
 
 /**
+ * @generated from rpc dashboard.notifications.v1.NotificationsService.VerifyUserEmail
+ */
+export const verifyUserEmail = NotificationsService.method.verifyUserEmail;
+
+/**
+ * @generated from rpc dashboard.notifications.v1.NotificationsService.GetUserGroups
+ */
+export const getUserGroups = NotificationsService.method.getUserGroups;
+
+/**
  * @generated from rpc dashboard.notifications.v1.NotificationsService.UpdateUserGroups
  */
 export const updateUserGroups = NotificationsService.method.updateUserGroups;

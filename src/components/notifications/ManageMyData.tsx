@@ -11,17 +11,28 @@ import { Button } from "@/src/ui/button";
 import { Spinner } from "@/src/ui/spinner";
 import type { ComponentClassNames, CustomizationTexts } from "./types";
 import { DEFAULT_TEXTS } from "./constants";
+import { Card, CardContent, CardHeader, CardTitle } from "@/src/ui/card";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 interface ManageMyDataProps {
+  accessToken: string;
   slug: string;
   userID: string;
   className?: ComponentClassNames;
   texts?: CustomizationTexts;
 }
 
-export function ManageMyData({ slug, userID, className, texts }: ManageMyDataProps) {
+export function ManageMyData({
+  accessToken,
+  slug,
+  userID,
+  className,
+  texts,
+}: ManageMyDataProps) {
+  const [parent] = useAutoAnimate();
+  const [parentCard] = useAutoAnimate();
   const { mutateAsync: deleteMyData, isPending: isDeleting } = useMutation(
-    rpcProvider.notifications.deleteNotificationUser,
+    rpcProvider.notifications.deleteNotificationUser
   );
   const { mutateAsync: updateNotificationUser, isPending: isUpdating } =
     useMutation(rpcProvider.notifications.updateNotificationUser);
@@ -31,11 +42,13 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
     {
       userId: userID,
       slug: slug,
-    },
+      accessToken: accessToken,
+    }
   );
 
   const [email, setEmail] = useState(false);
   const [phone, setPhone] = useState(false);
+  const [isDataUpdated, setIsDataUpdated] = useState(false);
   const [push, setPush] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -50,6 +63,7 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
 
   async function handleConfirmDelete() {
     await deleteMyData({
+      accessToken: accessToken,
       slug: slug,
       userId: userID,
     });
@@ -58,12 +72,17 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
 
   async function updateData() {
     await updateNotificationUser({
+      accessToken: accessToken,
       slug: slug,
       notificationUserId: userID,
       mobileNotificationEnabled: push,
       emailNotificationEnabled: email,
       smsNotificationEnabled: phone,
     });
+    setIsDataUpdated(true);
+    setTimeout(() => {
+      setIsDataUpdated(false);
+    }, 3000);
   }
   const debouncedUpdateData = useDebouncedCallback((_: boolean) => {
     updateData();
@@ -97,12 +116,16 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
     <div
       className={cn(
         "bg-beige-100 rounded-xl p-4 dark:bg-neutral-700",
-        className?.manageDataSection,
+        className?.manageDataSection
       )}
     >
       <div className="flex justify-start">
-        {isUpdating && <Spinner />}
-        <h3 className={cn("mb-3 text-base font-medium lg:text-lg", className?.manageDataTitle)}>
+        <h3
+          className={cn(
+            "mb-3 text-base font-medium lg:text-lg",
+            className?.manageDataTitle
+          )}
+        >
           {texts?.manageDataTitle ?? DEFAULT_TEXTS.manageDataTitle}
         </h3>
       </div>
@@ -110,97 +133,123 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm">
-              {texts?.manageDataDescription ?? DEFAULT_TEXTS.manageDataDescription}
-            </p>
-            <div className="mt-1.5 mb-3 flex flex-col items-start gap-5 gap-x-2">
-              {details?.emailNotificationAvailable && (
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id="email-enabled"
-                    className="data-[state=checked]:bg-blue-500 dark:data-[state=unchecked]:bg-neutral-600"
-                    checked={email}
-                    onCheckedChange={() => {
-                      setData("email", !email);
-                    }}
-                  />
-                  <Label htmlFor="email-enabled" className="text-sm">
-                    Email
-                  </Label>
-                </div>
+        <Card ref={parentCard} className={cn(isUpdating && "relative")}>
+          <CardHeader>
+            <CardTitle>
+              <p className="text-sm text-left">
+                {texts?.manageDataDescription ??
+                  DEFAULT_TEXTS.manageDataDescription}
+              </p>
+            </CardTitle>
+          </CardHeader>
+          <CardContent ref={parent}>
+            <div
+              className={cn(
+                isUpdating && "opacity-50 pointer-events-none",
+                "flex flex-col gap-2"
               )}
-              {details?.smsNotificationAvailable && (
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id="sms-enabled"
-                    className="data-[state=checked]:bg-blue-500 dark:data-[state=unchecked]:bg-neutral-600"
-                    checked={phone}
-                    onCheckedChange={() => {
-                      setData("phone", !phone);
-                    }}
-                  />
-                  <Label htmlFor="sms-enabled" className="text-sm">
-                    SMS
-                  </Label>
-                </div>
-              )}
-              {details?.mobileNotificationAvailable && (
-                <>
+            >
+              <div className="flex flex-col items-start gap-5 gap-x-2">
+                {details?.emailNotificationAvailable && (
                   <div className="flex items-center gap-3">
                     <Switch
-                      id="push-enabled"
+                      id="email-enabled"
                       className="data-[state=checked]:bg-blue-500 dark:data-[state=unchecked]:bg-neutral-600"
-                      checked={push}
+                      checked={email}
                       onCheckedChange={() => {
-                        setData("push", !push);
+                        setData("email", !email);
                       }}
                     />
-                    <Label htmlFor="push-enabled" className="text-sm">
-                      Powiadomienia na telefon
+                    <Label htmlFor="email-enabled" className="text-sm">
+                      Email
                     </Label>
                   </div>
-                  {details?.hasUserInstalledApp === false && (
-                    <div className="flex items-center gap-3">
-                      <MessageCircleWarningIcon
-                        color="var(--color-amber-500)"
-                        size={26}
-                      />
-                      <p className="text-xs text-amber-500">
-                        Wygląda na to, że nie masz zainstalowanej aplikacji
-                        mobilnej. Zainstaluj i wyraź zgodę na otrzymywanie
-                        powiadomień na telefon.
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-col gap-2">
-            <hr />
-            <p className="text-sm opacity-80">
-              {texts?.manageDataUnsubscribeDescription ?? DEFAULT_TEXTS.manageDataUnsubscribeDescription}
-            </p>
-            <div className="mt-1.5 mb-3 flex items-center gap-x-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                className={cn(isDeleting && "cursor-not-allowed")}
-                onClick={deleteData}
-              >
-                {texts?.manageDataUnsubscribeButton ?? DEFAULT_TEXTS.manageDataUnsubscribeButton}
-                {isDeleting && (
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                    <Spinner />
+                )}
+                {details?.smsNotificationAvailable && (
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      id="sms-enabled"
+                      className="data-[state=checked]:bg-blue-500 dark:data-[state=unchecked]:bg-neutral-600"
+                      checked={phone}
+                      onCheckedChange={() => {
+                        setData("phone", !phone);
+                      }}
+                    />
+                    <Label htmlFor="sms-enabled" className="text-sm">
+                      SMS
+                    </Label>
                   </div>
                 )}
-              </Button>
+                {details?.mobileNotificationAvailable && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id="push-enabled"
+                        className="data-[state=checked]:bg-blue-500 dark:data-[state=unchecked]:bg-neutral-600"
+                        checked={push}
+                        onCheckedChange={() => {
+                          setData("push", !push);
+                        }}
+                      />
+                      <Label htmlFor="push-enabled" className="text-sm">
+                        Powiadomienia na telefon
+                      </Label>
+                    </div>
+                    {details?.hasUserInstalledApp === false && (
+                      <div className="flex items-center gap-3">
+                        <MessageCircleWarningIcon
+                          color="var(--color-amber-500)"
+                          size={26}
+                        />
+                        <p className="text-xs text-amber-500">
+                          Wygląda na to, że nie masz zainstalowanej aplikacji
+                          mobilnej. Zainstaluj i wyraź zgodę na otrzymywanie
+                          powiadomień na telefon.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </>
+
+            <div className="mt-5 flex flex-col gap-2 text-left">
+              <hr />
+              {isDataUpdated && (
+                <p className="text-xs text-green-500">
+                  {texts?.manageDataUpdatedMessage ??
+                    DEFAULT_TEXTS.manageDataUpdatedMessage}
+                </p>
+              )}
+              <div className="flex items-center gap-x-2">
+                <Button
+                  size="sm"
+                  variant="link"
+                  className={cn(
+                    "pl-0 ml-0",
+                    isDeleting && "cursor-not-allowed"
+                  )}
+                  onClick={deleteData}
+                >
+                  {texts?.manageDataUnsubscribeButton ??
+                    DEFAULT_TEXTS.manageDataUnsubscribeButton}
+                  {isDeleting && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                      <Spinner />
+                    </div>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+          {isUpdating && (
+            <div className="bg-black/30 absolute inset-0 rounded-xl">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                <Spinner />
+              </div>
+            </div>
+          )}
+        </Card>
       )}
       <UnsubscribeDialog
         open={isDialogOpen}
@@ -211,4 +260,3 @@ export function ManageMyData({ slug, userID, className, texts }: ManageMyDataPro
     </div>
   );
 }
-

@@ -1,26 +1,26 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup";
 
-import { name, version } from './package.json';
+import { name, version } from "./package.json";
 
-export default defineConfig(overrideOptions => {
+export default defineConfig((overrideOptions) => {
   const isWatch = !!overrideOptions.watch;
   const shouldPublish = !!overrideOptions.env?.publish;
 
   return {
     entry: {
-      index: 'src/index.ts',
-      internal: 'src/internal.ts',
-      errors: 'src/errors.ts',
-      models: 'src/models.ts',
+      index: "src/index.ts",
+      internal: "src/internal.ts",
+      errors: "src/errors.ts",
+      models: "src/models.ts",
     },
     dts: true,
-    onSuccess: shouldPublish ? 'pnpm publish' : undefined,
-    format: ['cjs', 'esm'],
+    onSuccess: shouldPublish ? "pnpm publish" : undefined,
+    format: ["cjs", "esm"],
     bundle: true,
     clean: true,
     minify: false,
     sourcemap: true,
-    external: ['react', 'react-dom'],
+    external: ["react", "react-dom"],
     define: {
       PACKAGE_NAME: `"${name}"`,
       PACKAGE_VERSION: `"${version}"`,

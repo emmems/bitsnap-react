@@ -1,15 +1,21 @@
 import type { ReactNode } from "react";
 
+export type PublicNotificationGroup = {
+  id: string;
+  isOn?: boolean;
+};
+
 export type NotificationGroup = {
   id: string;
   name: string;
   description?: string;
   howOften?: string;
+  isOn?: boolean;
 };
 
 export interface CustomizationTexts {
-  title?: string;
-  description?: string;
+  title?: string | null;
+  description?: string | null;
   managingDescription?: string;
   formTitle?: string;
   formEmailLabel?: string;
@@ -24,6 +30,7 @@ export interface CustomizationTexts {
   qrCodeSubtitle?: string;
   qrCodeScanText?: string;
   groupsNoSelectionWarning?: string;
+  groupsTitle?: string;
   groupsSelectAllButton?: string;
   groupsUpdateButton?: string;
   groupsUpdateSuccess?: string;
@@ -31,6 +38,25 @@ export interface CustomizationTexts {
   manageDataDescription?: string;
   manageDataUnsubscribeButton?: string;
   manageDataUnsubscribeDescription?: string;
+  manageDataUpdatedMessage?: string;
+  loginEmailLabel?: string;
+  loginEmailPlaceholder?: string;
+  loginSendCodeButton?: string;
+  loginIHaveCode?: string;
+  loginSendingButton?: string;
+  loginCodeLabel?: string;
+  loginCodeSentMessage?: string;
+  loginChangeEmailButton?: string;
+  loginResendCodeButton?: string;
+  loginInvalidEmailError?: string;
+  loginSlugRequiredError?: string;
+  loginVerificationFailedError?: string;
+  loginInvalidCodeError?: string;
+  loginSendEmailError?: string;
+  loginVerifyCodeError?: string;
+  loginResendEmailError?: string;
+  loginTitle?: string;
+  loginDescription?: string;
 }
 
 export interface ComponentClassNames {
@@ -89,12 +115,7 @@ export interface NotificationsComponentPublicProps {
   /**
    * Array of notification groups that the user can subscribe to. If you will provide group, we will not show all possible public groups from dashboard.
    */
-  groups?: NotificationGroup[];
-
-  /**
-   * Mapping from group IDs to boolean (checked/selected groups).
-   */
-  groupsChecked: Record<string, boolean>;
+  groups?: PublicNotificationGroup[];
 
   /**
    * If true, the component is rendered in "manage my notifications" mode.
@@ -126,4 +147,3 @@ export interface NotificationsComponentPublicProps {
    */
   className?: ComponentClassNames;
 }
-
