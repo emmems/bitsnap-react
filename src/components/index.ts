@@ -2,6 +2,7 @@ export { default as ApplePayButton } from "./checkout/ApplePay";
 export { default as GooglePayButton } from "./checkout/GooglePay";
 export { default as BitsnapCheckout } from "./checkout/BitsnapCart";
 export { default as NotificationsComponent } from "./notifications/NotificationsComponentPublic";
+export * from "./notifications/types";
 export { setProjectID } from "./checkout/CartProvider";
 export { setCustomHost } from "./checkout/constants";
 export { type LinkRequest } from "./checkout/link.request.schema";
