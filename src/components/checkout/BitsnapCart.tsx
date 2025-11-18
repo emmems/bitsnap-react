@@ -4,6 +4,7 @@ import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
+import { sendAnalyticEvent } from "./frontent.analytics";
 
 enum CartEvent {
   ADD_TO_CART = "ADD_TO_CART",
@@ -34,7 +35,8 @@ function BitsnapCart({
     isVisible?: boolean;
   };
 }) {
-  const { isCartVisible, showCart, hideCart, numberOfProductsInCart } = useCheckoutStore();
+  const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
+    useCheckoutStore();
 
   function sentPostMessageToIframe(msg: unknown) {
     const iframes = document.querySelectorAll("iframe");
@@ -46,6 +48,11 @@ function BitsnapCart({
 
   useEffect(() => {
     onVisibleChange?.(isCartVisible);
+    if (isCartVisible) {
+      sendAnalyticEvent({
+        event: "viewCart",
+      });
+    }
   }, [isCartVisible]);
 
   useEffect(() => {
@@ -73,7 +80,9 @@ function BitsnapCart({
                 marketingAgreement: zod.boolean().optional(),
               })
               .parse(args);
-
+            sendAnalyticEvent({
+              event: "initiateCheckout",
+            });
             const methods = getCheckoutMethods(projectID);
 
             const result = await methods.justRedirectToPayment(payload);
@@ -83,7 +92,7 @@ function BitsnapCart({
               window.location.href = result.url;
             } else {
               alert(
-                "Nie udało się przekierować do płatności. Spróbuj ponownie później.",
+                "Nie udało się przekierować do płatności. Spróbuj ponownie później."
               );
             }
           } catch (e) {
@@ -130,10 +139,10 @@ function BitsnapCart({
 
   async function handleAddingSubscriptionToCart(
     projectID: string,
-    event: CartAddToCartEvent,
+    event: CartAddToCartEvent
   ) {
     alert(
-      `TODO, nie jest to jeszcze zrobione ${projectID} ${event.id} ${event.quantity}`,
+      `TODO, nie jest to jeszcze zrobione ${projectID} ${event.id} ${event.quantity}`
     );
   }
 
@@ -182,15 +191,15 @@ function BitsnapCart({
     }
   }, []);
 
-
   return (
     <>
       <button
         onClick={() => (isCartVisible ? hideCart() : showCart())}
         style={{ position: "relative" }}
-        className={
-          ['bitsnap-checkout', className ?? "rounded-full hover:bg-neutral-300 transition p-1"].join(' ')
-        }
+        className={[
+          "bitsnap-checkout",
+          className ?? "rounded-full hover:bg-neutral-300 transition p-1",
+        ].join(" ")}
       >
         {children ? (
           <>{children}</>
@@ -212,29 +221,30 @@ function BitsnapCart({
             <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
           </svg>
         )}
-        {(numberOfProductsInCartOptions?.isVisible != false) && numberOfProductsInCart > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: -5,
-              right: -5,
-              background: "black",
-              color: "white",
-              borderRadius: "50%",
-              width: "22px",
-              height: "22px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "13px",
-              fontWeight: 600,
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
-              ...numberOfProductsInCartOptions?.style,
-            }}
-          >
-            {numberOfProductsInCart}
-          </div>
-        )}
+        {numberOfProductsInCartOptions?.isVisible != false &&
+          numberOfProductsInCart > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: -5,
+                right: -5,
+                background: "black",
+                color: "white",
+                borderRadius: "50%",
+                width: "22px",
+                height: "22px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
+                ...numberOfProductsInCartOptions?.style,
+              }}
+            >
+              {numberOfProductsInCart}
+            </div>
+          )}
       </button>
       <CartComponent
         isVisible={isCartVisible}

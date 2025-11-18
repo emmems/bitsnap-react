@@ -16,11 +16,16 @@ import { buildURL } from "./helper.methods";
 import { Err, isErr } from "./lib/err";
 import { formatCurrency, round } from "./lib/round.number";
 import { LinkRequest } from "./link.request.schema";
-import { createPaymentURL, getReferenceIfPossible, injectReferenceToRequestIfNeeded } from "./methods";
+import {
+  createPaymentURL,
+  getReferenceIfPossible,
+  injectReferenceToRequestIfNeeded,
+} from "./methods";
 import { SingleProduct } from "./product.details.model";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCheckoutStore } from "./state";
+import { sendAnalyticEvent } from "./frontent.analytics";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -28,28 +33,31 @@ type CartProduct = {
   productID: string;
   quantity: number;
   metadata?: { [key: string]: string | undefined };
-}
+};
 
 export interface CartMethods {
   checkIfApplePayIsAvailable(): Promise<boolean>;
-  getGooglePayConfiguration(args: { items: CartProduct[] }): Promise<{
-    isAvailable: true;
-    config: google.payments.api.PaymentDataRequest;
-  } | {
-    isAvailable: false;
-  }>;
+  getGooglePayConfiguration(args: { items: CartProduct[] }): Promise<
+    | {
+        isAvailable: true;
+        config: google.payments.api.PaymentDataRequest;
+      }
+    | {
+        isAvailable: false;
+      }
+  >;
 
   addProduct(args: CartProduct): Promise<Err | void>;
 
   getProducts: () => Promise<
     | Err
     | {
-      id: string;
-      productID: string;
-      quantity: number;
-      metadata?: { [key: string]: string | undefined };
-      details?: SingleProduct;
-    }[]
+        id: string;
+        productID: string;
+        quantity: number;
+        metadata?: { [key: string]: string | undefined };
+        details?: SingleProduct;
+      }[]
   >;
 
   updateQuantity(args: { id: string; quantity: number }): Promise<Err | void>;
@@ -70,9 +78,9 @@ export interface CartMethods {
 
   redirectToNextStep: () => Promise<Err | { url: string }>;
 
-  getApplePayPaymentRequest: (args?: { expectedItems?: CartProduct[]; }) => Promise<
-    Err | ApplePayJS.ApplePayPaymentRequest
-  >;
+  getApplePayPaymentRequest: (args?: {
+    expectedItems?: CartProduct[];
+  }) => Promise<Err | ApplePayJS.ApplePayPaymentRequest>;
   completeApplePayPayment: (args: {
     token: ApplePayJS.ApplePayPaymentToken;
     shippingContact?: ApplePayJS.ApplePayPaymentContact;
@@ -80,16 +88,19 @@ export interface CartMethods {
   }) => Promise<
     | Err
     | {
-      isSuccess: boolean;
-      redirectURL?: string;
-    }
+        isSuccess: boolean;
+        redirectURL?: string;
+      }
   >;
   completeGooglePayPayment: (args: {
-    paymentData: google.payments.api.PaymentData
-  }) => Promise<Err | {
-    isSuccess: boolean;
-    redirectURL?: string;
-  }>;
+    paymentData: google.payments.api.PaymentData;
+  }) => Promise<
+    | Err
+    | {
+        isSuccess: boolean;
+        redirectURL?: string;
+      }
+  >;
 
   justRedirectToPayment: (args: {
     email?: string;
@@ -100,8 +111,8 @@ export interface CartMethods {
   }) => Promise<
     | Err
     | {
-      url: string;
-    }
+        url: string;
+      }
   >;
 }
 
@@ -117,7 +128,7 @@ export function getProjectID(): string | undefined {
     return bitsnapProjectID;
   }
   const me = document.querySelector(
-    'script[data-id][data-name="internal-cart"]',
+    'script[data-id][data-name="internal-cart"]'
   );
   const projectID = me?.getAttribute("data-id");
   return projectID ?? undefined;
@@ -125,7 +136,7 @@ export function getProjectID(): string | undefined {
 
 function getNewHostIfExist(): string | undefined {
   const me = document.querySelector(
-    'script[data-id][data-name="internal-cart"]',
+    'script[data-id][data-name="internal-cart"]'
   );
   const customHost = me?.getAttribute("data-custom-host");
   return customHost ?? undefined;
@@ -143,7 +154,6 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
     return <></>;
   }
 
-
   const checkoutMethods = getCheckoutMethods(projectID);
 
   return (
@@ -159,17 +169,17 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
 const getProducts: (projectID: string) => Promise<
   | Err
   | {
-    id: string;
-    productID: string;
-    quantity: number;
-    metadata?: { [key: string]: string | undefined };
-    details?: SingleProduct;
-  }[]
+      id: string;
+      productID: string;
+      quantity: number;
+      metadata?: { [key: string]: string | undefined };
+      details?: SingleProduct;
+    }[]
 > = async (projectID: string) => {
   const products = getCheckout()?.products ?? [];
 
   const productIds = Array.from(
-    new Set(products.map((product) => product.productID)),
+    new Set(products.map((product) => product.productID))
   );
 
   const params = new URLSearchParams();
@@ -179,7 +189,7 @@ const getProducts: (projectID: string) => Promise<
     buildURL(projectID, `/products?${params.toString()}`),
     {
       method: "GET",
-    },
+    }
   );
 
   if (result.status != 200) {
@@ -201,7 +211,7 @@ const getProducts: (projectID: string) => Promise<
       }
       if (el.variants != null && el.variants.length > 0) {
         const index = el.variants.findIndex(
-          (variant) => variant.id === product.productID,
+          (variant) => variant.id === product.productID
         );
         return index !== -1;
       }
@@ -215,7 +225,7 @@ const getProducts: (projectID: string) => Promise<
     .map((el) => {
       el.details = resolveProductDetailsFromSingleProduct(
         el.productID,
-        el.details as SingleProduct,
+        el.details as SingleProduct
       );
       return el;
     });
@@ -253,7 +263,7 @@ const checkoutSchema = zod.object({
         productID: zod.string(),
         quantity: zod.number(),
         metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-      }),
+      })
     )
     .optional(),
   googlePayConfig: googlePayConfigSchema.optional(),
@@ -289,12 +299,25 @@ function addProducts(products: CartProduct[]) {
   if (checkout.products == null) {
     checkout.products = [];
   }
-  checkout.products.push(...products.map(el => ({
-    id: Math.random().toString(36).substring(7),
-    productID: el.productID,
-    quantity: el.quantity,
-    metadata: el.metadata,
-  })));
+  checkout.products.push(
+    ...products.map((el) => ({
+      id: Math.random().toString(36).substring(7),
+      productID: el.productID,
+      quantity: el.quantity,
+      metadata: el.metadata,
+    }))
+  );
+  sendAnalyticEvent({
+    event: "addToCart",
+    currency: "PLN",
+    items: products.map((el) => ({
+      id: el.productID,
+      name: "",
+      price: 0,
+      quantity: el.quantity,
+      currency: "PLN",
+    })),
+  });
   saveCheckout(checkout);
   updateNumberOfProductsInCart();
 }
@@ -304,9 +327,19 @@ function removeProductFromCheckout(ids: string[]) {
   const newCheckout = {
     ...checkout,
     products: checkout?.products?.filter(
-      (product) => !ids.includes(product.productID) && !ids.includes(product.id),
+      (product) => !ids.includes(product.productID) && !ids.includes(product.id)
     ),
   };
+  sendAnalyticEvent({
+    event: "removeFromCart",
+    items: ids.map((id) => ({
+      id: id,
+      name: "",
+      price: 0,
+      quantity: 1,
+      currency: "PLN",
+    })),
+  });
   saveCheckout(newCheckout);
   updateNumberOfProductsInCart();
 }
@@ -316,7 +349,7 @@ function saveCheckout(model: Checkout) {
 }
 
 export const getCheckoutMethods: (projectID: string) => CartMethods = (
-  projectID,
+  projectID
 ) => {
   const newHost = getNewHostIfExist();
   if (newHost != null) {
@@ -324,7 +357,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
   }
   return {
     async checkIfApplePayIsAvailable(): Promise<boolean> {
-      if (typeof window == "undefined" || typeof document == 'undefined') {
+      if (typeof window == "undefined" || typeof document == "undefined") {
         return false;
       }
       if ("ApplePaySession" in window === false) {
@@ -332,7 +365,9 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       }
 
       try {
-        const result = await PublicApiClient.get(HOST).isOneClickPaymentAvailable({
+        const result = await PublicApiClient.get(
+          HOST
+        ).isOneClickPaymentAvailable({
           projectId: projectID,
         });
 
@@ -342,16 +377,19 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         return false;
       }
     },
-    async getGooglePayConfiguration(args: { items: CartProduct[] }): Promise<{
-      isAvailable: true;
-      config: google.payments.api.PaymentDataRequest;
-    } | {
-      isAvailable: false;
-    }> {
-      if (typeof window == "undefined" || typeof document == 'undefined') {
+    async getGooglePayConfiguration(args: { items: CartProduct[] }): Promise<
+      | {
+          isAvailable: true;
+          config: google.payments.api.PaymentDataRequest;
+        }
+      | {
+          isAvailable: false;
+        }
+    > {
+      if (typeof window == "undefined" || typeof document == "undefined") {
         return {
           isAvailable: false,
-        }
+        };
       }
 
       try {
@@ -359,19 +397,21 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         if (googlePayConfig?.isAvailable != true) {
           return {
             isAvailable: false,
-          }
+          };
         }
 
         const checkout = getCheckout();
         if (checkout == null) {
-          console.log('checkout is null');
+          console.log("checkout is null");
           return {
             isAvailable: false,
-          }
+          };
         }
         if (args && args.items != null && args.items.length > 0) {
           if (checkout.products) {
-            removeProductFromCheckout(checkout.products.map(el => el.productID));
+            removeProductFromCheckout(
+              checkout.products.map((el) => el.productID)
+            );
           }
           addProducts(args.items);
         }
@@ -385,7 +425,10 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         }
         const result = await PublicApiClient.get(HOST).getPreOrderDetails({
           items: products.map((el) =>
-            create(PreOrderItemSchema, { id: el.productID, quantity: el.quantity }),
+            create(PreOrderItemSchema, {
+              id: el.productID,
+              quantity: el.quantity,
+            })
           ),
           projectId: projectID,
           // we can detect 5 the closest inpost pickup point based on shipping address.
@@ -397,9 +440,10 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         if (result.totalAmount == null) {
           return {
             isAvailable: false,
-          }
+          };
         }
-        const cartRequiresShipping = products.find(el => el.details?.isDeliverable == true) != null;
+        const cartRequiresShipping =
+          products.find((el) => el.details?.isDeliverable == true) != null;
 
         const mappedPaymentRequest = await mapGooglePayConfiguration({
           items: products,
@@ -411,18 +455,18 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         if (mappedPaymentRequest == null) {
           return {
             isAvailable: false,
-          }
+          };
         }
 
         return {
           isAvailable: true,
           config: mappedPaymentRequest,
-        }
+        };
       } catch (e) {
         console.error("Error resolving Google Pay configuration", e);
         return {
           isAvailable: false,
-        }
+        };
       }
     },
     async clearCart(): Promise<Err | void> {
@@ -449,7 +493,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
             zod.object({
               name: zod.string(),
               code: zod.string(),
-            }),
+            })
           )
           .parse(await result.json());
       } catch (e) {
@@ -475,7 +519,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       return (
         getCheckout()?.products?.reduce(
           (acc, product) => acc + product.quantity,
-          0,
+          0
         ) ?? 0
       );
     },
@@ -483,14 +527,14 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
     async getProducts(): Promise<
       | Err
       | {
-        id: string;
-        productID: string;
-        quantity: number;
-        metadata?: {
-          [p: string]: string | undefined
-        };
-        details?: SingleProduct;
-      }[]
+          id: string;
+          productID: string;
+          quantity: number;
+          metadata?: {
+            [p: string]: string | undefined;
+          };
+          details?: SingleProduct;
+        }[]
     > {
       return await getProducts(projectID);
     },
@@ -554,20 +598,17 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       if (checkout.products == null || checkout.products.length == 0) {
         return Err("cart-is-empty", "badInput");
       }
-      const mergedMetadata = checkout.products.reduce(
-        (acc, product) => {
-          if (product.metadata != null) {
-            Object.keys(product.metadata).forEach((key) => {
-              const value = product.metadata?.[key];
-              if (value != null) {
-                acc[key] = value;
-              }
-            });
-          }
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
+      const mergedMetadata = checkout.products.reduce((acc, product) => {
+        if (product.metadata != null) {
+          Object.keys(product.metadata).forEach((key) => {
+            const value = product.metadata?.[key];
+            if (value != null) {
+              acc[key] = value;
+            }
+          });
+        }
+        return acc;
+      }, {} as Record<string, string>);
 
       const payload: LinkRequest = {
         items: checkout.products.map((el) => {
@@ -611,9 +652,9 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         details:
           args.email || args.name
             ? {
-              name: args.name,
-              email: args.email,
-            }
+                name: args.name,
+                email: args.email,
+              }
             : undefined,
       };
 
@@ -656,7 +697,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
           "result",
           await result.text(),
           result.status,
-          result.statusText,
+          result.statusText
         );
         return Err("internal-error", "internal");
       }
@@ -676,9 +717,9 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
     }): Promise<
       | Err
       | {
-        isSuccess: boolean;
-        redirectURL?: string;
-      }
+          isSuccess: boolean;
+          redirectURL?: string;
+        }
     > {
       const checkout = getCheckout();
       if (checkout == null) {
@@ -694,9 +735,9 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       try {
         let shippingName = args.shippingContact?.givenName;
         if (args.shippingContact?.familyName != null) {
-          shippingName += ' ' + args.shippingContact?.familyName;
+          shippingName += " " + args.shippingContact?.familyName;
         } else if (args.billingContact?.familyName != null) {
-          shippingName += ' ' + args.billingContact?.familyName;
+          shippingName += " " + args.billingContact?.familyName;
         }
 
         let metadata: Record<string, string> = {};
@@ -718,8 +759,15 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
                 quantity: el.quantity,
               })),
               couponCode: checkout.couponCode,
-              email: args.shippingContact?.emailAddress ?? args.billingContact?.emailAddress ?? checkout.email ?? undefined,
-              phone: args.shippingContact?.phoneNumber ?? args.billingContact?.phoneNumber ?? undefined,
+              email:
+                args.shippingContact?.emailAddress ??
+                args.billingContact?.emailAddress ??
+                checkout.email ??
+                undefined,
+              phone:
+                args.shippingContact?.phoneNumber ??
+                args.billingContact?.phoneNumber ??
+                undefined,
               selectedDeliveryMethod: checkout.selectedDeliveryMethod,
               postCode: checkout.postalCode,
               projectId: projectID,
@@ -732,14 +780,19 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
               name: shippingName,
             }),
             billingAddress: create(BillingAddressSchema, {
-              name: args.billingContact?.givenName ?? '' + ' ' + (args.billingContact?.familyName ?? ''),
+              name:
+                args.billingContact?.givenName ??
+                "" + " " + (args.billingContact?.familyName ?? ""),
               line1: args.billingContact?.addressLines?.[0] ?? "",
               city: args.billingContact?.locality ?? "",
               country: args.billingContact?.countryCode ?? "",
               zipCode: args.billingContact?.postalCode ?? "",
             }),
-            metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined,
-          },
+            metadata:
+              Object.keys(metadata).length > 0
+                ? JSON.stringify(metadata)
+                : undefined,
+          }
         );
 
         return {
@@ -753,11 +806,14 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
     },
 
     async completeGooglePayPayment(args: {
-      paymentData: google.payments.api.PaymentData
-    }): Promise<Err | {
-      isSuccess: boolean;
-      redirectURL?: string;
-    }> {
+      paymentData: google.payments.api.PaymentData;
+    }): Promise<
+      | Err
+      | {
+          isSuccess: boolean;
+          redirectURL?: string;
+        }
+    > {
       const checkout = getCheckout();
       if (checkout == null) {
         return Err("Checkout not found");
@@ -782,9 +838,10 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         const result = await PublicApiClient.get(HOST).authorizeOneClickPayment(
           {
             gateway: OneClickAuthorizePaymentRequest_Gateway.GOOGLE_PAY,
-            paymentData: args.paymentData.paymentMethodData.tokenizationData.token,
+            paymentData:
+              args.paymentData.paymentMethodData.tokenizationData.token,
             paymentMethod: args.paymentData.paymentMethodData.type,
-            transactionIdentifier: '',
+            transactionIdentifier: "",
             order: create(GetPreOrderDetailsRequestSchema, {
               items: products.map((el) => ({
                 id: el.productID,
@@ -793,7 +850,9 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
               couponCode: checkout.couponCode,
               email: args.paymentData.email ?? undefined,
               phone: args.paymentData.shippingAddress?.phoneNumber ?? undefined,
-              selectedDeliveryMethod: args.paymentData.shippingOptionData?.id ?? checkout.selectedDeliveryMethod,
+              selectedDeliveryMethod:
+                args.paymentData.shippingOptionData?.id ??
+                checkout.selectedDeliveryMethod,
               postCode: args.paymentData.shippingAddress?.postalCode,
               projectId: projectID,
             }),
@@ -805,14 +864,26 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
               name: shippingName,
             }),
             billingAddress: create(BillingAddressSchema, {
-              name: args.paymentData.paymentMethodData.info?.billingAddress?.name,
-              line1: args.paymentData.paymentMethodData.info?.billingAddress?.address1 ?? "",
-              city: args.paymentData.paymentMethodData.info?.billingAddress?.locality ?? "",
-              country: args.paymentData.paymentMethodData.info?.billingAddress?.countryCode ?? "",
-              zipCode: args.paymentData.paymentMethodData.info?.billingAddress?.postalCode ?? "",
+              name: args.paymentData.paymentMethodData.info?.billingAddress
+                ?.name,
+              line1:
+                args.paymentData.paymentMethodData.info?.billingAddress
+                  ?.address1 ?? "",
+              city:
+                args.paymentData.paymentMethodData.info?.billingAddress
+                  ?.locality ?? "",
+              country:
+                args.paymentData.paymentMethodData.info?.billingAddress
+                  ?.countryCode ?? "",
+              zipCode:
+                args.paymentData.paymentMethodData.info?.billingAddress
+                  ?.postalCode ?? "",
             }),
-            metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined,
-          },
+            metadata:
+              Object.keys(metadata).length > 0
+                ? JSON.stringify(metadata)
+                : undefined,
+          }
         );
 
         return {
@@ -826,19 +897,21 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
 
       return {
         isSuccess: true,
-      }
+      };
     },
 
-    async getApplePayPaymentRequest(args?: { expectedItems?: CartProduct[]; }): Promise<
-      Err | ApplePayJS.ApplePayPaymentRequest
-    > {
+    async getApplePayPaymentRequest(args?: {
+      expectedItems?: CartProduct[];
+    }): Promise<Err | ApplePayJS.ApplePayPaymentRequest> {
       const checkout = getCheckout();
       if (checkout == null) {
         return Err("Checkout not found");
       }
       if (args && args.expectedItems != null && args.expectedItems.length > 0) {
         if (checkout.products) {
-          removeProductFromCheckout(checkout.products.map(el => el.productID));
+          removeProductFromCheckout(
+            checkout.products.map((el) => el.productID)
+          );
         }
         addProducts(args.expectedItems);
       }
@@ -851,7 +924,10 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
 
       const result = await PublicApiClient.get(HOST).getPreOrderDetails({
         items: products.map((el) =>
-          create(PreOrderItemSchema, { id: el.productID, quantity: el.quantity }),
+          create(PreOrderItemSchema, {
+            id: el.productID,
+            quantity: el.quantity,
+          })
         ),
         projectId: projectID,
         // we can detect 5 the closest inpost pickup point based on shipping address.
@@ -870,13 +946,15 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       });
 
       if (result.selectedDeliveryMethod != null) {
-        const deliveryMethod = result.methods.find(el => el.id == result.selectedDeliveryMethod);
+        const deliveryMethod = result.methods.find(
+          (el) => el.id == result.selectedDeliveryMethod
+        );
         if (deliveryMethod != null) {
           items.push({
             amount: `${round(deliveryMethod.amount / 100, 2)}`,
             label: deliveryMethod.name,
             type: "final" as ApplePayJS.ApplePayLineItemType,
-          })
+          });
         }
       }
 
@@ -897,7 +975,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         ],
         supportedNetworks: ["visa", "masterCard"],
         total: {
-          amount: `${round(((result.totalAmount ?? 0) / 100), 2)}`,
+          amount: `${round((result.totalAmount ?? 0) / 100, 2)}`,
           label: "Płatność za koszyk",
           type: "final",
         },
@@ -941,15 +1019,15 @@ async function resolveGooglePayConfiguration(projectID: string) {
         gatewayId: result.googlePayConfig.gatewayMerchantId,
         merchantName: result.googlePayConfig.merchantName,
         merchantId: result.googlePayConfig.merchantId,
-      }
+      };
     } else {
       checkout.googlePayConfig = {
         isAvailable: false,
-        gateway: '',
-        gatewayId: '',
-        merchantName: '',
-        merchantId: '',
-      }
+        gateway: "",
+        gatewayId: "",
+        merchantName: "",
+        merchantId: "",
+      };
     }
   }
   saveCheckout(checkout);
@@ -958,7 +1036,7 @@ async function resolveGooglePayConfiguration(projectID: string) {
 
 function resolveProductDetailsFromSingleProduct(
   id: string,
-  product: SingleProduct,
+  product: SingleProduct
 ) {
   if (id == product.id) {
     const variantIndex = product.variants?.findIndex((v) => v.id === id);
@@ -971,8 +1049,8 @@ function resolveProductDetailsFromSingleProduct(
         images: variant.images ?? product.images,
         name: product.name + " " + variant.name,
         price: variant.price,
-        currency: variant.currency
-      }
+        currency: variant.currency,
+      };
     }
     return product;
   }
@@ -1005,9 +1083,13 @@ function updateNumberOfProductsInCart() {
   const checkout = getCheckout();
   let numberOfProductsInCart = 0;
   if (checkout == null) {
-    useCheckoutStore.setState((state) => ({ ...state, numberOfProductsInCart }));
-    return
+    useCheckoutStore.setState((state) => ({
+      ...state,
+      numberOfProductsInCart,
+    }));
+    return;
   }
-  numberOfProductsInCart = checkout.products?.reduce((acc, product) => acc + product.quantity, 0) ?? 0;
+  numberOfProductsInCart =
+    checkout.products?.reduce((acc, product) => acc + product.quantity, 0) ?? 0;
   useCheckoutStore.setState((state) => ({ ...state, numberOfProductsInCart }));
 }

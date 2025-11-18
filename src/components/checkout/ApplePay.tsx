@@ -5,9 +5,27 @@ import { HOST } from "./constants";
 import { isErr } from "./lib/err";
 import { round } from "./lib/round.number";
 import { useQuery } from "@tanstack/react-query";
+import { sendAnalyticEvent } from "./frontent.analytics";
 
-type AppleButtonType = 'plain' | 'add-money' | 'book' | 'buy' | 'check-out' | 'continue' | 'contribute' | 'donate' | 'order' | 'pay' | 'reload' | 'rent' | 'set-up' | 'subscribe' | 'support' | 'tip' | 'top-up';
-type ColorType = 'black' | 'white' | 'white-outline';
+type AppleButtonType =
+  | "plain"
+  | "add-money"
+  | "book"
+  | "buy"
+  | "check-out"
+  | "continue"
+  | "contribute"
+  | "donate"
+  | "order"
+  | "pay"
+  | "reload"
+  | "rent"
+  | "set-up"
+  | "subscribe"
+  | "support"
+  | "tip"
+  | "top-up";
+type ColorType = "black" | "white" | "white-outline";
 
 type Props = {
   style?: {
@@ -19,11 +37,24 @@ type Props = {
   };
   buttonType?: AppleButtonType;
   colorType?: ColorType;
-  items: { name: string; id: string; price: number; quantity: number; isDeliverable?: boolean; metadata?: { [key: string]: string | undefined } }[];
+  items: {
+    name: string;
+    id: string;
+    price: number;
+    quantity: number;
+    isDeliverable?: boolean;
+    metadata?: { [key: string]: string | undefined };
+  }[];
   onClick?: () => Promise<void>;
 };
 
-function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick }: Props) {
+function ApplePayButtonComponent({
+  style,
+  buttonType,
+  colorType,
+  items,
+  onClick,
+}: Props) {
   const {
     checkIfApplePayIsAvailable,
     getApplePayPaymentRequest,
@@ -43,44 +74,67 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
     return null;
   }
 
-  const expectedItems = items.map(el => ({
+  const expectedItems = items.map((el) => ({
     productID: el.id,
     quantity: el.quantity,
     metadata: el.metadata,
   }));
 
   async function beginSession() {
-    const requiresShipping = items.find(el => el.isDeliverable === true) != null;
+    sendAnalyticEvent({
+      event: "initiateCheckout",
+    });
+    const requiresShipping =
+      items.find((el) => el.isDeliverable === true) != null;
     const session = new ApplePaySession(14, {
       countryCode: "PL",
       merchantCapabilities: ["supports3DS"],
       supportedNetworks: ["visa", "masterCard"],
       currencyCode: "PLN",
       total: {
-        amount: `${round(items.reduce((acc, item) => acc + item.price * item.quantity, 0) / 100, 2)}`,
+        amount: `${round(
+          items.reduce((acc, item) => acc + item.price * item.quantity, 0) /
+            100,
+          2
+        )}`,
         label: "Płatność za koszyk",
         type: "pending",
       },
       lineItems: [
-        ...items.map((item) => ({
-          amount: `${round((item.price * item.quantity) / 100, 2)}`,
-          label: item.name,
-          type: "final",
-        } as ApplePayJS.ApplePayLineItem)),
-        requiresShipping ? {
-          amount: `16.99`,
-          type: "pending",
-          label: "Dostawa",
-        } as ApplePayJS.ApplePayLineItem : undefined
-      ].filter(el => el != null),
-      ...(
-        requiresShipping ? {
-          shippingMethods: [],
-          supportsCouponCode: true,
-          requiredBillingContactFields: ["name", "email", "postalAddress", "phone"],
-          requiredShippingContactFields: ["name", "email", "postalAddress", "phone"],
-        } : {}
-      ),
+        ...items.map(
+          (item) =>
+            ({
+              amount: `${round((item.price * item.quantity) / 100, 2)}`,
+              label: item.name,
+              type: "final",
+            } as ApplePayJS.ApplePayLineItem)
+        ),
+        requiresShipping
+          ? ({
+              amount: `16.99`,
+              type: "pending",
+              label: "Dostawa",
+            } as ApplePayJS.ApplePayLineItem)
+          : undefined,
+      ].filter((el) => el != null),
+      ...(requiresShipping
+        ? {
+            shippingMethods: [],
+            supportsCouponCode: true,
+            requiredBillingContactFields: [
+              "name",
+              "email",
+              "postalAddress",
+              "phone",
+            ],
+            requiredShippingContactFields: [
+              "name",
+              "email",
+              "postalAddress",
+              "phone",
+            ],
+          }
+        : {}),
     });
     await onClick?.();
     const apRequest = await getApplePayPaymentRequest({ expectedItems });
@@ -99,13 +153,13 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
           {
             validationUrl: event.validationURL,
             projectId: getProjectID(),
-          },
+          }
         );
         console.log("merchantSession", result.merchantSession);
         if (result.merchantSession.length > 0) {
-          console.log('completing merchant session');
+          console.log("completing merchant session");
           session.completeMerchantValidation(
-            JSON.parse(result.merchantSession),
+            JSON.parse(result.merchantSession)
           );
         } else {
           session.abort();
@@ -148,7 +202,7 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
           throw new Error("Failed to get Apple Pay payment request");
         }
 
-        console.log('apRequest', apRequest);
+        console.log("apRequest", apRequest);
         session.completeShippingContactSelection({
           newLineItems: apRequest.lineItems,
           newTotal: apRequest.total,
@@ -206,7 +260,9 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
           }, 2000);
         }
         session.completePayment({
-          status: result.isSuccess ? ApplePaySession.STATUS_SUCCESS : ApplePaySession.STATUS_FAILURE,
+          status: result.isSuccess
+            ? ApplePaySession.STATUS_SUCCESS
+            : ApplePaySession.STATUS_FAILURE,
         });
 
         result.isSuccess && clearCart();
@@ -221,7 +277,14 @@ function ApplePayButtonComponent({ style, buttonType, colorType, items, onClick 
     session.begin();
   }
 
-  return <ApplePayButton style={style} buttonStyle={colorType} type={buttonType} onClick={beginSession} />;
+  return (
+    <ApplePayButton
+      style={style}
+      buttonStyle={colorType}
+      type={buttonType}
+      onClick={beginSession}
+    />
+  );
 }
 
 function Wrapper(props: Props) {
