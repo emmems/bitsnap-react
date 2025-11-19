@@ -20,6 +20,7 @@ export default defineConfig((overrideOptions) => {
     clean: true,
     minify: false,
     sourcemap: true,
+    platform: "browser",
     external: ["react", "react-dom"],
     define: {
       PACKAGE_NAME: `"${name}"`,
