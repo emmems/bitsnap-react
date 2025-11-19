@@ -171,12 +171,24 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-function NotificationsComponentPublic(
-  props: NotificationsComponentPublicProps
-) {
+function NotificationsComponentPublic({
+  slug: slugProp,
+  userID,
+  productID: _productID,
+  projectName,
+  projectLogo,
+  projectLogoDark,
+  groups,
+  isManaging = false,
+  texts,
+  showQRCode = false,
+  showPhoneInput = false,
+  hiddenGroupIds = [],
+  className,
+}: NotificationsComponentPublicProps) {
   const [parent] = useAutoAnimate();
   let slug =
-    props.slug ??
+    slugProp ??
     getProjectID() ??
     (typeof window !== "undefined" ? window.location.hostname : "");
 
@@ -211,9 +223,9 @@ function NotificationsComponentPublic(
     isLoading: isGroupsDownloading,
     isUserGroupsUpdated: false,
     wasChanged: false,
-    groupsProvided: props.groups,
+    groupsProvided: groups,
     groups: [],
-    showSettings: userInfo != null && props.isManaging == true,
+    showSettings: userInfo != null && isManaging == true,
     isLoggedIn: userInfo != null,
     userID: undefined,
   });
@@ -228,10 +240,10 @@ function NotificationsComponentPublic(
       value: userInfo?.accessToken != null,
     });
     dispatch({ type: "SET_USER_ID", value: userInfo?.userID });
-    if (userInfo?.accessToken != null && props.isManaging == true) {
+    if (userInfo?.accessToken != null && isManaging == true) {
       dispatch({ type: "SHOW_SETTINGS" });
     }
-  }, [userInfo, props.isManaging]);
+  }, [userInfo, isManaging]);
 
   useEffect(() => {
     if (groupsDownloaded == null) {
@@ -261,12 +273,12 @@ function NotificationsComponentPublic(
     dispatch({ type: "SET_GROUPS", value: newGroups });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupsDownloaded, isGroupsDownloading, props.groups]);
+  }, [groupsDownloaded, isGroupsDownloading, groups]);
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    let preparedGroups = props.groups?.map((el) => {
+    let preparedGroups = groups?.map((el) => {
       if (el.id.startsWith("group_")) {
         return el;
       }
@@ -275,15 +287,7 @@ function NotificationsComponentPublic(
     });
 
     dispatch({ type: "SET_PUBLIC_GROUPS", value: preparedGroups });
-  }, [props.groups]);
-
-  const {
-    texts,
-    showQRCode = false,
-    showPhoneInput = false,
-    hiddenGroupIds = [],
-    className,
-  } = props;
+  }, [groups]);
 
   const mergedTexts = { ...DEFAULT_TEXTS, ...texts };
 
@@ -291,7 +295,7 @@ function NotificationsComponentPublic(
     await updateUserGroups({
       accessToken: userInfo?.accessToken,
       slug: slug,
-      userId: props.userID,
+      userId: userID,
       groupIds: state.groups
         .filter((el) => el.isOn === true)
         .map((el) => el.id),
@@ -351,7 +355,7 @@ function NotificationsComponentPublic(
         .then()
         .catch()
         .finally(() => {
-          if (props.isManaging == true) {
+          if (isManaging == true) {
             // Automatically switch to managing view
             dispatch({ type: "SHOW_SETTINGS" });
           }
@@ -371,9 +375,7 @@ function NotificationsComponentPublic(
   }, []);
 
   const isManagingEnabled =
-    props.isManaging == true &&
-    state.userID != null &&
-    userInfo?.accessToken != null;
+    isManaging == true && state.userID != null && userInfo?.accessToken != null;
 
   return (
     <main className={cn("bitsnap-checkout relative", className?.container)}>
@@ -384,7 +386,7 @@ function NotificationsComponentPublic(
       )}
 
       {/* Floating Settings Icon */}
-      {!state.showSettings && props.isManaging && (
+      {!state.showSettings && isManaging && (
         <Button
           onClick={handleSettingsClick}
           variant="outline"
@@ -415,9 +417,9 @@ function NotificationsComponentPublic(
               >
                 <div className={className?.groupsContainer}>
                   <NotificationHeader
-                    projectName={props.projectName}
-                    projectLogo={props.projectLogo}
-                    projectLogoDark={props.projectLogoDark}
+                    projectName={projectName}
+                    projectLogo={projectLogo}
+                    projectLogoDark={projectLogoDark}
                     description={mergedTexts.managingDescription}
                     className={className}
                     onLogout={handleLogout}
@@ -431,7 +433,7 @@ function NotificationsComponentPublic(
                   <NotificationGroupsList
                     groups={state.groups}
                     hiddenGroupIds={hiddenGroupIds}
-                    isManaging={props.isManaging}
+                    isManaging={isManaging}
                     onToggle={toggleGroup}
                     onCheckAll={checkAllGroups}
                     onUpdate={updateGroups}
@@ -504,10 +506,38 @@ function NotificationsComponentPublic(
   );
 }
 
-function Wrapper(props: Props) {
+function Wrapper({
+  slug,
+  userID,
+  productID,
+  projectName,
+  projectLogo,
+  projectLogoDark,
+  groups,
+  isManaging,
+  texts,
+  showQRCode,
+  showPhoneInput,
+  hiddenGroupIds,
+  className,
+}: Props) {
   return (
     <RpcProvider>
-      <NotificationsComponentPublic {...props} />
+      <NotificationsComponentPublic
+        slug={slug}
+        userID={userID}
+        productID={productID}
+        projectName={projectName}
+        projectLogo={projectLogo}
+        projectLogoDark={projectLogoDark}
+        groups={groups}
+        isManaging={isManaging}
+        texts={texts}
+        showQRCode={showQRCode}
+        showPhoneInput={showPhoneInput}
+        hiddenGroupIds={hiddenGroupIds}
+        className={className}
+      />
     </RpcProvider>
   );
 }
