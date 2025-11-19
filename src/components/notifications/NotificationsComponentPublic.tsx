@@ -20,6 +20,7 @@ export type {
   CustomizationTexts,
   ComponentClassNames,
 } from "./types";
+export type Props = NotificationsComponentPublicProps;
 import { DEFAULT_TEXTS } from "./constants";
 import { NotificationHeader } from "./NotificationHeader";
 import { NotificationGroupsList } from "./NotificationGroupsList";
@@ -503,7 +504,7 @@ function NotificationsComponentPublic(
   );
 }
 
-function Wrapper(props: NotificationsComponentPublicProps) {
+function Wrapper(props: Props) {
   return (
     <RpcProvider>
       <NotificationsComponentPublic {...props} />

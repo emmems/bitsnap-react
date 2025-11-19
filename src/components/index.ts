@@ -10,7 +10,10 @@ export {
   default as BitsnapCheckout,
   type BitsnapCartProps,
 } from "./checkout/BitsnapCart";
-export { default as NotificationsComponent } from "./notifications/NotificationsComponentPublic";
+export {
+  default as NotificationsComponent,
+  type Props as NotificationsComponentProps,
+} from "./notifications/NotificationsComponentPublic";
 export {
   type NotificationsComponentPublicProps,
   type PublicNotificationGroup,
