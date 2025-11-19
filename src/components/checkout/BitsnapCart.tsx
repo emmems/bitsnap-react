@@ -19,13 +19,7 @@ const cartAddToCartSchema = zod.object({
 
 type CartAddToCartEvent = zod.infer<typeof cartAddToCartSchema>;
 
-function BitsnapCart({
-  projectID,
-  children,
-  onVisibleChange,
-  className,
-  numberOfProductsInCartOptions,
-}: {
+export type BitsnapCartProps = {
   projectID: string;
   children?: React.ReactNode;
   onVisibleChange?: (isVisible: boolean) => void;
@@ -34,7 +28,15 @@ function BitsnapCart({
     style?: React.CSSProperties;
     isVisible?: boolean;
   };
-}) {
+};
+
+function BitsnapCart({
+  projectID,
+  children,
+  onVisibleChange,
+  className,
+  numberOfProductsInCartOptions,
+}: BitsnapCartProps) {
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
 

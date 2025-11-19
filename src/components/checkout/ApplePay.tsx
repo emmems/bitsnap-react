@@ -27,7 +27,7 @@ type AppleButtonType =
   | "top-up";
 type ColorType = "black" | "white" | "white-outline";
 
-type Props = {
+export type Props = {
   style?: {
     width?: string;
     height?: string;

@@ -5,7 +5,7 @@ import { Spinner } from "@/src/ui/spinner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
 
-type Props = {
+export type Props = {
   test?: boolean;
   buttonSizeMode?: "static" | "fill";
   buttonColor?: "white" | "black";
