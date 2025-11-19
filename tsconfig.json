@@ -2,16 +2,13 @@
   "compilerOptions": {
     "baseUrl": ".",
     "declaration": true,
-    "declarationMap": false,
+    "declarationMap": true,
     "esModuleInterop": true,
     "emitDeclarationOnly": true,
     "importHelpers": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "lib": [
-      "es6",
-      "dom"
-    ],
+    "lib": ["es6", "dom"],
     "moduleResolution": "Bundler",
     "noImplicitReturns": true,
     "noUnusedLocals": false,
@@ -19,21 +16,14 @@
     "outDir": "dist",
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "sourceMap": false,
+    "sourceMap": true,
     "strict": true,
-    "target": "ES2019",
+    "target": "ES6",
     "allowUmdGlobalAccess": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx"
-  ]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
