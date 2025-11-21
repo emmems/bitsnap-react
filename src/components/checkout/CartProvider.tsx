@@ -33,6 +33,10 @@ type CartProduct = {
   productID: string;
   quantity: number;
   metadata?: { [key: string]: string | undefined };
+
+  // Those fields are used to send the price and currency to the analytics
+  price?: number;
+  currency?: string;
 };
 
 export interface CartMethods {

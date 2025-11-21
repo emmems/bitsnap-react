@@ -36,9 +36,7 @@ export function sendAnalyticEvent(payload: EventPayload) {
   sendPixelAnalyticsEvent(payload);
 }
 
-function sendGoogleAnalyticsEvent(
-  payload: Record<string, string | number | boolean | object | undefined>
-) {
+function sendGoogleAnalyticsEvent(payload: EventPayload) {
   try {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
@@ -48,12 +46,82 @@ function sendGoogleAnalyticsEvent(
       window.dataLayer = [];
     }
 
+    // Map custom events to GA4 ecommerce events
+    const ga4Event = mapToGA4EcommerceEvent(payload);
+
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    window.dataLayer.push(payload);
+    window.dataLayer.push(ga4Event);
   } catch (e) {
     console.warn("cannot send google analytics event", e);
   }
+}
+
+function mapToGA4EcommerceEvent(payload: EventPayload) {
+  // Calculate total value from items if not provided
+  const totalValue =
+    payload.value ??
+    payload.items?.reduce(
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
+      0
+    ) ??
+    0;
+
+  // Map items to GA4 format
+  const items = payload.items?.map((item) => ({
+    item_id: item.id,
+    item_name: item.name || item.id,
+    price: item.price || 0,
+    quantity: item.quantity || 1,
+  }));
+
+  // Build base ecommerce object
+  const ecommerce: Record<string, unknown> = {
+    currency: payload.currency || "PLN",
+    value: totalValue,
+  };
+
+  if (items && items.length > 0) {
+    ecommerce.items = items;
+  }
+
+  // Map event names to GA4 ecommerce events
+  let eventName: string;
+  switch (payload.event) {
+    case "purchase":
+      eventName = "purchase";
+      // Purchase events require transaction_id, but we'll use a timestamp-based one if not provided
+      ecommerce.transaction_id = payload.step || `txn_${Date.now()}`;
+      break;
+    case "addToCart":
+      eventName = "add_to_cart";
+      break;
+    case "viewCart":
+      eventName = "view_cart";
+      break;
+    case "removeFromCart":
+      eventName = "remove_from_cart";
+      break;
+    case "initiateCheckout":
+      eventName = "begin_checkout";
+      break;
+    case "customizeProduct":
+      // Customize product is not a standard GA4 ecommerce event
+      // We'll send it as a custom event with ecommerce data
+      eventName = "customize_product";
+      break;
+    default:
+      eventName = payload.event;
+  }
+
+  return {
+    event: eventName,
+    ecommerce,
+    // Include step if provided for additional context
+    ...(payload.step && { step: payload.step }),
+    // Include content_name if provided
+    ...(payload.content_name && { content_name: payload.content_name }),
+  };
 }
 
 function sendPixelAnalyticsEvent(payload: EventPayload) {
