@@ -12,7 +12,6 @@ import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-Not
 import { HOST } from "./components/checkout/constants";
 import { Transport } from "@connectrpc/connect";
 
-console.log("HOST", HOST);
 let currentFinalTransportHost: string | undefined;
 let finalTransport: Transport | undefined;
 
