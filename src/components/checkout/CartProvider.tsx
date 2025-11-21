@@ -35,6 +35,7 @@ type CartProduct = {
   metadata?: { [key: string]: string | undefined };
 
   // Those fields are used to send the price and currency to the analytics
+  name?: string;
   price?: number;
   currency?: string;
 };
@@ -316,10 +317,10 @@ function addProducts(products: CartProduct[]) {
     currency: "PLN",
     items: products.map((el) => ({
       id: el.productID,
-      name: "",
-      price: 0,
+      name: el.name ?? "",
+      price: el.price ?? 0,
       quantity: el.quantity,
-      currency: "PLN",
+      currency: el.currency ?? "PLN",
     })),
   });
   saveCheckout(checkout);

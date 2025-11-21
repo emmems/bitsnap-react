@@ -12,6 +12,7 @@ export namespace Bitsnap {
     metadata?: Record<string, string | undefined>,
     // Those fields are used to send the price and currency to the analytics
     args?: {
+      name?: string;
       price?: number;
       currency?: string;
     }
