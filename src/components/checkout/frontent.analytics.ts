@@ -1,4 +1,5 @@
 import zod from "zod";
+import { round } from "./lib/round.number";
 
 const eventPayload = zod.object({
   event: zod.enum([
@@ -71,14 +72,14 @@ function mapToGA4EcommerceEvent(payload: EventPayload) {
   const items = payload.items?.map((item) => ({
     item_id: item.id,
     item_name: item.name || item.id,
-    price: item.price || 0,
+    price: round((item.price || 0) / 100, 2),
     quantity: item.quantity || 1,
   }));
 
   // Build base ecommerce object
   const ecommerce: Record<string, unknown> = {
     currency: payload.currency || "PLN",
-    value: totalValue,
+    value: round(totalValue / 100, 2),
   };
 
   if (items && items.length > 0) {
