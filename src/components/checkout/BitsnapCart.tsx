@@ -82,10 +82,22 @@ function BitsnapCart({
                 marketingAgreement: zod.boolean().optional(),
               })
               .parse(args);
-            sendAnalyticEvent({
-              event: "initiateCheckout",
-            });
             const methods = getCheckoutMethods(projectID);
+            try {
+              const products = await methods.getProducts();
+              if (isErr(products) == false) {
+                sendAnalyticEvent({
+                  event: "initiateCheckout",
+                  items: products.map((el) => ({
+                    id: el.productID,
+                    name: el.details?.name ?? "",
+                    price: el.details?.price ?? 0,
+                    quantity: el.quantity,
+                    currency: el.details?.currency ?? "PLN",
+                  })),
+                });
+              }
+            } catch (e) {}
 
             const result = await methods.justRedirectToPayment(payload);
 

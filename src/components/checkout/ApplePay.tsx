@@ -83,6 +83,13 @@ function ApplePayButtonComponent({
   async function beginSession() {
     sendAnalyticEvent({
       event: "initiateCheckout",
+      items: items.map((el) => ({
+        id: el.id,
+        name: el.name,
+        price: el.price,
+        quantity: el.quantity,
+        currency: "PLN",
+      })),
     });
     const requiresShipping =
       items.find((el) => el.isDeliverable === true) != null;

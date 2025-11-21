@@ -82,6 +82,13 @@ function GooglePayButtonComponent({
         onPaymentDataChanged={async (paymentData) => {
           sendAnalyticEvent({
             event: "initiateCheckout",
+            items: items.map((el) => ({
+              id: el.id,
+              name: el.name,
+              price: el.price,
+              quantity: el.quantity,
+              currency: "PLN",
+            })),
           });
           console.log("payment data changed", paymentData);
           if (paymentData.shippingAddress?.postalCode != null) {
