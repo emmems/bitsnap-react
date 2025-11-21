@@ -10,6 +10,11 @@ export namespace Bitsnap {
     id: string,
     quantity: number = 1,
     metadata?: Record<string, string | undefined>,
+    // Those fields are used to send the price and currency to the analytics
+    args?: {
+      price?: number;
+      currency?: string;
+    }
   ) {
     const projectID = getProjectID();
     if (projectID == null) {
@@ -22,6 +27,7 @@ export namespace Bitsnap {
       productID: id,
       quantity: quantity,
       metadata: metadata,
+      ...args,
     });
     if (err != null) {
       return err;
@@ -60,7 +66,7 @@ export async function createPaymentURL(request: LinkRequest) {
       "result",
       await result.text(),
       result.status,
-      result.statusText,
+      result.statusText
     );
     return Err("internal-error", "internal");
   }
@@ -73,7 +79,7 @@ export async function createPaymentURL(request: LinkRequest) {
 }
 
 export async function createCheckout(
-  request: LinkRequest & { apiKey?: string; testMode?: boolean },
+  request: LinkRequest & { apiKey?: string; testMode?: boolean }
 ) {
   const projectID = getProjectID();
   if (projectID == null) {
@@ -122,7 +128,7 @@ export function getReferenceIfPossible(): string | undefined {
 }
 
 export function injectReferenceToRequestIfNeeded(
-  request: LinkRequest,
+  request: LinkRequest
 ): LinkRequest {
   const ref = getReferenceIfPossible();
   if (ref == null) {
