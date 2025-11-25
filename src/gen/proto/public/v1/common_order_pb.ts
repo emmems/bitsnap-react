@@ -3,15 +3,116 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file public/v1/common_order.proto.
  */
 export const file_public_v1_common_order: GenFile = /*@__PURE__*/
-  fileDesc("ChxwdWJsaWMvdjEvY29tbW9uX29yZGVyLnByb3RvEg1wdWJsaWNfYXBpLnYxImkKDU9yZGVyUmVzcG9uc2USGQoMcmVkaXJlY3RfdXJsGAEgASgJSACIAQESGgoNZXJyb3JfbWVzc2FnZRgCIAEoCUgBiAEBQg8KDV9yZWRpcmVjdF91cmxCEAoOX2Vycm9yX21lc3NhZ2UilgQKDE9yZGVyUmVxdWVzdBIQCghvcmRlcl9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEgwKBG5hbWUYAyABKAkSDQoFZW1haWwYBCABKAkSEgoFcGhvbmUYBSABKAlIAIgBARIcCg9kZWxpdmVyeV9tZXRob2QYBiABKAlIAYgBARIsCgdhZGRyZXNzGAcgASgLMhYucHVibGljX2FwaS52MS5BZGRyZXNzSAKIAQESOwoPYmlsbGluZ19hZGRyZXNzGAggASgLMh0ucHVibGljX2FwaS52MS5CaWxsaW5nQWRkcmVzc0gDiAEBEjcKFWFkZGl0aW9uYWxfYWdyZWVtZW50cxgJIAMoCzIYLnB1YmxpY19hcGkudjEuQWdyZWVtZW50EhgKC2NvdXBvbl9jb2RlGAogASgJSASIAQESEQoEbm90ZRgLIAEoCUgFiAEBEiAKE2lucG9zdF9waWNrdXBfcG9pbnQYDCABKAlIBogBARImCgRibGlrGA0gASgLMhMucHVibGljX2FwaS52MS5CbGlrSAeIAQFCCAoGX3Bob25lQhIKEF9kZWxpdmVyeV9tZXRob2RCCgoIX2FkZHJlc3NCEgoQX2JpbGxpbmdfYWRkcmVzc0IOCgxfY291cG9uX2NvZGVCBwoFX25vdGVCFgoUX2lucG9zdF9waWNrdXBfcG9pbnRCBwoFX2JsaWsidQoHQWRkcmVzcxIMCgRuYW1lGAEgASgJEg0KBWxpbmUxGAIgASgJEhIKBWxpbmUyGAMgASgJSACIAQESDAoEY2l0eRgEIAEoCRIQCgh6aXBfY29kZRgFIAEoCRIPCgdjb3VudHJ5GAYgASgJQggKBl9saW5lMiKWAQoOQmlsbGluZ0FkZHJlc3MSEAoDbmlwGAEgASgJSACIAQESDAoEbmFtZRgCIAEoCRINCgVsaW5lMRgDIAEoCRISCgVsaW5lMhgEIAEoCUgBiAEBEgwKBGNpdHkYBSABKAkSEAoIemlwX2NvZGUYBiABKAkSDwoHY291bnRyeRgHIAEoCUIGCgRfbmlwQggKBl9saW5lMiLNAQoJQWdyZWVtZW50Eg8KAmlkGAEgASgJSACIAQESDAoEbmFtZRgCIAEoCRIYCgtkZXNjcmlwdGlvbhgDIAEoCUgBiAEBEhAKCHJlcXVpcmVkGAQgASgIEhEKBGxpbmsYBSABKAlIAogBARIVCghyYXdfdGV4dBgGIAEoCUgDiAEBEhMKBmFuc3dlchgHIAEoCEgEiAEBQgUKA19pZEIOCgxfZGVzY3JpcHRpb25CBwoFX2xpbmtCCwoJX3Jhd190ZXh0QgkKB19hbnN3ZXIiFAoEQmxpaxIMCgRjb2RlGAEgASgJMn8KEkNvbW1vbk9yZGVyU2VydmljZRJpCipVcGRhdGVPcmRlckRhdGFBbmRHZXRSZWRpcmVjdGlvbklmU3VjY2VkZWQSGy5wdWJsaWNfYXBpLnYxLk9yZGVyUmVxdWVzdBocLnB1YmxpY19hcGkudjEuT3JkZXJSZXNwb25zZSIAYgZwcm90bzM");
+  fileDesc("ChxwdWJsaWMvdjEvY29tbW9uX29yZGVyLnByb3RvEg1wdWJsaWNfYXBpLnYxIkwKFkNoZWNrQ291cG9uQ29kZVJlcXVlc3QSDAoEY29kZRgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhAKCG9yZGVyX2lkGAMgASgJIswBCg1Db3Vwb25EZXRhaWxzEgwKBGNvZGUYASABKAkSJwoEdHlwZRgCIAEoDjIZLnB1YmxpY19hcGkudjEuQ291cG9uVHlwZRIOCgZhbW91bnQYAyABKAESFQoIY3VycmVuY3kYBCABKAlIAIgBARIeChFpbmNsdWRlc19kZWxpdmVyeRgFIAEoCEgBiAEBEhoKEmFkZGl0aW9uYWxfbWVzc2FnZRgGIAMoCUILCglfY3VycmVuY3lCFAoSX2luY2x1ZGVzX2RlbGl2ZXJ5IssBChdDaGVja0NvdXBvbkNvZGVSZXNwb25zZRIQCghpc192YWxpZBgBIAEoCBITCgZyZWFzb24YAiABKAlIAIgBARIcCg9taW5fb3JkZXJfdmFsdWUYAyABKAFIAYgBARI5Cg5jb3Vwb25fZGV0YWlscxgJIAEoCzIcLnB1YmxpY19hcGkudjEuQ291cG9uRGV0YWlsc0gCiAEBQgkKB19yZWFzb25CEgoQX21pbl9vcmRlcl92YWx1ZUIRCg9fY291cG9uX2RldGFpbHMiaQoNT3JkZXJSZXNwb25zZRIZCgxyZWRpcmVjdF91cmwYASABKAlIAIgBARIaCg1lcnJvcl9tZXNzYWdlGAIgASgJSAGIAQFCDwoNX3JlZGlyZWN0X3VybEIQCg5fZXJyb3JfbWVzc2FnZSKWBAoMT3JkZXJSZXF1ZXN0EhAKCG9yZGVyX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRINCgVlbWFpbBgEIAEoCRISCgVwaG9uZRgFIAEoCUgAiAEBEhwKD2RlbGl2ZXJ5X21ldGhvZBgGIAEoCUgBiAEBEiwKB2FkZHJlc3MYByABKAsyFi5wdWJsaWNfYXBpLnYxLkFkZHJlc3NIAogBARI7Cg9iaWxsaW5nX2FkZHJlc3MYCCABKAsyHS5wdWJsaWNfYXBpLnYxLkJpbGxpbmdBZGRyZXNzSAOIAQESNwoVYWRkaXRpb25hbF9hZ3JlZW1lbnRzGAkgAygLMhgucHVibGljX2FwaS52MS5BZ3JlZW1lbnQSGAoLY291cG9uX2NvZGUYCiABKAlIBIgBARIRCgRub3RlGAsgASgJSAWIAQESIAoTaW5wb3N0X3BpY2t1cF9wb2ludBgMIAEoCUgGiAEBEiYKBGJsaWsYDSABKAsyEy5wdWJsaWNfYXBpLnYxLkJsaWtIB4gBAUIICgZfcGhvbmVCEgoQX2RlbGl2ZXJ5X21ldGhvZEIKCghfYWRkcmVzc0ISChBfYmlsbGluZ19hZGRyZXNzQg4KDF9jb3Vwb25fY29kZUIHCgVfbm90ZUIWChRfaW5wb3N0X3BpY2t1cF9wb2ludEIHCgVfYmxpayJ1CgdBZGRyZXNzEgwKBG5hbWUYASABKAkSDQoFbGluZTEYAiABKAkSEgoFbGluZTIYAyABKAlIAIgBARIMCgRjaXR5GAQgASgJEhAKCHppcF9jb2RlGAUgASgJEg8KB2NvdW50cnkYBiABKAlCCAoGX2xpbmUyIpYBCg5CaWxsaW5nQWRkcmVzcxIQCgNuaXAYASABKAlIAIgBARIMCgRuYW1lGAIgASgJEg0KBWxpbmUxGAMgASgJEhIKBWxpbmUyGAQgASgJSAGIAQESDAoEY2l0eRgFIAEoCRIQCgh6aXBfY29kZRgGIAEoCRIPCgdjb3VudHJ5GAcgASgJQgYKBF9uaXBCCAoGX2xpbmUyIs0BCglBZ3JlZW1lbnQSDwoCaWQYASABKAlIAIgBARIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSAGIAQESEAoIcmVxdWlyZWQYBCABKAgSEQoEbGluaxgFIAEoCUgCiAEBEhUKCHJhd190ZXh0GAYgASgJSAOIAQESEwoGYW5zd2VyGAcgASgISASIAQFCBQoDX2lkQg4KDF9kZXNjcmlwdGlvbkIHCgVfbGlua0ILCglfcmF3X3RleHRCCQoHX2Fuc3dlciIUCgRCbGlrEgwKBGNvZGUYASABKAkilwIKD0NvbW1vbk9yZGVySXRlbRISCgpwcm9kdWN0X2lkGAEgASgJEhAKCHF1YW50aXR5GAIgASgFEhAKA3RheBgDIAEoAUgAiAEBEj4KCG1ldGFkYXRhGAQgAygLMiwucHVibGljX2FwaS52MS5Db21tb25PcmRlckl0ZW0uTWV0YWRhdGFFbnRyeRIMCgRuYW1lGAUgASgJEhYKCWltYWdlX3VybBgGIAEoCUgBiAEBEg0KBXByaWNlGAcgASgBEhAKCGN1cnJlbmN5GAggASgJGi8KDU1ldGFkYXRhRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUIGCgRfdGF4QgwKCl9pbWFnZV91cmwqOgoKQ291cG9uVHlwZRIUChBDb3Vwb25UeXBlX0ZJWEVEEAASFgoSQ291cG9uVHlwZV9QRVJDRU5UEAEy4wEKEkNvbW1vbk9yZGVyU2VydmljZRJpCipVcGRhdGVPcmRlckRhdGFBbmRHZXRSZWRpcmVjdGlvbklmU3VjY2VkZWQSGy5wdWJsaWNfYXBpLnYxLk9yZGVyUmVxdWVzdBocLnB1YmxpY19hcGkudjEuT3JkZXJSZXNwb25zZSIAEmIKD0NoZWNrQ291cG9uQ29kZRIlLnB1YmxpY19hcGkudjEuQ2hlY2tDb3Vwb25Db2RlUmVxdWVzdBomLnB1YmxpY19hcGkudjEuQ2hlY2tDb3Vwb25Db2RlUmVzcG9uc2UiAGIGcHJvdG8z");
+
+/**
+ * @generated from message public_api.v1.CheckCouponCodeRequest
+ */
+export type CheckCouponCodeRequest = Message<"public_api.v1.CheckCouponCodeRequest"> & {
+  /**
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string order_id = 3;
+   */
+  orderId: string;
+};
+
+/**
+ * Describes the message public_api.v1.CheckCouponCodeRequest.
+ * Use `create(CheckCouponCodeRequestSchema)` to create a new message.
+ */
+export const CheckCouponCodeRequestSchema: GenMessage<CheckCouponCodeRequest> = /*@__PURE__*/
+  messageDesc(file_public_v1_common_order, 0);
+
+/**
+ * @generated from message public_api.v1.CouponDetails
+ */
+export type CouponDetails = Message<"public_api.v1.CouponDetails"> & {
+  /**
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * @generated from field: public_api.v1.CouponType type = 2;
+   */
+  type: CouponType;
+
+  /**
+   * @generated from field: double amount = 3;
+   */
+  amount: number;
+
+  /**
+   * @generated from field: optional string currency = 4;
+   */
+  currency?: string;
+
+  /**
+   * @generated from field: optional bool includes_delivery = 5;
+   */
+  includesDelivery?: boolean;
+
+  /**
+   * @generated from field: repeated string additional_message = 6;
+   */
+  additionalMessage: string[];
+};
+
+/**
+ * Describes the message public_api.v1.CouponDetails.
+ * Use `create(CouponDetailsSchema)` to create a new message.
+ */
+export const CouponDetailsSchema: GenMessage<CouponDetails> = /*@__PURE__*/
+  messageDesc(file_public_v1_common_order, 1);
+
+/**
+ * @generated from message public_api.v1.CheckCouponCodeResponse
+ */
+export type CheckCouponCodeResponse = Message<"public_api.v1.CheckCouponCodeResponse"> & {
+  /**
+   * @generated from field: bool is_valid = 1;
+   */
+  isValid: boolean;
+
+  /**
+   * @generated from field: optional string reason = 2;
+   */
+  reason?: string;
+
+  /**
+   * @generated from field: optional double min_order_value = 3;
+   */
+  minOrderValue?: number;
+
+  /**
+   * @generated from field: optional public_api.v1.CouponDetails coupon_details = 9;
+   */
+  couponDetails?: CouponDetails;
+};
+
+/**
+ * Describes the message public_api.v1.CheckCouponCodeResponse.
+ * Use `create(CheckCouponCodeResponseSchema)` to create a new message.
+ */
+export const CheckCouponCodeResponseSchema: GenMessage<CheckCouponCodeResponse> = /*@__PURE__*/
+  messageDesc(file_public_v1_common_order, 2);
 
 /**
  * @generated from message public_api.v1.OrderResponse
@@ -33,7 +134,7 @@ export type OrderResponse = Message<"public_api.v1.OrderResponse"> & {
  * Use `create(OrderResponseSchema)` to create a new message.
  */
 export const OrderResponseSchema: GenMessage<OrderResponse> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 0);
+  messageDesc(file_public_v1_common_order, 3);
 
 /**
  * @generated from message public_api.v1.OrderRequest
@@ -110,7 +211,7 @@ export type OrderRequest = Message<"public_api.v1.OrderRequest"> & {
  * Use `create(OrderRequestSchema)` to create a new message.
  */
 export const OrderRequestSchema: GenMessage<OrderRequest> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 1);
+  messageDesc(file_public_v1_common_order, 4);
 
 /**
  * @generated from message public_api.v1.Address
@@ -152,7 +253,7 @@ export type Address = Message<"public_api.v1.Address"> & {
  * Use `create(AddressSchema)` to create a new message.
  */
 export const AddressSchema: GenMessage<Address> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 2);
+  messageDesc(file_public_v1_common_order, 5);
 
 /**
  * @generated from message public_api.v1.BillingAddress
@@ -199,7 +300,7 @@ export type BillingAddress = Message<"public_api.v1.BillingAddress"> & {
  * Use `create(BillingAddressSchema)` to create a new message.
  */
 export const BillingAddressSchema: GenMessage<BillingAddress> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 3);
+  messageDesc(file_public_v1_common_order, 6);
 
 /**
  * @generated from message public_api.v1.Agreement
@@ -246,7 +347,7 @@ export type Agreement = Message<"public_api.v1.Agreement"> & {
  * Use `create(AgreementSchema)` to create a new message.
  */
 export const AgreementSchema: GenMessage<Agreement> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 4);
+  messageDesc(file_public_v1_common_order, 7);
 
 /**
  * @generated from message public_api.v1.Blik
@@ -263,7 +364,82 @@ export type Blik = Message<"public_api.v1.Blik"> & {
  * Use `create(BlikSchema)` to create a new message.
  */
 export const BlikSchema: GenMessage<Blik> = /*@__PURE__*/
-  messageDesc(file_public_v1_common_order, 5);
+  messageDesc(file_public_v1_common_order, 8);
+
+/**
+ * @generated from message public_api.v1.CommonOrderItem
+ */
+export type CommonOrderItem = Message<"public_api.v1.CommonOrderItem"> & {
+  /**
+   * @generated from field: string product_id = 1;
+   */
+  productId: string;
+
+  /**
+   * @generated from field: int32 quantity = 2;
+   */
+  quantity: number;
+
+  /**
+   * @generated from field: optional double tax = 3;
+   */
+  tax?: number;
+
+  /**
+   * @generated from field: map<string, string> metadata = 4;
+   */
+  metadata: { [key: string]: string };
+
+  /**
+   * @generated from field: string name = 5;
+   */
+  name: string;
+
+  /**
+   * @generated from field: optional string image_url = 6;
+   */
+  imageUrl?: string;
+
+  /**
+   * @generated from field: double price = 7;
+   */
+  price: number;
+
+  /**
+   * "PLN", "EUR", "USD"
+   *
+   * @generated from field: string currency = 8;
+   */
+  currency: string;
+};
+
+/**
+ * Describes the message public_api.v1.CommonOrderItem.
+ * Use `create(CommonOrderItemSchema)` to create a new message.
+ */
+export const CommonOrderItemSchema: GenMessage<CommonOrderItem> = /*@__PURE__*/
+  messageDesc(file_public_v1_common_order, 9);
+
+/**
+ * @generated from enum public_api.v1.CouponType
+ */
+export enum CouponType {
+  /**
+   * @generated from enum value: CouponType_FIXED = 0;
+   */
+  CouponType_FIXED = 0,
+
+  /**
+   * @generated from enum value: CouponType_PERCENT = 1;
+   */
+  CouponType_PERCENT = 1,
+}
+
+/**
+ * Describes the enum public_api.v1.CouponType.
+ */
+export const CouponTypeSchema: GenEnum<CouponType> = /*@__PURE__*/
+  enumDesc(file_public_v1_common_order, 0);
 
 /**
  * @generated from service public_api.v1.CommonOrderService
@@ -276,6 +452,14 @@ export const CommonOrderService: GenService<{
     methodKind: "unary";
     input: typeof OrderRequestSchema;
     output: typeof OrderResponseSchema;
+  },
+  /**
+   * @generated from rpc public_api.v1.CommonOrderService.CheckCouponCode
+   */
+  checkCouponCode: {
+    methodKind: "unary";
+    input: typeof CheckCouponCodeRequestSchema;
+    output: typeof CheckCouponCodeResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_public_v1_common_order, 0);

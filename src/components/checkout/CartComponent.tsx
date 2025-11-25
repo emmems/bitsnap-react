@@ -12,7 +12,11 @@ function CartComponent({ isVisible, shouldHide }: Props) {
   const [parent] = useAutoAnimate(/* optional config */);
 
   return (
-    <div ref={parent} className={"bitsnap-checkout dark"} style={{ zIndex: 999999 }}>
+    <div
+      ref={parent}
+      className={"bitsnap-checkout dark"}
+      style={{ zIndex: 999999 }}
+    >
       {isVisible && (
         <>
           <div
@@ -26,14 +30,10 @@ function CartComponent({ isVisible, shouldHide }: Props) {
               "fixed z-20 top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] dark:bg-neutral-900 bg-neutral-300 dark:text-neutral-200 text-neutral-900 flex flex-col"
             }
           >
-            <div
-              className={
-                "mx-3 mt-7 flex justify-between items-center"
-              }
-            >
+            <div className={"mx-3 mt-7 flex justify-between items-center"}>
               <h1 className={"text-2xl font-medium"}>Koszyk</h1>
               <button
-                className="rounded-full dark:hover:bg-neutral-700 hover:bg-neutral-400 p-2 transition"
+                className="rounded-xl dark:hover:bg-neutral-700 hover:bg-neutral-400 p-2 transition"
                 onClick={shouldHide}
               >
                 <svg
@@ -71,7 +71,7 @@ const WrapperCartComponent = (props: Props) => {
     <CartProvider>
       <CartComponent {...props} />
     </CartProvider>,
-    document.body,
+    document.body
   );
 };
 

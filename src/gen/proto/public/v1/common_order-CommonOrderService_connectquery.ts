@@ -9,3 +9,8 @@ import { CommonOrderService } from "./common_order_pb";
  * @generated from rpc public_api.v1.CommonOrderService.UpdateOrderDataAndGetRedirectionIfSucceded
  */
 export const updateOrderDataAndGetRedirectionIfSucceded = CommonOrderService.method.updateOrderDataAndGetRedirectionIfSucceded;
+
+/**
+ * @generated from rpc public_api.v1.CommonOrderService.CheckCouponCode
+ */
+export const checkCouponCode = CommonOrderService.method.checkCouponCode;

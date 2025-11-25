@@ -14,4 +14,5 @@ protoc -I . --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt tar
 protoc --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt target=ts ../instapay/proto/common/v1/push_notifications.proto
 protoc --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt target=ts ../instapay/proto/dashboard/v1/audiobooks.proto
 protoc --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt target=ts ../instapay/proto/public/v1/public_api.proto
+protoc --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt target=ts ../instapay/proto/public/v1/common_order.proto
 protoc -I . --proto_path=../instapay/proto --es_out ./src/gen/proto --es_opt target=ts --es_opt ts_nocheck=true --connect-query_out ./src/gen/proto --connect-query_opt target=ts --connect-query_opt ts_nocheck=true ../instapay/proto/public/v1/*.proto
