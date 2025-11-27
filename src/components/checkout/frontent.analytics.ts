@@ -9,6 +9,7 @@ const eventPayload = zod.object({
     "viewCart",
     "removeFromCart",
     "initiateCheckout",
+    "lead",
   ]),
   step: zod.string().optional(),
   value: zod.number().optional(),
@@ -35,6 +36,7 @@ export function sendAnalyticEvent(payload: EventPayload) {
 
   sendGoogleAnalyticsEvent(payload);
   sendPixelAnalyticsEvent(payload);
+  sendTikTokAnalyticsEvent(payload);
 }
 
 function sendGoogleAnalyticsEvent(payload: EventPayload) {
@@ -47,7 +49,6 @@ function sendGoogleAnalyticsEvent(payload: EventPayload) {
       window.dataLayer = [];
     }
 
-    // Map custom events to GA4 ecommerce events
     const ga4Event = mapToGA4EcommerceEvent(payload);
 
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -145,6 +146,14 @@ function sendPixelAnalyticsEvent(payload: EventPayload) {
         ...payload,
       };
       break;
+    case "lead":
+      eventType = "track";
+      eventName = "Lead";
+      eventPayload = {
+        category_name: payload.step,
+        ...payload,
+      };
+      break;
     case "addToCart":
       eventType = "track";
       eventName = "Add to Cart";
@@ -196,4 +205,112 @@ function sendPixelAnalyticsEvent(payload: EventPayload) {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   window.fbq(eventType, eventName, eventPayload);
+}
+
+function sendTikTokAnalyticsEvent(payload: EventPayload) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    if (typeof window.ttq == "undefined") {
+      return;
+    }
+
+    const tiktokEvent = mapToTikTokEvent(payload);
+
+    if (!tiktokEvent) {
+      return;
+    }
+
+    if (window.location.search.includes("analytics")) {
+      console.log(
+        "Pushing TikTok event",
+        tiktokEvent.eventName,
+        tiktokEvent.eventPayload
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    window.ttq.track(tiktokEvent.eventName, tiktokEvent.eventPayload);
+  } catch (e) {
+    console.warn("cannot send tiktok analytics event", e);
+  }
+}
+
+function mapToTikTokEvent(payload: EventPayload) {
+  // Calculate total value from items if not provided
+  const totalValue =
+    payload.value ??
+    payload.items?.reduce(
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
+      0
+    ) ??
+    0;
+
+  // Map items to TikTok contents format
+  const contents =
+    payload.items?.map((item) => ({
+      content_id: item.id,
+      content_type: "product",
+      content_name: item.name || item.id,
+      quantity: item.quantity || 1,
+      price: round((item.price || 0) / 100, 2),
+    })) || [];
+
+  // If no items but we have content_name, create a single content entry
+  if (contents.length === 0 && payload.content_name) {
+    contents.push({
+      content_id: payload.step || "unknown",
+      content_type: "product",
+      content_name: payload.content_name,
+      quantity: 1,
+      price: round(totalValue / 100, 2),
+    });
+  }
+
+  // Build base event payload
+  const eventPayload: Record<string, unknown> = {
+    currency: payload.currency || "PLN",
+    value: round(totalValue / 100, 2),
+  };
+
+  if (contents.length > 0) {
+    eventPayload.contents = contents;
+  }
+
+  // Map event names to TikTok events
+  let eventName: string | null = null;
+  switch (payload.event) {
+    case "purchase":
+      eventName = "Purchase";
+      break;
+    case "addToCart":
+      eventName = "AddToCart";
+      break;
+    case "initiateCheckout":
+      eventName = "InitiateCheckout";
+      break;
+    case "customizeProduct":
+      eventName = "CustomizeProduct";
+      break;
+    case "viewCart":
+      // TikTok doesn't have a ViewCart event, use ViewContent as fallback
+      eventName = "ViewContent";
+      break;
+    case "removeFromCart":
+      // TikTok doesn't have a RemoveFromCart event, use ViewContent as fallback
+      eventName = "ViewContent";
+      break;
+    case "lead":
+      // TikTok doesn't have a standard Lead event, use ViewContent as fallback
+      eventName = "ViewContent";
+      break;
+    default:
+      return null;
+  }
+
+  return {
+    eventName,
+    eventPayload,
+  };
 }
