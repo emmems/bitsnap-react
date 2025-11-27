@@ -294,16 +294,19 @@ function mapToTikTokEvent(payload: EventPayload) {
       eventName = "CustomizeProduct";
       break;
     case "viewCart":
-      // TikTok doesn't have a ViewCart event, use ViewContent as fallback
-      eventName = "ViewContent";
+      return undefined;
+      // // TikTok doesn't have a ViewCart event, use ViewContent as fallback
+      // eventName = 'ViewContent'
       break;
     case "removeFromCart":
-      // TikTok doesn't have a RemoveFromCart event, use ViewContent as fallback
-      eventName = "ViewContent";
+      return undefined;
+      // // TikTok doesn't have a RemoveFromCart event, use ViewContent as fallback
+      // eventName = 'ViewContent'
       break;
     case "lead":
-      // TikTok doesn't have a standard Lead event, use ViewContent as fallback
-      eventName = "ViewContent";
+      return undefined;
+      // // TikTok doesn't have a standard Lead event, use ViewContent as fallback
+      // eventName = 'ViewContent'
       break;
     default:
       return null;
