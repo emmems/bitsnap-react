@@ -171,7 +171,10 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
 };
 
 // @ts-ignore
-const getProducts: (projectID: string) => Promise<
+const getProducts: (
+  projectID: string,
+  args?: { items?: CheckoutProduct[] }
+) => Promise<
   | Err
   | {
       id: string;
@@ -180,8 +183,14 @@ const getProducts: (projectID: string) => Promise<
       metadata?: { [key: string]: string | undefined };
       details?: SingleProduct;
     }[]
-> = async (projectID: string) => {
-  const products = getCheckout()?.products ?? [];
+> = async (projectID: string, args?: { items?: CheckoutProduct[] }) => {
+  let products: CheckoutProduct[] = [];
+
+  if (args?.items != null && args.items.length > 0) {
+    products = args.items;
+  } else {
+    products = getCheckout()?.products ?? [];
+  }
 
   const productIds = Array.from(
     new Set(products.map((product) => product.productID))
@@ -255,22 +264,20 @@ const googlePayConfigSchema = zod.object({
   gateway: zod.string(),
   gatewayId: zod.string(),
 });
+const checkoutProduct = zod.object({
+  id: zod.string(),
+  productID: zod.string(),
+  quantity: zod.number(),
+  metadata: zod.record(zod.string(), zod.string().optional()).optional(),
+});
+type CheckoutProduct = zod.infer<typeof checkoutProduct>;
 const checkoutSchema = zod.object({
   country: zod.string().optional(),
   couponCode: zod.string().optional(),
   selectedDeliveryMethod: zod.string().optional(),
   postalCode: zod.string().optional(),
   email: zod.string().optional(),
-  products: zod
-    .array(
-      zod.object({
-        id: zod.string(),
-        productID: zod.string(),
-        quantity: zod.number(),
-        metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-      })
-    )
-    .optional(),
+  products: zod.array(checkoutProduct).optional(),
   googlePayConfig: googlePayConfigSchema.optional(),
 });
 export type GooglePayConfig = zod.infer<typeof googlePayConfigSchema>;
@@ -412,16 +419,17 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
             isAvailable: false,
           };
         }
-        if (args && args.items != null && args.items.length > 0) {
-          if (checkout.products) {
-            removeProductFromCheckout(
-              checkout.products.map((el) => el.productID)
-            );
-          }
-          addProducts(args.items);
-        }
 
-        const products = await getProducts(projectID);
+        const products = await getProducts(projectID, {
+          items: args.items.map((el) => {
+            return {
+              id: Math.random().toString(36).substring(7),
+              quantity: el.quantity,
+              metadata: el.metadata,
+              productID: el.productID,
+            };
+          }),
+        });
 
         if (isErr(products)) {
           return {
