@@ -696,31 +696,15 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         ];
       }
 
-      const result = await fetch(buildURL(projectID, "/buy"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      console.log("CODE", result.status);
+      const result = await createPaymentURL(payload);
 
-      if (result.status != 200) {
-        console.warn(
-          "result",
-          await result.text(),
-          result.status,
-          result.statusText
-        );
-        return Err("internal-error", "internal");
+      if (isErr(result)) {
+        return result;
+      } else {
+        return {
+          url: result.url,
+        };
       }
-
-      const response: { url: string; sessionID: string } = await result.json();
-
-      console.log(response.url);
-      return {
-        url: response.url,
-      };
     },
 
     async completeApplePayPayment(args: {

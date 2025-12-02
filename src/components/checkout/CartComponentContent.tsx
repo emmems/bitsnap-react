@@ -10,6 +10,7 @@ import { Skeleton } from "./Skeleton";
 import { ApplePayButton, GooglePayButton } from "..";
 import { Spinner } from "@/src/ui/spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { sendAnalyticEvent } from "./frontent.analytics";
 
 const CartComponentContent = ({ className }: { className: string }) => {
   const provider = useCartProvider();
@@ -28,6 +29,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
   });
 
   const [errMsg, setErrMsg] = React.useState("");
+  const [missingItemIds, setMissingItemIds] = React.useState<string[]>([]);
 
   const [isCountryOpen, setIsCountryOpen] = React.useState(false);
 
@@ -100,10 +102,32 @@ const CartComponentContent = ({ className }: { className: string }) => {
     try {
       setErrMsg("");
 
+      if (products != null) {
+        try {
+          sendAnalyticEvent({
+            event: "initiateCheckout",
+            items: products?.map((el) => ({
+              id: el.productID,
+              name: el.details?.name ?? "",
+              price: el.details?.price ?? 0,
+              quantity: el.quantity,
+              currency: el.details?.currency ?? "PLN",
+            })),
+          });
+        } catch (e) {}
+      }
+
       const response = await continueToCheckoutAsync();
 
       if (isErr(response)) {
-        setErrMsg(`${response.error}`);
+        if (response.error == "item-ids-not-found") {
+          setErrMsg("Nie wszystkie produkty są dostępne w magazynie.");
+          if ("data" in response && Array.isArray(response.data)) {
+            setMissingItemIds(response.data as string[]);
+          }
+        } else {
+          setErrMsg(`${response.error}`);
+        }
         return;
       }
 
@@ -131,9 +155,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
         </div>
       )}
 
-      <div
-        className={"max-h-[70vh] overflow-clip overflow-y-scroll"}
-      >
+      <div className={"max-h-[70vh] overflow-clip overflow-y-scroll"}>
         {products != null && products.length > 0 && (
           <ul className={"mt-5"}>
             {products.map((product) => (
@@ -141,6 +163,9 @@ const CartComponentContent = ({ className }: { className: string }) => {
                 {product.details != null && (
                   <li className={"mb-3"}>
                     <SingleProduct
+                      isNotAvailable={missingItemIds.includes(
+                        product.productID
+                      )}
                       quantity={product.quantity}
                       details={product.details}
                       shouldUpdate={(newQuantity) => {
@@ -161,16 +186,8 @@ const CartComponentContent = ({ className }: { className: string }) => {
       {sumOfProducts > 0 && currency != null && (
         <>
           <div className="mx-3 flex flex-col">
-            <div
-              className={
-                "flex flex-row justify-between text-lg"
-              }
-            >
-              <p
-                className={
-                  "dark:text-neutral-200 text-neutral-800 text-xl"
-                }
-              >
+            <div className={"flex flex-row justify-between text-lg"}>
+              <p className={"dark:text-neutral-200 text-neutral-800 text-xl"}>
                 Suma:
               </p>
               <div className={"flex flex-col items-end"}>
@@ -182,9 +199,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
                   {formatCurrency(sumOfProducts, currency)}
                 </p>
                 {isSomeProductDeliverable && (
-                  <p className={"opacity-70 text-right text-base"}>
-                    + dostawa
-                  </p>
+                  <p className={"opacity-70 text-right text-base"}>+ dostawa</p>
                 )}
               </div>
             </div>
@@ -219,26 +234,35 @@ const CartComponentContent = ({ className }: { className: string }) => {
           <div className={"mb-3 flex flex-col"}>
             {isApplePayAvailable && products != null && products.length > 0 && (
               <div className="w-full px-2">
-                <ApplePayButton colorType="white" style={{ width: '100%' }} items={products?.map(el => ({
-                  name: el.details?.name ?? "",
-                  id: el.productID,
-                  price: el.details?.price ?? 0,
-                  quantity: el.quantity,
-                  isDeliverable: el.details?.isDeliverable ?? false,
-                  metadata: el.metadata,
-                }))} />
+                <ApplePayButton
+                  colorType="white"
+                  style={{ width: "100%" }}
+                  items={products?.map((el) => ({
+                    name: el.details?.name ?? "",
+                    id: el.productID,
+                    price: el.details?.price ?? 0,
+                    quantity: el.quantity,
+                    isDeliverable: el.details?.isDeliverable ?? false,
+                    metadata: el.metadata,
+                  }))}
+                />
               </div>
             )}
             {products != null && products.length > 0 && (
               <div className="w-full px-2">
-                <GooglePayButton buttonSizeMode="fill" buttonColor="white" style={{ width: '100%' }} items={products?.map(el => ({
-                  name: el.details?.name ?? "",
-                  id: el.productID,
-                  price: el.details?.price ?? 0,
-                  quantity: el.quantity,
-                  isDeliverable: el.details?.isDeliverable ?? false,
-                  metadata: el.metadata,
-                }))} />
+                <GooglePayButton
+                  buttonSizeMode="fill"
+                  buttonColor="white"
+                  style={{ width: "100%" }}
+                  items={products?.map((el) => ({
+                    name: el.details?.name ?? "",
+                    id: el.productID,
+                    price: el.details?.price ?? 0,
+                    quantity: el.quantity,
+                    isDeliverable: el.details?.isDeliverable ?? false,
+                    metadata: el.metadata,
+                  }))}
+                />
               </div>
             )}
             <button
@@ -255,9 +279,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
               {isContinueToCheckoutLoading ? <Spinner /> : "Następny krok"}
             </button>
             {errMsg.length > 0 && (
-              <p className={"text-red-500 text-sm text-center"}>
-                {errMsg}
-              </p>
+              <p className={"text-red-500 text-sm text-center"}>{errMsg}</p>
             )}
           </div>
         </>

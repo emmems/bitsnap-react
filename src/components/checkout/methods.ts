@@ -63,12 +63,23 @@ export async function createPaymentURL(request: LinkRequest) {
   });
 
   if (result.status != 200) {
-    console.warn(
-      "result",
-      await result.text(),
-      result.status,
-      result.statusText
-    );
+    if (result.headers.get("Content-Type")?.includes("application/json")) {
+      try {
+        const payload = await result.json();
+        if ("itemIds" in payload && Array.isArray(payload.itemIds)) {
+          const itemIds: string[] = payload.itemIds;
+          return Err("item-ids-not-found", "badInput", itemIds);
+        }
+      } catch (error) {}
+      return Err("internal-error", "internal");
+    } else {
+      console.warn(
+        "result",
+        await result.text(),
+        result.status,
+        result.statusText
+      );
+    }
     return Err("internal-error", "internal");
   }
 

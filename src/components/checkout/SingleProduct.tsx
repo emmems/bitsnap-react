@@ -4,19 +4,27 @@ import type { SingleProduct } from "./product.details.model";
 import { Button } from "@/src/ui/button";
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { ButtonGroup } from "@/src/ui/button-group";
+import { cn } from "@/src/lib/utils";
 
 const SingleProduct = ({
+  isNotAvailable,
   quantity,
   details,
   shouldUpdate,
 }: {
+  isNotAvailable: boolean;
   quantity: number;
   metadata?: { [key: string]: string | undefined };
   details: SingleProduct;
   shouldUpdate: (newQuantity?: number) => void;
 }) => {
   return (
-    <div className={"flex items-center gap-3 mx-3"}>
+    <div
+      className={cn(
+        "flex items-center gap-3 mx-3",
+        isNotAvailable ? "outline outline-1 rounded-md outline-red-600 m-1" : ""
+      )}
+    >
       <img
         className={
           "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden"
