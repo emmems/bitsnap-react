@@ -1,12 +1,3 @@
-import { Button } from "../../ui/button";
-import {
-  mediaSessionPause,
-  mediaSessionPlay,
-  mediaSessionUpdateDurationAndPosition,
-  startMediaSessionCoordinator,
-  stopMediaSessionCoordinator,
-} from "./media.session.coordinator";
-import LoadingIndicator from "../LoadingIndicator";
 import Hls from "hls.js";
 import { Pause, Play } from "lucide-react";
 import {
@@ -17,6 +8,15 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { Button } from "../../ui/button";
+import LoadingIndicator from "../LoadingIndicator";
+import {
+  mediaSessionPause,
+  mediaSessionPlay,
+  mediaSessionUpdateDurationAndPosition,
+  startMediaSessionCoordinator,
+  stopMediaSessionCoordinator,
+} from "./media.session.coordinator";
 
 import "./audio-player.css";
 
@@ -27,6 +27,7 @@ type ChapterWithPublicUrl = {
   description?: string;
   publicUrl: string;
   downloadableUrl?: string;
+  duration?: number;
 };
 
 export type AudioPlayerMethods = {

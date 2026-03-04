@@ -1,18 +1,18 @@
-import { Button } from "../../ui/button";
-import { cn } from "../../lib/utils";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { ChevronLeft, Download } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   UserProductType,
-  type UserProduct,
   type UserPanelGetAudiobookDetailsDownloadURLsResponse_AudiobookDownloadDetails,
+  type UserProduct,
 } from "../../gen/proto/public/v1/public_api_pb";
+import { cn } from "../../lib/utils";
 import { rpcProvider, useMutation } from "../../rpc-provider";
+import { Button } from "../../ui/button";
 import AudioPlayer, {
   type AudioPlayerMethods,
 } from "../audio-player/AudioPlayer";
 import LoadingIndicator from "../LoadingIndicator";
-import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { ChevronLeft, Download } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { ProgressBar } from "./ProgressBar";
 
@@ -48,10 +48,13 @@ const PanelProductDetails = ({
   const audioPlayerSeekToHandler = useRef<
     ((second: number) => void) | undefined
   >(undefined);
-  const [audioResponse, setAudioResponse] = useState<Record<string, unknown> | null>(null);
+  const [audioResponse, setAudioResponse] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [audioDownloadURLs, setAudioDownloadURLs] = useState<
-    UserPanelGetAudiobookDetailsDownloadURLsResponse_AudiobookDownloadDetails[]
-  | null
+    | UserPanelGetAudiobookDetailsDownloadURLsResponse_AudiobookDownloadDetails[]
+    | null
   >(null);
   const [
     isAvailableToDownloadInMobileApp,
@@ -73,6 +76,7 @@ const PanelProductDetails = ({
     description?: string;
     publicUrl: string;
     downloadableUrl?: string;
+    duration?: number;
   };
 
   const [selectedChapter, setSelectedChapter] =
@@ -107,7 +111,9 @@ const PanelProductDetails = ({
       });
 
       if (audioResult.result.case === "audiobook") {
-        setAudioResponse(audioResult.result.value as unknown as Record<string, unknown>);
+        setAudioResponse(
+          audioResult.result.value as unknown as Record<string, unknown>,
+        );
         return;
       } else {
         warn("Pobranie plików nie powiodło się. Zalecamy kontakt.");
@@ -155,9 +161,11 @@ const PanelProductDetails = ({
 
   useEffect(() => {
     if (audioResponse != null && audioDownloadURLs != null) {
-      const audioChapters = (audioResponse as { chapters?: ChapterWithPublicUrl[] }).chapters;
+      const audioChapters = (
+        audioResponse as { chapters?: ChapterWithPublicUrl[] }
+      ).chapters;
       if (!audioChapters) return;
-      
+
       const mappedChapters = audioChapters
         .map((chapter) => {
           const details = audioDownloadURLs?.find(
@@ -170,6 +178,7 @@ const PanelProductDetails = ({
             ...chapter,
             publicUrl: details.publicUrl,
             downloadableUrl: details.downloadableUrl,
+            duration: details.duration,
           } as ChapterWithPublicUrl;
         })
         .filter((el) => el != null);
@@ -268,7 +277,8 @@ const PanelProductDetails = ({
                               undefined
                             }
                             imageURL={
-                              (audioResponse as { coverImage?: string })?.coverImage ??
+                              (audioResponse as { coverImage?: string })
+                                ?.coverImage ??
                               product.productImageUrl ??
                               undefined
                             }
@@ -349,9 +359,19 @@ const PanelProductDetails = ({
                                 audioPlayerRef.current.selectChapter(chapter);
                               }}
                             >
-                              <p className="text-sm font-medium">
-                                {chapter.name}
-                              </p>
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium">
+                                  {chapter.name}
+                                </p>
+                                {chapter.duration && (
+                                  <span className="text-xs text-neutral-500">
+                                    {Math.floor(chapter.duration / 60)}:
+                                    {String(
+                                      Math.floor(chapter.duration % 60),
+                                    ).padStart(2, "0")}
+                                  </span>
+                                )}
+                              </div>
                               {chapter.description && (
                                 <p className="mt-3 text-xs">
                                   {chapter.description}
@@ -360,7 +380,8 @@ const PanelProductDetails = ({
                             </button>
 
                             {audioResponse &&
-                              (audioResponse as { isDownloadable?: boolean }).isDownloadable &&
+                              (audioResponse as { isDownloadable?: boolean })
+                                .isDownloadable &&
                               chapter.downloadableUrl && (
                                 <a href={chapter.downloadableUrl}>
                                   <Download width={14} height={14} />
