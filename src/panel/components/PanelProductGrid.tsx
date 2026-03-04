@@ -8,14 +8,10 @@ import { rpcProvider, useQuery } from "../../rpc-provider";
 import { Button } from "../../ui/button";
 import LoadingIndicator from "../LoadingIndicator";
 
+import { renderText } from "@/src/lib/render.text";
 import { fromJsonString, toJsonString } from "@bufbuild/protobuf";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
-
-function renderText(text: string | undefined): string {
-  if (!text) return "";
-  return text;
-}
 
 interface PanelProductGridComponentProps {
   accessToken: string;
