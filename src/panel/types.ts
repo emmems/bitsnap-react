@@ -1,5 +1,3 @@
-import type { UserProduct } from "../gen/proto/public/v1/public_api_pb";
-
 export interface GetThemeOutput {
   logoURL?: string;
   logoDarkURL?: string;
@@ -9,10 +7,16 @@ export interface GetThemeOutput {
   };
 }
 
-export type PanelScreen = "products" | "notifications" | "profile" | "plans" | "orders" | "order-details";
+export type PanelScreen =
+  | "products"
+  | "notifications"
+  | "profile"
+  | "plans"
+  | "orders"
+  | "order-details";
 
 export type PanelSearchParamsType = {
-  product?: UserProduct;
+  product?: string;
   state: PanelScreen;
   orderId?: string;
 };

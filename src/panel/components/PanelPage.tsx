@@ -1,6 +1,5 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useEffect, useState, type CSSProperties } from "react";
-import type { UserProduct } from "../../gen/proto/public/v1/public_api_pb";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
 import { usePanelConfig } from "../PanelProvider";
@@ -22,7 +21,7 @@ export type PanelScreen =
   | "order-details";
 
 export type PanelSearchParamsType = {
-  product?: UserProduct;
+  product?: string;
   state: PanelScreen;
   orderId?: string;
 };

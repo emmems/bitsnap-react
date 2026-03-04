@@ -1,12 +1,14 @@
-import { Button } from "../../ui/button";
+import { useState, type CSSProperties } from "react";
 import {
+  UserProductSchema,
   UserProductType,
   type UserProduct,
 } from "../../gen/proto/public/v1/public_api_pb";
 import { rpcProvider, useQuery } from "../../rpc-provider";
+import { Button } from "../../ui/button";
 import LoadingIndicator from "../LoadingIndicator";
-import { useState, type CSSProperties } from "react";
 
+import { fromJsonString, toJsonString } from "@bufbuild/protobuf";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
 
@@ -103,7 +105,11 @@ const ProductsComponent = ({
 
   const [selectedProduct, setSelectedProduct] = useState<
     UserProduct | undefined
-  >(params.product ? JSON.parse(params.product.toString()) : undefined);
+  >(
+    params.product
+      ? fromJsonString(UserProductSchema, params.product)
+      : undefined,
+  );
 
   const reveal = (product?: UserProduct) => {
     if (product == null) {
@@ -114,7 +120,7 @@ const ProductsComponent = ({
       });
     } else {
       setParams({
-        product: product,
+        product: toJsonString(UserProductSchema, product),
         state: "products",
       });
     }

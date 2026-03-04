@@ -1,17 +1,16 @@
-import { Button } from "../../ui/button";
-import { cn } from "../../lib/utils";
-import type { UserProduct } from "../../gen/proto/public/v1/public_api_pb";
-import type { GetThemeOutput } from "../types";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { LogOut } from "lucide-react";
 import { useState, type CSSProperties } from "react";
+import { cn } from "../../lib/utils";
+import { Button } from "../../ui/button";
+import type { GetThemeOutput } from "../types";
 
 import type { PanelScreen } from "../types";
 
 interface PanelProductHeaderComponentProps {
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: UserProduct; state: PanelScreen }) => void;
+  setParams: (params: { product?: string; state: PanelScreen }) => void;
   styles: CSSProperties;
   theme?: GetThemeOutput;
   logout: () => void;
@@ -49,7 +48,7 @@ export default PanelProductHeaderComponent;
 interface MobileMenuProps {
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: UserProduct; state: PanelScreen }) => void;
+  setParams: (params: { product?: string; state: PanelScreen }) => void;
 }
 
 function MobileMenu({
@@ -95,7 +94,7 @@ interface MobileButtonProps {
   imageURL: string;
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: UserProduct; state: PanelScreen }) => void;
+  setParams: (params: { product?: string; state: PanelScreen }) => void;
 }
 
 function MobileButton({
@@ -135,7 +134,7 @@ interface SidebarButtonProps {
   darkImageURL: string;
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: UserProduct; state: PanelScreen }) => void;
+  setParams: (params: { product?: string; state: PanelScreen }) => void;
   isExpanded: boolean;
 }
 
@@ -187,7 +186,7 @@ function SidebarButton({
 interface SidebarMenuProps {
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: UserProduct; state: PanelScreen }) => void;
+  setParams: (params: { product?: string; state: PanelScreen }) => void;
   theme?: GetThemeOutput;
   logout: () => void;
 }
