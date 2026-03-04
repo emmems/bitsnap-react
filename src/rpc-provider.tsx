@@ -36,7 +36,7 @@ export function setHost(host: string): void {
 }
 
 function getTransportHost(): string {
-  return "http://localhost:4321"; //customHost ?? HOST;
+  return customHost ?? HOST;
 }
 
 export const RpcProvider: React.FC<{
