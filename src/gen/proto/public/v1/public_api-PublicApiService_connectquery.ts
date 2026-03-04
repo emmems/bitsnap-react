@@ -11,6 +11,11 @@ import { PublicApiService } from "./public_api_pb";
 export const getOrder = PublicApiService.method.getOrder;
 
 /**
+ * @generated from rpc public_api.v1.PublicApiService.GetOrders
+ */
+export const getOrders = PublicApiService.method.getOrders;
+
+/**
  * @generated from rpc public_api.v1.PublicApiService.GetOrderRetryUrl
  */
 export const getOrderRetryUrl = PublicApiService.method.getOrderRetryUrl;
@@ -142,3 +147,32 @@ export const authorizeOneClickPayment = PublicApiService.method.authorizeOneClic
  * @generated from rpc public_api.v1.PublicApiService.NotifyUserAboutProductAvailability
  */
 export const notifyUserAboutProductAvailability = PublicApiService.method.notifyUserAboutProductAvailability;
+
+/**
+ * Public order details (with obfuscation)
+ *
+ * @generated from rpc public_api.v1.PublicApiService.GetPublicOrderDetails
+ */
+export const getPublicOrderDetails = PublicApiService.method.getPublicOrderDetails;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.AddPublicOrderComment
+ */
+export const addPublicOrderComment = PublicApiService.method.addPublicOrderComment;
+
+/**
+ * Testimonials
+ *
+ * @generated from rpc public_api.v1.PublicApiService.GetOrderForTestimonial
+ */
+export const getOrderForTestimonial = PublicApiService.method.getOrderForTestimonial;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.SubmitTestimonial
+ */
+export const submitTestimonial = PublicApiService.method.submitTestimonial;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetTestimonialUploadUrl
+ */
+export const getTestimonialUploadUrl = PublicApiService.method.getTestimonialUploadUrl;

@@ -1,0 +1,47 @@
+---
+import { hashId } from "../../../../queries/hashids";
+import { db } from "../../../../server/db/sql";
+import { getProjectFromName } from "../../../../server/routers/subscriptions/subscriptions";
+import Layout from "../../../layouts/Layout.astro";
+import { getPublicTRPCCaller } from "../../api/integrations/[project_id]/coupons/auth.helper";
+import { PanelLoginComponent } from "../PanelLoginComponent";
+
+const title = "Logowanie";
+
+const name = Astro.params.name;
+
+const isDarkMode = Astro.params["dark"] === "true";
+const isLightMode = Astro.params["dark"] === "false";
+
+let darkMode: boolean | undefined = undefined;
+if (isDarkMode) {
+  darkMode = true;
+} else if (isLightMode) {
+  darkMode = false;
+}
+
+let projectID = "";
+let theme;
+if (name != null) {
+  const project = await getProjectFromName(db, name);
+  if (project != null) {
+    projectID = hashId(project.id as number);
+    const caller = await getPublicTRPCCaller(
+      Astro.request,
+      Astro.cookies,
+      projectID,
+    );
+
+    theme = await caller.userPanel.getTheme({ projectID });
+  }
+}
+---
+
+<Layout title={title} darkMode={darkMode ?? theme.darkMode}>
+  <PanelLoginComponent
+    client:only="react"
+    projectID={projectID}
+    theme={theme}
+  />
+  <script is:inline src="/js/iframeResizer.contentWindow.min.js"></script>
+</Layout>

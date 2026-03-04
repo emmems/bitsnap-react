@@ -92,9 +92,7 @@ setProjectID("your-project-id");
 3. Cart Methods:
 
 ```tsx
-import {
-  Bitsnap,
-} from "bitsnap-checkout";
+import { Bitsnap } from "bitsnap-checkout";
 
 // Modern approach using namespace
 async function handleCart() {
@@ -256,3 +254,238 @@ function Store() {
   );
 }
 ```
+
+---
+
+## Capabilities
+
+### Authentication:
+
+- Email-based login with OTP verification
+- Session management
+- Logout functionality
+
+### Product Management:
+
+- Browse purchased products
+- View product details
+- Audio playback with chapter navigation
+- File downloads
+- Progress tracking
+
+### User Features:
+
+- Profile management
+- Order history viewing
+- Subscription plan management
+- Notification preferences
+
+## Configuration
+
+Before using the Panel components, configure the library globally:
+
+```tsx
+import {
+  setProjectID,
+  setTheme,
+  setLoginURL,
+  setHost,
+  PanelProvider,
+} from "bitsnap-react";
+
+// Configure globally - call once at app initialization
+setProjectID("your-project-id");
+setLoginURL("/panel/login");
+setHost("https://api.bitsnap.pl");
+
+// Optional: Set theme
+setTheme({
+  logoURL: "https://yourdomain.com/logo.png",
+  logoDarkURL: "https://yourdomain.com/logo-dark.png",
+  colors: {
+    brand: "#ff0000",
+    brandDark: "#cc0000",
+  },
+});
+```
+
+### Configuration Options
+
+| Function       | Type             | Description                                  |
+| -------------- | ---------------- | -------------------------------------------- |
+| `setProjectID` | `string`         | Your Bitsnap project ID                      |
+| `setLoginURL`  | `string`         | URL for login page (default: `/panel/login`) |
+| `setHost`      | `string`         | Custom API host URL                          |
+| `setTheme`     | `GetThemeOutput` | Theme configuration (logo, colors)           |
+
+### Theme Type
+
+```tsx
+interface GetThemeOutput {
+  logoURL?: string;
+  logoDarkURL?: string;
+  colors?: {
+    brand?: string;
+    brandDark?: string;
+  };
+}
+```
+
+## Usage
+
+Wrap your application with `PanelProvider`:
+
+```tsx
+import { PanelProvider } from "bitsnap-react";
+
+function App() {
+  return (
+    <PanelProvider>
+      <YourApp />
+    </PanelProvider>
+  );
+}
+```
+
+### Panel Component
+
+The main panel component displays the authenticated user panel with products, orders, and profile.
+
+```tsx
+import { Panel } from "bitsnap-react";
+
+function MyPage() {
+  return <Panel />;
+}
+```
+
+### PanelLogin Component
+
+The login component handles email-based authentication with OTP verification.
+
+```tsx
+import { PanelLogin } from "bitsnap-react";
+
+function LoginPage() {
+  return <PanelLogin />;
+}
+```
+
+## Complete Example
+
+### App Entry Point
+
+```tsx
+import {
+  setProjectID,
+  setTheme,
+  setLoginURL,
+  setHost,
+  PanelProvider,
+  Panel,
+  PanelLogin,
+} from "bitsnap-react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+// Configure at app startup
+setProjectID("your-project-id");
+setLoginURL("/panel/login");
+setHost("https://api.bitsnap.pl");
+
+setTheme({
+  logoURL: "https://yourdomain.com/logo.png",
+  colors: {
+    brand: "#4F46E5",
+    brandDark: "#3730A3",
+  },
+});
+
+export default function App() {
+  return (
+    <PanelProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/panel" element={<Panel />} />
+          <Route path="/panel/login" element={<PanelLogin />} />
+        </Routes>
+      </BrowserRouter>
+    </PanelProvider>
+  );
+}
+```
+
+### Login Page
+
+```tsx
+import { PanelLogin } from "bitsnap-react";
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <PanelLogin />
+    </div>
+  );
+}
+```
+
+### Panel Page (Authenticated)
+
+```tsx
+import { Panel } from "bitsnap-react";
+
+export default function DashboardPage() {
+  return <Panel />;
+}
+```
+
+## Panel Screens
+
+The panel provides the following screens:
+
+| Screen        | Path                         | Description                        |
+| ------------- | ---------------------------- | ---------------------------------- |
+| Products      | `/panel`                     | Browse and view purchased products |
+| Orders        | `/panel?state=orders`        | View order history and invoices    |
+| Profile       | `/panel?state=profile`       | User profile and settings          |
+| Notifications | `/panel?state=notifications` | Notification preferences           |
+| Plans         | `/panel?state=plans`         | Subscription management            |
+
+## Features Detail
+
+### Products Screen
+
+- Displays all purchased products
+- Shows product cards with image, name, and description
+- Click to view product details
+- Supports audio, file, and ticket products
+
+### Product Details
+
+- Full product information display
+- Audio player with chapter navigation
+- File download links
+- Progress tracking
+
+### Audio Player
+
+- Chapter selection
+- Play/pause controls
+- Seek functionality
+- Media session integration (lock screen controls)
+- Progress persistence
+
+### Order History
+
+- List of all invoices
+- Invoice status (paid, unpaid, overdue)
+- Download PDF invoices
+
+### Profile
+
+- View email address
+- Logout functionality
+
+### Notifications
+
+- Toggle all notifications
+- Notification preferences

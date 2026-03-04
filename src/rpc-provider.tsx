@@ -7,10 +7,10 @@ import { createConnectTransport } from "@connectrpc/connect-web";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { useState } from "react";
 
-import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
-import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
-import { HOST } from "./components/checkout/constants";
 import { Transport } from "@connectrpc/connect";
+import { setCustomHost } from "./components/checkout/constants";
+import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
+import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
 
 let currentFinalTransportHost: string | undefined;
 let finalTransport: Transport | undefined;
@@ -28,13 +28,26 @@ export const rpcProvider = {
 export const useQuery = uq;
 export const useMutation = um;
 
+let customHost: string | undefined;
+
+export function setHost(host: string): void {
+  customHost = host;
+  setCustomHost(host);
+}
+
+function getTransportHost(): string {
+  return "http://localhost:4321"; //customHost ?? HOST;
+}
+
 export const RpcProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
-  if (finalTransport == null || currentFinalTransportHost !== HOST) {
-    currentFinalTransportHost = HOST;
+  const transportHost = getTransportHost();
+
+  if (finalTransport == null || currentFinalTransportHost !== transportHost) {
+    currentFinalTransportHost = transportHost;
     finalTransport = createConnectTransport({
-      baseUrl: HOST + "/api/rpc",
+      baseUrl: transportHost + "/api/rpc",
       useBinaryFormat: true,
       // @ts-ignore
       fetch: async (input, init?) => {
@@ -51,7 +64,7 @@ export const RpcProvider: React.FC<{
     () =>
       new QueryClient({
         defaultOptions: { queries: { staleTime: 5000 } },
-      })
+      }),
   );
 
   return (

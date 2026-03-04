@@ -1,0 +1,17 @@
+---
+import { hashId } from "../../../queries/hashids";
+import { db } from "../../../server/db/sql";
+import { getProjectFromName } from "../../../server/routers/subscriptions/subscriptions";
+import Layout from "../../layouts/Layout.astro";
+import { getPublicTRPCCaller } from "../api/integrations/[project_id]/coupons/auth.helper";
+import PanelPage from "./PanelPage";
+
+const title = "Panel";
+
+const loginURL = `/panel/login`;
+const projectID = "";
+---
+
+<Layout title={title}>
+  <PanelPage client:only="react" loginURL={loginURL} projectID={projectID} />
+</Layout>

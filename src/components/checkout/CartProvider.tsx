@@ -1,4 +1,6 @@
+import { setPanelConfig } from "@/src/panel";
 import { create } from "@bufbuild/protobuf";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect } from "react";
 import {
   AddressSchema,
@@ -12,9 +14,11 @@ import {
 import { PublicApiClient } from "src/public.api.client";
 import zod from "zod";
 import { HOST, setCustomHost } from "./constants";
+import { sendAnalyticEvent } from "./frontent.analytics";
+import { mapGooglePayConfiguration } from "./google.pay.mapper";
 import { buildURL } from "./helper.methods";
 import { Err, isErr } from "./lib/err";
-import { formatCurrency, round } from "./lib/round.number";
+import { round } from "./lib/round.number";
 import { LinkRequest } from "./link.request.schema";
 import {
   createPaymentURL,
@@ -22,10 +26,7 @@ import {
   injectReferenceToRequestIfNeeded,
 } from "./methods";
 import { SingleProduct } from "./product.details.model";
-import { mapGooglePayConfiguration } from "./google.pay.mapper";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCheckoutStore } from "./state";
-import { sendAnalyticEvent } from "./frontent.analytics";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -125,6 +126,9 @@ const CartProviderContext = createContext<CartMethods | undefined>(undefined);
 
 export var bitsnapProjectID: string | undefined = undefined;
 export function setProjectID(projectID: string) {
+  setPanelConfig({
+    projectID,
+  });
   bitsnapProjectID = projectID;
 }
 
@@ -133,7 +137,7 @@ export function getProjectID(): string | undefined {
     return bitsnapProjectID;
   }
   const me = document.querySelector(
-    'script[data-id][data-name="internal-cart"]'
+    'script[data-id][data-name="internal-cart"]',
   );
   const projectID = me?.getAttribute("data-id");
   return projectID ?? undefined;
@@ -141,7 +145,7 @@ export function getProjectID(): string | undefined {
 
 function getNewHostIfExist(): string | undefined {
   const me = document.querySelector(
-    'script[data-id][data-name="internal-cart"]'
+    'script[data-id][data-name="internal-cart"]',
   );
   const customHost = me?.getAttribute("data-custom-host");
   return customHost ?? undefined;
@@ -173,7 +177,7 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
 // @ts-ignore
 const getProducts: (
   projectID: string,
-  args?: { items?: CheckoutProduct[] }
+  args?: { items?: CheckoutProduct[] },
 ) => Promise<
   | Err
   | {
@@ -193,7 +197,7 @@ const getProducts: (
   }
 
   const productIds = Array.from(
-    new Set(products.map((product) => product.productID))
+    new Set(products.map((product) => product.productID)),
   );
 
   const params = new URLSearchParams();
@@ -203,7 +207,7 @@ const getProducts: (
     buildURL(projectID, `/products?${params.toString()}`),
     {
       method: "GET",
-    }
+    },
   );
 
   if (result.status != 200) {
@@ -225,7 +229,7 @@ const getProducts: (
       }
       if (el.variants != null && el.variants.length > 0) {
         const index = el.variants.findIndex(
-          (variant) => variant.id === product.productID
+          (variant) => variant.id === product.productID,
         );
         return index !== -1;
       }
@@ -239,7 +243,7 @@ const getProducts: (
     .map((el) => {
       el.details = resolveProductDetailsFromSingleProduct(
         el.productID,
-        el.details as SingleProduct
+        el.details as SingleProduct,
       );
       return el;
     });
@@ -317,7 +321,7 @@ function addProducts(products: CartProduct[]) {
       productID: el.productID,
       quantity: el.quantity,
       metadata: el.metadata,
-    }))
+    })),
   );
   sendAnalyticEvent({
     event: "addToCart",
@@ -339,7 +343,8 @@ function removeProductFromCheckout(ids: string[]) {
   const newCheckout = {
     ...checkout,
     products: checkout?.products?.filter(
-      (product) => !ids.includes(product.productID) && !ids.includes(product.id)
+      (product) =>
+        !ids.includes(product.productID) && !ids.includes(product.id),
     ),
   };
   sendAnalyticEvent({
@@ -361,7 +366,7 @@ function saveCheckout(model: Checkout) {
 }
 
 export const getCheckoutMethods: (projectID: string) => CartMethods = (
-  projectID
+  projectID,
 ) => {
   const newHost = getNewHostIfExist();
   if (newHost != null) {
@@ -378,7 +383,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
 
       try {
         const result = await PublicApiClient.get(
-          HOST
+          HOST,
         ).isOneClickPaymentAvailable({
           projectId: projectID,
         });
@@ -441,7 +446,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
             create(PreOrderItemSchema, {
               id: el.productID,
               quantity: el.quantity,
-            })
+            }),
           ),
           projectId: projectID,
           // we can detect 5 the closest inpost pickup point based on shipping address.
@@ -506,7 +511,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
             zod.object({
               name: zod.string(),
               code: zod.string(),
-            })
+            }),
           )
           .parse(await result.json());
       } catch (e) {
@@ -532,7 +537,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       return (
         getCheckout()?.products?.reduce(
           (acc, product) => acc + product.quantity,
-          0
+          0,
         ) ?? 0
       );
     },
@@ -611,17 +616,20 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       if (checkout.products == null || checkout.products.length == 0) {
         return Err("cart-is-empty", "badInput");
       }
-      const mergedMetadata = checkout.products.reduce((acc, product) => {
-        if (product.metadata != null) {
-          Object.keys(product.metadata).forEach((key) => {
-            const value = product.metadata?.[key];
-            if (value != null) {
-              acc[key] = value;
-            }
-          });
-        }
-        return acc;
-      }, {} as Record<string, string>);
+      const mergedMetadata = checkout.products.reduce(
+        (acc, product) => {
+          if (product.metadata != null) {
+            Object.keys(product.metadata).forEach((key) => {
+              const value = product.metadata?.[key];
+              if (value != null) {
+                acc[key] = value;
+              }
+            });
+          }
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
 
       const payload: LinkRequest = {
         items: checkout.products.map((el) => {
@@ -789,7 +797,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
               Object.keys(metadata).length > 0
                 ? JSON.stringify(metadata)
                 : undefined,
-          }
+          },
         );
 
         return {
@@ -880,7 +888,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
               Object.keys(metadata).length > 0
                 ? JSON.stringify(metadata)
                 : undefined,
-          }
+          },
         );
 
         return {
@@ -907,7 +915,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       if (args && args.expectedItems != null && args.expectedItems.length > 0) {
         if (checkout.products) {
           removeProductFromCheckout(
-            checkout.products.map((el) => el.productID)
+            checkout.products.map((el) => el.productID),
           );
         }
         addProducts(args.expectedItems);
@@ -924,7 +932,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
           create(PreOrderItemSchema, {
             id: el.productID,
             quantity: el.quantity,
-          })
+          }),
         ),
         projectId: projectID,
         // we can detect 5 the closest inpost pickup point based on shipping address.
@@ -944,7 +952,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
 
       if (result.selectedDeliveryMethod != null) {
         const deliveryMethod = result.methods.find(
-          (el) => el.id == result.selectedDeliveryMethod
+          (el) => el.id == result.selectedDeliveryMethod,
         );
         if (deliveryMethod != null) {
           items.push({
@@ -1033,7 +1041,7 @@ async function resolveGooglePayConfiguration(projectID: string) {
 
 function resolveProductDetailsFromSingleProduct(
   id: string,
-  product: SingleProduct
+  product: SingleProduct,
 ) {
   if (id == product.id) {
     const variantIndex = product.variants?.findIndex((v) => v.id === id);

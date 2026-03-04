@@ -1,0 +1,45 @@
+---
+import Layout from "../../../../../layouts/Layout.astro";
+import MessagePreviewer from "./_MessagePreviewer";
+import { hashId } from "../../../../../../queries/hashids";
+import { getPublicTRPCCaller } from "../../../../api/integrations/[project_id]/coupons/auth.helper";
+import { getProjectByID } from "../../../../../../server/routers/subscriptions/subscriptions";
+import { getProjectFromName } from "../../../../../../server/routers/subscriptions/subscriptions";
+import { db } from "../../../../../../server/db/sql";
+import { EmailMessageHelper } from "../../../../../../server/logic/products/email.message.helper";
+import { redis } from "../../../../../../server/db/redis";
+
+const {
+  name,
+  msg_slug
+} = Astro.params;
+
+let title = "Wiadomość";
+
+const project = await getProjectFromName(db, name);
+if (project == null) {
+  return Astro.redirect(`/`);
+  }
+const projectID = hashId(project.id as number);
+const caller = await getPublicTRPCCaller(Astro.request, Astro.cookies, projectID);
+const theme = await caller.userPanel.getTheme({ projectID });
+
+const result = await EmailMessageHelper.getAfterPurchaseEmailFor({
+    db: db,
+    redis: redis,
+    projectID: project.id as number,
+    msgSlug: msg_slug,
+});
+
+if (result == null) {
+    return Astro.redirect(`/panel/${name}`);
+}
+if (result.title) {
+  title = result.title;
+}
+
+---
+
+<Layout title={title} darkMode={false} >
+    <MessagePreviewer msg={result.message} client:load />
+</Layout>
