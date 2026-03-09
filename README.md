@@ -62,7 +62,7 @@ It uses modern React patterns and libraries like:
 1. `BitsnapCheckout` Component:
 
 ```tsx
-import { BitsnapCheckout } from "bitsnap-checkout";
+import { BitsnapCheckout } from "bitsnap-react";
 
 function MyComponent() {
   return (
@@ -83,7 +83,7 @@ function MyComponent() {
 2. `setProjectID`:
 
 ```tsx
-import { setProjectID } from "bitsnap-checkout";
+import { setProjectID } from "bitsnap-react";
 
 // Set the project ID globally
 setProjectID("your-project-id");
@@ -92,7 +92,7 @@ setProjectID("your-project-id");
 3. Cart Methods:
 
 ```tsx
-import { Bitsnap } from "bitsnap-checkout";
+import { Bitsnap } from "bitsnap-react";
 
 // Modern approach using namespace
 async function handleCart() {
@@ -119,7 +119,7 @@ async function legacyHandleCart() {
 5. Creating Checkout/Payment:
 
 ```tsx
-import { createCheckout, LinkRequest } from "bitsnap-checkout";
+import { createCheckout, LinkRequest } from "bitsnap-react";
 
 async function handleCheckout() {
   const request: LinkRequest = {
@@ -158,7 +158,7 @@ async function handleCheckout() {
 6. Webhook Handler:
 
 ```tsx
-import { handleWebhook } from "bitsnap-checkout";
+import { handleWebhook } from "bitsnap-react";
 
 async function processWebhook(req: Request) {
   const payload = await req.text();
@@ -199,7 +199,7 @@ import {
   createCheckout,
   handleWebhook,
   type LinkRequest,
-} from "bitsnap-checkout";
+} from "bitsnap-react";
 
 // Configure globally
 setProjectID("your-project-id");

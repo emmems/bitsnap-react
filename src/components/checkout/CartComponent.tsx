@@ -14,7 +14,7 @@ function CartComponent({ isVisible, shouldHide }: Props) {
   return (
     <div
       ref={parent}
-      className={"bitsnap-checkout dark"}
+      className={"bitsnap-react dark"}
       style={{ zIndex: 999999 }}
     >
       {isVisible && (
@@ -71,7 +71,7 @@ const WrapperCartComponent = (props: Props) => {
     <CartProvider>
       <CartComponent {...props} />
     </CartProvider>,
-    document.body
+    document.body,
   );
 };
 

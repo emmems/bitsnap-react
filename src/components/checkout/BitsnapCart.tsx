@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import zod from "zod";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
+import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
-import { sendAnalyticEvent } from "./frontent.analytics";
 
 enum CartEvent {
   ADD_TO_CART = "ADD_TO_CART",
@@ -106,7 +106,7 @@ function BitsnapCart({
               window.location.href = result.url;
             } else {
               alert(
-                "Nie udało się przekierować do płatności. Spróbuj ponownie później."
+                "Nie udało się przekierować do płatności. Spróbuj ponownie później.",
               );
             }
           } catch (e) {
@@ -153,10 +153,10 @@ function BitsnapCart({
 
   async function handleAddingSubscriptionToCart(
     projectID: string,
-    event: CartAddToCartEvent
+    event: CartAddToCartEvent,
   ) {
     alert(
-      `TODO, nie jest to jeszcze zrobione ${projectID} ${event.id} ${event.quantity}`
+      `TODO, nie jest to jeszcze zrobione ${projectID} ${event.id} ${event.quantity}`,
     );
   }
 
@@ -211,7 +211,7 @@ function BitsnapCart({
         onClick={() => (isCartVisible ? hideCart() : showCart())}
         style={{ position: "relative" }}
         className={[
-          "bitsnap-checkout",
+          "bitsnap-react",
           className ?? "rounded-full hover:bg-neutral-300 transition p-1",
         ].join(" ")}
       >

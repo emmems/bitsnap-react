@@ -86,7 +86,7 @@ function reducer(state: State, action: Action): State {
         groups:
           action.value != null && action.value.length > 0
             ? state.groups.filter(
-                (group) => action.value?.find((g) => g.id === group.id) != null
+                (group) => action.value?.find((g) => g.id === group.id) != null,
               )
             : state.groups,
       };
@@ -193,7 +193,7 @@ function NotificationsComponentPublic({
     (typeof window !== "undefined" ? window.location.hostname : "");
 
   const { mutateAsync: updateUserGroups, isPending: isUpdating } = useMutation(
-    rpcProvider.notifications.updateUserGroups
+    rpcProvider.notifications.updateUserGroups,
   );
 
   const { data: userInfo, refetch: refetchAccessToken } = UQ({
@@ -340,7 +340,7 @@ function NotificationsComponentPublic({
 
   async function handleLoginSuccess(
     userID: string | undefined,
-    accessToken: string
+    accessToken: string,
   ) {
     if (typeof window !== "undefined") {
       localStorage.setItem("notifications_accessToken", accessToken);
@@ -378,7 +378,7 @@ function NotificationsComponentPublic({
     isManaging == true && state.userID != null && userInfo?.accessToken != null;
 
   return (
-    <main className={cn("bitsnap-checkout relative", className?.container)}>
+    <main className={cn("bitsnap-react relative", className?.container)}>
       {mergedTexts.title != null && (
         <h1 className="text-2xl font-semibold text-black md:text-3xl lg:text-4xl xl:text-5xl dark:text-neutral-100">
           {mergedTexts.title}
@@ -401,7 +401,7 @@ function NotificationsComponentPublic({
       <div
         className={cn(
           "md:pt8 relative z-0 mt-6 overflow-hidden rounded-2xl bg-white px-3 pt-6 pb-3 md:px-5 md:pb-5 dark:bg-neutral-800",
-          className?.header
+          className?.header,
         )}
       >
         {state.showSettings ? (
@@ -412,7 +412,7 @@ function NotificationsComponentPublic({
               <div
                 className={cn(
                   "grid grid-cols-1 gap-3 lg:gap-6",
-                  isManagingEnabled ? "md:grid-cols-2" : ""
+                  isManagingEnabled ? "md:grid-cols-2" : "",
                 )}
               >
                 <div className={className?.groupsContainer}>

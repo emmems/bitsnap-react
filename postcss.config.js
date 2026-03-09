@@ -3,7 +3,7 @@ module.exports = {
     require("@tailwindcss/postcss")(),
     require("autoprefixer")(),
     require("postcss-prefix-selector")({
-      prefix: ".bitsnap-checkout",
+      prefix: ".bitsnap-react",
     }),
   ],
 };

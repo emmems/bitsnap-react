@@ -10,7 +10,7 @@ export const PanelProvider: React.FC<{
   return (
     <RpcProvider>
       <PanelContext.Provider value={getPanelConfig()}>
-        {children}
+        <div className="bitsnap-react">{children}</div>
       </PanelContext.Provider>
     </RpcProvider>
   );
