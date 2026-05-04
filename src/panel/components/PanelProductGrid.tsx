@@ -130,6 +130,8 @@ const ProductsComponent = ({
         return "Plik";
       case UserProductType.TICKET:
         return "Bilet";
+      case UserProductType.COURSE:
+        return "Kurs";
       default:
         return undefined;
     }

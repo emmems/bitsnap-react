@@ -66,6 +66,11 @@ export const userPanelGetFileDetails = PublicApiService.method.userPanelGetFileD
 export const userPanelGetTicketDetails = PublicApiService.method.userPanelGetTicketDetails;
 
 /**
+ * @generated from rpc public_api.v1.PublicApiService.UserPanelGetCourseDetails
+ */
+export const userPanelGetCourseDetails = PublicApiService.method.userPanelGetCourseDetails;
+
+/**
  * @generated from rpc public_api.v1.PublicApiService.PushSendDeviceToken
  */
 export const pushSendDeviceToken = PublicApiService.method.pushSendDeviceToken;

@@ -156,3 +156,8 @@ export const getUserGroups = NotificationsService.method.getUserGroups;
  * @generated from rpc dashboard.notifications.v1.NotificationsService.UpdateUserGroups
  */
 export const updateUserGroups = NotificationsService.method.updateUserGroups;
+
+/**
+ * @generated from rpc dashboard.notifications.v1.NotificationsService.GetProjectedRecipientCount
+ */
+export const getProjectedRecipientCount = NotificationsService.method.getProjectedRecipientCount;
