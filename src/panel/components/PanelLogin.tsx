@@ -26,6 +26,12 @@ import {
 import { Label } from "../../ui/label";
 import LoadingIndicator from "../LoadingIndicator";
 import { usePanelConfig } from "../PanelProvider";
+import {
+  buildAccessTokenRedirect,
+  getReturnURLFromSearch,
+  persistReturnURL,
+  readPersistedReturnURL,
+} from "../return-url";
 
 type LoginResponseStatus = "success" | "error" | "default";
 
@@ -249,7 +255,14 @@ const VerifyCodePanel = ({
         localStorage.setItem("__access_token", accessToken);
         localStorage.setItem("__user-email", email);
       }
+      const returnURL = typeof window !== "undefined"
+        ? readPersistedReturnURL()
+        : null;
       setTimeout(() => {
+        if (accessToken && returnURL) {
+          window.location.href = buildAccessTokenRedirect(returnURL, accessToken);
+          return;
+        }
         window.location.reload();
       }, 100);
     }
@@ -412,6 +425,24 @@ const PanelLoginComponentWrapper = () => {
     useMutation(rpcProvider.publicApi.userPanelLogin);
 
   const [errMsg, setErrMsg] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.parent !== window) return;
+
+    const queryReturnURL = getReturnURLFromSearch(window.location.search);
+    if (queryReturnURL) {
+      persistReturnURL(queryReturnURL);
+    }
+
+    const returnURL = queryReturnURL ?? readPersistedReturnURL();
+    if (!returnURL) return;
+
+    const existingToken = window.localStorage.getItem("__access_token");
+    if (!existingToken) return;
+
+    window.location.href = buildAccessTokenRedirect(returnURL, existingToken);
+  }, []);
 
   async function loginUser() {
     setErrMsg("");

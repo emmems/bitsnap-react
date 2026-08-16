@@ -7,6 +7,8 @@ let config: PanelConfig = {
   host: undefined,
 };
 
+let allowedReturnOrigins: string[] = [];
+
 export interface PanelConfig {
   projectID?: string;
   loginURL?: string;
@@ -36,4 +38,12 @@ export function setLoginURL(loginURL: string): void {
 
 export function setHost(host: string): void {
   config.host = host;
+}
+
+export function setAllowedReturnOrigins(origins: string[]): void {
+  allowedReturnOrigins = origins;
+}
+
+export function getAllowedReturnOrigins(): string[] {
+  return allowedReturnOrigins;
 }

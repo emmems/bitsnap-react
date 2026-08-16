@@ -28,11 +28,17 @@ export { type LinkRequest } from "./checkout/link.request.schema";
 export * from "./checkout/methods";
 
 export {
+  buildAccessTokenRedirect,
+  getAllowedReturnOrigins,
   getPanelConfig,
+  getReturnURLFromSearch,
   Panel,
   PanelLogin,
   PanelProvider,
+  persistReturnURL,
   PublicOrderPage,
+  readPersistedReturnURL,
+  setAllowedReturnOrigins,
   setHost,
   setLoginURL,
   setPanelConfig,

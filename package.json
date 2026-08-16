@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "index.ts",
   "type": "commonjs",
@@ -15,26 +15,14 @@
     "type": "git",
     "url": "git+https://github.com/emmems/bitsnap-react.git"
   },
-  "keywords": [
-    "bitsnap",
-    "checkout",
-    "shop",
-    "ecommerce"
-  ],
+  "keywords": ["bitsnap", "checkout", "shop", "ecommerce"],
   "author": "Piotr Michalik",
   "license": "SEE LICENSE IN LICENSE file",
   "bugs": {
     "url": "https://github.com/emmems/bitsnap-react/issues"
   },
-  "sideEffects": [
-    "*.css"
-  ],
-  "files": [
-    "dist",
-    "internal",
-    "errors",
-    "backend"
-  ],
+  "sideEffects": ["*.css"],
+  "files": ["dist", "internal", "errors", "backend"],
   "types": "dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",
   "devDependencies": {
