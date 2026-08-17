@@ -23,6 +23,7 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "../../ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Label } from "../../ui/label";
 import LoadingIndicator from "../LoadingIndicator";
 import { usePanelConfig } from "../PanelProvider";
@@ -317,6 +318,7 @@ const VerifyCodePanel = ({
                     <InputOTP
                       id="verify-code"
                       maxLength={6}
+                      pattern={REGEXP_ONLY_DIGITS}
                       onChange={(newValue) => {
                         handleInputChange(newValue);
                       }}
