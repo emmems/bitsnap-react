@@ -26,6 +26,10 @@ import {
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Label } from "../../ui/label";
 import LoadingIndicator from "../LoadingIndicator";
+import {
+  getAllowedReturnOrigins,
+  setAllowedReturnOrigins,
+} from "../config";
 import { usePanelConfig } from "../PanelProvider";
 import {
   buildAccessTokenRedirect,
@@ -35,6 +39,18 @@ import {
 } from "../return-url";
 
 type LoginResponseStatus = "success" | "error" | "default";
+
+if (typeof window !== "undefined") {
+  const currentOrigin = window.location.origin;
+  const knownSiblings = [
+    currentOrigin,
+    "https://bitsnap.pl",
+    "https://kursy.bitsnap.pl",
+  ];
+  if (getAllowedReturnOrigins().length === 0) {
+    setAllowedReturnOrigins(Array.from(new Set(knownSiblings)));
+  }
+}
 
 interface LoginUserPanelProps {
   reveal: () => void;
