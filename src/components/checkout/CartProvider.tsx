@@ -1,4 +1,4 @@
-import { setPanelConfig } from "@/src/panel";
+import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel";
 import { create } from "@bufbuild/protobuf";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect } from "react";
@@ -130,6 +130,9 @@ export function setProjectID(projectID: string) {
     projectID,
   });
   bitsnapProjectID = projectID;
+  if (typeof window !== "undefined") {
+    setAllowedReturnOrigins([window.location.origin]);
+  }
 }
 
 export function getProjectID(): string | undefined {

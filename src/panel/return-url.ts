@@ -26,11 +26,20 @@ export function readPersistedReturnURL(): string | null {
   return validateReturnURL(stored);
 }
 
+function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+  return allowedOrigins.some((allowed) => {
+    if (origin === allowed) return true;
+    const allowedHost = new URL(allowed).hostname;
+    const originHost = new URL(origin).hostname;
+    return originHost.endsWith(`.${allowedHost}`) || originHost === allowedHost;
+  });
+}
+
 function validateReturnURL(raw: string): string | null {
   try {
     const u = new URL(raw);
     if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    if (!getAllowedReturnOrigins().includes(u.origin)) return null;
+    if (!isOriginAllowed(u.origin, getAllowedReturnOrigins())) return null;
     return u.toString();
   } catch {
     return null;

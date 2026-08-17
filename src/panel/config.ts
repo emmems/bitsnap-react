@@ -5,6 +5,7 @@ let config: PanelConfig = {
   loginURL: "/panel/login",
   theme: undefined,
   host: undefined,
+  allowedReturnOrigins: [],
 };
 
 let allowedReturnOrigins: string[] = [];
@@ -14,6 +15,7 @@ export interface PanelConfig {
   loginURL?: string;
   theme?: GetThemeOutput;
   host?: string;
+  allowedReturnOrigins: string[];
 }
 
 export function setPanelConfig(newConfig: Partial<PanelConfig>): void {
@@ -42,6 +44,7 @@ export function setHost(host: string): void {
 
 export function setAllowedReturnOrigins(origins: string[]): void {
   allowedReturnOrigins = origins;
+  config = { ...config, allowedReturnOrigins: origins };
 }
 
 export function getAllowedReturnOrigins(): string[] {

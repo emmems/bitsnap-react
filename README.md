@@ -311,12 +311,13 @@ setTheme({
 
 ### Configuration Options
 
-| Function       | Type             | Description                                  |
-| -------------- | ---------------- | -------------------------------------------- |
-| `setProjectID` | `string`         | Your Bitsnap project ID                      |
-| `setLoginURL`  | `string`         | URL for login page (default: `/panel/login`) |
-| `setHost`      | `string`         | Custom API host URL                          |
-| `setTheme`     | `GetThemeOutput` | Theme configuration (logo, colors)           |
+| Function                | Type             | Description                                              |
+| ----------------------- | ---------------- | -------------------------------------------------------- |
+| `setProjectID`          | `string`         | Your Bitsnap project ID                                  |
+| `setLoginURL`           | `string`         | URL for login page (default: `/panel/login`)             |
+| `setHost`               | `string`         | Custom API host URL                                      |
+| `setTheme`              | `GetThemeOutput` | Theme configuration (logo, colors)                      |
+| `setAllowedReturnOrigins` | `string[]`    | Allowed return URL origins (auto-set by `setProjectID`)  |
 
 ### Theme Type
 

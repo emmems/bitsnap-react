@@ -392,7 +392,7 @@ const VerifyCodePanel = ({
 };
 
 const PanelLoginComponentWrapper = () => {
-  const { theme } = usePanelConfig();
+  const { theme, allowedReturnOrigins } = usePanelConfig();
 
   const styles = {
     "--button-background-color": theme?.colors?.brand ?? "#FFFFFF",
@@ -444,7 +444,8 @@ const PanelLoginComponentWrapper = () => {
     if (!existingToken) return;
 
     window.location.href = buildAccessTokenRedirect(returnURL, existingToken);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedReturnOrigins]);
 
   async function loginUser() {
     setErrMsg("");
