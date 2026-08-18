@@ -130,9 +130,7 @@ useEffect(() => {
     const returnURL = queryReturnURL ?? readPersistedReturnURL();
     if (!returnURL) return;
 
-    const target = buildAccessTokenRedirect(returnURL, accessToken);
-    console.log("[bitsnap-react][panel-page] redirecting to", target);
-    window.location.href = target;
+    window.location.href = buildAccessTokenRedirect(returnURL, accessToken);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 

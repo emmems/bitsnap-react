@@ -39,21 +39,7 @@ function validateReturnURL(raw: string): string | null {
   try {
     const u = new URL(raw);
     if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    const allowed = getAllowedReturnOrigins();
-    if (!isOriginAllowed(u.origin, allowed)) {
-      if (allowed.length === 0) {
-        console.warn(
-          "[bitsnap-react] allowed return origins is empty; call setAllowedReturnOrigins() before navigating.",
-        );
-      } else {
-        console.warn(
-          "[bitsnap-react] origin not in allowlist",
-          { origin: u.origin, allowed },
-        );
-      }
-      return null;
-    }
-    console.log("[bitsnap-react] return_url validated", u.toString());
+    if (!isOriginAllowed(u.origin, getAllowedReturnOrigins())) return null;
     return u.toString();
   } catch {
     return null;
