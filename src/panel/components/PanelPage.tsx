@@ -3,6 +3,12 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
 import { usePanelConfig } from "../PanelProvider";
+import {
+  buildAccessTokenRedirect,
+  getReturnURLFromSearch,
+  persistReturnURL,
+  readPersistedReturnURL,
+} from "../return-url";
 
 import PanelNotificationsComponent from "./PanelNotifications";
 import PanelOrderHistoryComponent from "./PanelOrderHistory";
@@ -110,6 +116,25 @@ const PanelPage = () => {
       return;
     }
   }, [activeScreen]);
+
+useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.parent !== window) return;
+    if (!accessToken) return;
+
+    const queryReturnURL = getReturnURLFromSearch(window.location.search);
+    if (queryReturnURL) {
+      persistReturnURL(queryReturnURL);
+    }
+
+    const returnURL = queryReturnURL ?? readPersistedReturnURL();
+    if (!returnURL) return;
+
+    const target = buildAccessTokenRedirect(returnURL, accessToken);
+    console.log("[bitsnap-react][panel-page] redirecting to", target);
+    window.location.href = target;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
 
   return (
     <div

@@ -126,7 +126,7 @@ const LoginUserPanel = ({
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    goToVerifyCode();
+    void loginUser();
   }
 
   return (
@@ -167,7 +167,7 @@ const LoginUserPanel = ({
 
                 <div>
                   <Button
-                    type="button"
+                    type="submit"
                     disabled={isLoginLoading}
                     className="relative w-full"
                     onClick={loginUser}
@@ -320,6 +320,11 @@ const VerifyCodePanel = ({
     reveal();
   }
 
+  function onCodeSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    void login();
+  }
+
   return (
     <main className="mx-auto flex max-w-md flex-1 flex-col justify-center space-y-8">
       <div className={cn("flex min-w-sm flex-col gap-6")}>
@@ -331,7 +336,7 @@ const VerifyCodePanel = ({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-6">
+            <form onSubmit={onCodeSubmit} className="flex flex-col gap-6">
               <div className="grid gap-2">
                 <div className="my-5 flex w-full items-center justify-center">
                   <div className="flex flex-col gap-2">
@@ -393,7 +398,7 @@ const VerifyCodePanel = ({
                   <p className="text-xs font-medium text-red-500">{errMsg}</p>
                 )}
               </div>
-            </div>
+            </form>
             <div className="mt-4 text-center text-sm">
               Nie masz kodu?{" "}
               <button
