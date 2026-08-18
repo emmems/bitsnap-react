@@ -45,9 +45,15 @@ function validateReturnURL(raw: string): string | null {
         console.warn(
           "[bitsnap-react] allowed return origins is empty; call setAllowedReturnOrigins() before navigating.",
         );
+      } else {
+        console.warn(
+          "[bitsnap-react] origin not in allowlist",
+          { origin: u.origin, allowed },
+        );
       }
       return null;
     }
+    console.log("[bitsnap-react] return_url validated", u.toString());
     return u.toString();
   } catch {
     return null;

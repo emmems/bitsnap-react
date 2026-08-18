@@ -275,11 +275,15 @@ const VerifyCodePanel = ({
       const returnURL = typeof window !== "undefined"
         ? readPersistedReturnURL()
         : null;
+      console.log("[bitsnap-react][panel-login] post-verify returnURL=", returnURL, "token?", Boolean(accessToken));
       setTimeout(() => {
         if (accessToken && returnURL) {
-          window.location.href = buildAccessTokenRedirect(returnURL, accessToken);
+          const target = buildAccessTokenRedirect(returnURL, accessToken);
+          console.log("[bitsnap-react][panel-login] redirecting to", target);
+          window.location.href = target;
           return;
         }
+        console.warn("[bitsnap-react][panel-login] no returnURL or no token; reloading instead");
         window.location.reload();
       }, 100);
     }
@@ -448,12 +452,15 @@ const PanelLoginComponentWrapper = () => {
     if (typeof window === "undefined") return;
     if (window.parent !== window) return;
 
+    console.log("[bitsnap-react][panel-login] mounted; allowedOrigins=", getAllowedReturnOrigins());
     const queryReturnURL = getReturnURLFromSearch(window.location.search);
+    console.log("[bitsnap-react][panel-login] queryReturnURL=", queryReturnURL);
     if (queryReturnURL) {
       persistReturnURL(queryReturnURL);
     }
 
     const returnURL = queryReturnURL ?? readPersistedReturnURL();
+    console.log("[bitsnap-react][panel-login] effective returnURL=", returnURL);
     if (!returnURL) return;
 
     const existingToken = window.localStorage.getItem("__access_token");
