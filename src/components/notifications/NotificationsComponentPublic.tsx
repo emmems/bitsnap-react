@@ -275,7 +275,7 @@ function NotificationsComponentPublic({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupsDownloaded, isGroupsDownloading, groups]);
 
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let preparedGroups = groups?.map((el) => {

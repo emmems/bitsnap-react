@@ -20,7 +20,7 @@ function PanelProductHeaderComponent({
   activeScreen,
   setActiveScreen,
   setParams,
-  styles,
+  styles: _styles,
   theme,
   logout,
 }: PanelProductHeaderComponentProps) {
@@ -280,7 +280,7 @@ interface CompanyLogoProps {
   isExpanded: boolean;
 }
 
-function CompanyLogo({ theme, isExpanded }: CompanyLogoProps) {
+function CompanyLogo({ theme, isExpanded: _isExpanded }: CompanyLogoProps) {
   return (
     <>
       {theme == null && (

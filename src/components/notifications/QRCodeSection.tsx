@@ -13,7 +13,7 @@ interface QRCodeSectionProps {
 
 export function QRCodeSection({
   showQRCode = true,
-  isManaging,
+  isManaging: _isManaging,
   className,
   texts,
 }: QRCodeSectionProps) {

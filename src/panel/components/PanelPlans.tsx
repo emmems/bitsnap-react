@@ -34,7 +34,7 @@ const statusColor: Record<string, string> = {
   paused: "text-yellow-500",
 };
 
-function PanelPlansComponent({ projectID }: PanelPlansComponentProps) {
+function PanelPlansComponent({ projectID: _projectID }: PanelPlansComponentProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

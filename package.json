@@ -1,8 +1,9 @@
 {
   "name": "bitsnap-react",
-  "version": "1.4.15",
+  "version": "1.5.0",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
-  "main": "index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "type": "commonjs",
   "scripts": {
     "build": "tsup",
@@ -22,14 +23,15 @@
     "url": "https://github.com/emmems/bitsnap-react/issues"
   },
   "sideEffects": ["*.css"],
-  "files": ["dist", "internal", "errors", "backend"],
-  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "types": "./dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "^2.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.3",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3"
   },
@@ -129,5 +131,12 @@
       }
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "models": ["./dist/models.d.ts"],
+      "internal": ["./dist/internal.d.ts"],
+      "errors": ["./dist/errors.d.ts"]
+    }
   }
 }

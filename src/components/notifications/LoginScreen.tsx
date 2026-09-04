@@ -86,7 +86,7 @@ export function LoginScreen({
   slug,
   onSuccess,
   onError,
-  className,
+  className: _className,
   isOpen,
   onClose,
   texts,
