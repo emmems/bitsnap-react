@@ -1,4 +1,4 @@
-import { getCheckoutMethods, getProjectID } from "./CartProvider";
+import { getCheckoutMethods, getLocale, getProjectID } from "./CartProvider";
 import { HOST } from "./constants";
 import { buildURL } from "./helper.methods";
 import { Err } from "./lib/err";
@@ -15,7 +15,7 @@ export namespace Bitsnap {
       name?: string;
       price?: number;
       currency?: string;
-    }
+    },
   ) {
     const projectID = getProjectID();
     if (projectID == null) {
@@ -53,6 +53,7 @@ export async function createPaymentURL(request: LinkRequest) {
   }
 
   request = injectReferenceToRequestIfNeeded(request);
+  request.locale ??= getLocale();
 
   const result = await fetch(buildURL(projectID, "/buy"), {
     method: "POST",
@@ -77,7 +78,7 @@ export async function createPaymentURL(request: LinkRequest) {
         "result",
         await result.text(),
         result.status,
-        result.statusText
+        result.statusText,
       );
     }
     return Err("internal-error", "internal");
@@ -91,7 +92,7 @@ export async function createPaymentURL(request: LinkRequest) {
 }
 
 export async function createCheckout(
-  request: LinkRequest & { apiKey?: string; testMode?: boolean }
+  request: LinkRequest & { apiKey?: string; testMode?: boolean },
 ) {
   const projectID = getProjectID();
   if (projectID == null) {
@@ -111,6 +112,7 @@ export async function createCheckout(
 
   delete request.apiKey;
   delete request.testMode;
+  request.locale ??= getLocale();
 
   const response = await fetch(HOST + path, {
     method: "POST",
@@ -140,7 +142,7 @@ export function getReferenceIfPossible(): string | undefined {
 }
 
 export function injectReferenceToRequestIfNeeded(
-  request: LinkRequest
+  request: LinkRequest,
 ): LinkRequest {
   const ref = getReferenceIfPossible();
   if (ref == null) {

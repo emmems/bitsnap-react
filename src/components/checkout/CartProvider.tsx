@@ -27,6 +27,7 @@ import {
 } from "./methods";
 import { SingleProduct } from "./product.details.model";
 import { useCheckoutStore } from "./state";
+import { getLocale } from "./locale";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -114,6 +115,7 @@ export interface CartMethods {
     name?: string;
     country?: string;
     marketingAgreement?: boolean;
+    locale?: string;
   }) => Promise<
     | Err
     | {
@@ -146,6 +148,8 @@ export function getProjectID(): string | undefined {
   return projectID ?? undefined;
 }
 
+export { getLocale, setLocale } from "./locale";
+
 function getNewHostIfExist(): string | undefined {
   const me = document.querySelector(
     'script[data-id][data-name="internal-cart"]',
@@ -154,7 +158,13 @@ function getNewHostIfExist(): string | undefined {
   return customHost ?? undefined;
 }
 
-const CartProvider = ({ children }: { children: React.ReactNode }) => {
+const CartProvider = ({
+  children,
+  locale,
+}: {
+  children: React.ReactNode;
+  locale?: string;
+}) => {
   const queryClient = new QueryClient();
 
   useEffect(() => {
@@ -166,7 +176,7 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
     return <></>;
   }
 
-  const checkoutMethods = getCheckoutMethods(projectID);
+  const checkoutMethods = getCheckoutMethods(projectID, locale);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -180,7 +190,7 @@ const CartProvider = ({ children }: { children: React.ReactNode }) => {
 // @ts-ignore
 const getProducts: (
   projectID: string,
-  args?: { items?: CheckoutProduct[] },
+  args?: { items?: CheckoutProduct[]; locale?: string },
 ) => Promise<
   | Err
   | {
@@ -190,7 +200,10 @@ const getProducts: (
       metadata?: { [key: string]: string | undefined };
       details?: SingleProduct;
     }[]
-> = async (projectID: string, args?: { items?: CheckoutProduct[] }) => {
+> = async (
+  projectID: string,
+  args?: { items?: CheckoutProduct[]; locale?: string },
+) => {
   let products: CheckoutProduct[] = [];
 
   if (args?.items != null && args.items.length > 0) {
@@ -205,6 +218,7 @@ const getProducts: (
 
   const params = new URLSearchParams();
   params.set("ids", productIds.join(","));
+  params.set("locale", args?.locale ?? getLocale());
 
   const result = await fetch(
     buildURL(projectID, `/products?${params.toString()}`),
@@ -368,9 +382,10 @@ function saveCheckout(model: Checkout) {
   localStorage.setItem(checkoutKey, JSON.stringify(model));
 }
 
-export const getCheckoutMethods: (projectID: string) => CartMethods = (
-  projectID,
-) => {
+export const getCheckoutMethods: (
+  projectID: string,
+  locale?: string,
+) => CartMethods = (projectID, locale = getLocale()) => {
   const newHost = getNewHostIfExist();
   if (newHost != null) {
     setCustomHost(newHost);
@@ -429,6 +444,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         }
 
         const products = await getProducts(projectID, {
+          locale,
           items: args.items.map((el) => {
             return {
               id: Math.random().toString(36).substring(7),
@@ -557,7 +573,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
           details?: SingleProduct;
         }[]
     > {
-      return await getProducts(projectID);
+      return await getProducts(projectID, { locale });
     },
 
     async removeProductFromCart(args: { id: string }): Promise<Err | void> {
@@ -644,6 +660,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         askForNote: true,
         countries: checkout.country ? [checkout.country] : undefined,
         metadata: mergedMetadata,
+        locale,
       };
 
       const paymentResponse = await createPaymentURL(payload);
@@ -664,6 +681,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
       name?: string;
       country?: string;
       marketingAgreement?: boolean;
+      locale?: string;
     }): Promise<Err | { url: string }> {
       let payload: LinkRequest = {
         items: [
@@ -680,6 +698,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
                 email: args.email,
               }
             : undefined,
+        locale: args.locale ?? locale,
       };
 
       payload = injectReferenceToRequestIfNeeded(payload);
@@ -734,7 +753,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         return Err("Checkout not found");
       }
 
-      const products = await getProducts(projectID);
+      const products = await getProducts(projectID, { locale });
 
       if (isErr(products)) {
         return products;
@@ -827,7 +846,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         return Err("Checkout not found");
       }
 
-      const products = await getProducts(projectID);
+      const products = await getProducts(projectID, { locale });
 
       if (isErr(products)) {
         return products;
@@ -924,7 +943,7 @@ export const getCheckoutMethods: (projectID: string) => CartMethods = (
         addProducts(args.expectedItems);
       }
 
-      const products = await getProducts(projectID);
+      const products = await getProducts(projectID, { locale });
 
       if (isErr(products)) {
         return products;

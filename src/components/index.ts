@@ -23,6 +23,7 @@ export {
 } from "./notifications/types";
 
 export { setProjectID } from "./checkout/CartProvider";
+export { getLocale, setLocale } from "./checkout/locale";
 export { setCustomHost } from "./checkout/constants";
 export { type LinkRequest } from "./checkout/link.request.schema";
 export * from "./checkout/methods";

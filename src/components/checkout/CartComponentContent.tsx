@@ -11,9 +11,17 @@ import { ApplePayButton, GooglePayButton } from "..";
 import { Spinner } from "@/src/ui/spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import { getLocale, translate } from "./locale";
 
-const CartComponentContent = ({ className }: { className: string }) => {
+const CartComponentContent = ({
+  className,
+  locale,
+}: {
+  className: string;
+  locale?: string;
+}) => {
   const provider = useCartProvider();
+  const currentLocale = locale ?? getLocale();
 
   const { mutateAsync: removeProduct } = useMutation({
     mutationFn: provider.removeProductFromCart,
@@ -49,7 +57,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
     queryFn: provider.checkIfApplePayIsAvailable,
   });
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["cart"],
+    queryKey: ["cart", currentLocale],
     queryFn: provider.getProducts,
   });
   const { data: countryData, refetch: refetchCountry } = useQuery({
@@ -121,7 +129,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
 
       if (isErr(response)) {
         if (response.error == "item-ids-not-found") {
-          setErrMsg("Nie wszystkie produkty są dostępne w magazynie.");
+          setErrMsg(translate("unavailableProducts", currentLocale));
           if ("data" in response && Array.isArray(response.data)) {
             setMissingItemIds(response.data as string[]);
           }
@@ -150,7 +158,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
       {!isLoading && (products == null || products.length == 0) && (
         <div className={"flex flex-col gap-4 p-4"}>
           <p className={"dark:text-neutral-400 text-neutral-700"}>
-            Brak produktów w koszyku.
+            {translate("emptyCart", currentLocale)}
           </p>
         </div>
       )}
@@ -164,7 +172,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
                   <li className={"mb-3"}>
                     <SingleProduct
                       isNotAvailable={missingItemIds.includes(
-                        product.productID
+                        product.productID,
                       )}
                       quantity={product.quantity}
                       details={product.details}
@@ -188,7 +196,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
           <div className="mx-3 flex flex-col">
             <div className={"flex flex-row justify-between text-lg"}>
               <p className={"dark:text-neutral-200 text-neutral-800 text-xl"}>
-                Suma:
+                {translate("total", currentLocale)}
               </p>
               <div className={"flex flex-col items-end"}>
                 <p
@@ -199,7 +207,9 @@ const CartComponentContent = ({ className }: { className: string }) => {
                   {formatCurrency(sumOfProducts, currency)}
                 </p>
                 {isSomeProductDeliverable && (
-                  <p className={"opacity-70 text-right text-base"}>+ dostawa</p>
+                  <p className={"opacity-70 text-right text-base"}>
+                    {translate("delivery", currentLocale)}
+                  </p>
                 )}
               </div>
             </div>
@@ -212,7 +222,7 @@ const CartComponentContent = ({ className }: { className: string }) => {
                   "ml-3 text-sm dark:text-neutral-400 text-neutral-700"
                 }
               >
-                Wybierz kraj
+                {translate("chooseCountry", currentLocale)}
               </h4>
               <CountrySelector
                 id={Math.random().toString()}
@@ -276,7 +286,11 @@ const CartComponentContent = ({ className }: { className: string }) => {
                 "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed dark:bg-neutral-300 dark:hover:bg-neutral-100 dark:text-neutral-800 hover:bg-neutral-900 text-neutral-200 bg-neutral-800 transition font-bold"
               }
             >
-              {isContinueToCheckoutLoading ? <Spinner /> : "Następny krok"}
+              {isContinueToCheckoutLoading ? (
+                <Spinner />
+              ) : (
+                translate("nextStep", currentLocale)
+              )}
             </button>
             {errMsg.length > 0 && (
               <p className={"text-red-500 text-sm text-center"}>{errMsg}</p>

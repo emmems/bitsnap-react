@@ -5,6 +5,7 @@ import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
+import { setLocale } from "./locale";
 
 enum CartEvent {
   ADD_TO_CART = "ADD_TO_CART",
@@ -21,6 +22,7 @@ type CartAddToCartEvent = zod.infer<typeof cartAddToCartSchema>;
 
 export type BitsnapCartProps = {
   projectID: string;
+  locale?: string;
   children?: React.ReactNode;
   onVisibleChange?: (isVisible: boolean) => void;
   className?: string;
@@ -32,6 +34,7 @@ export type BitsnapCartProps = {
 
 function BitsnapCart({
   projectID,
+  locale,
   children,
   onVisibleChange,
   className,
@@ -62,6 +65,10 @@ function BitsnapCart({
   }, [projectID]);
 
   useEffect(() => {
+    setLocale(locale);
+  }, [locale]);
+
+  useEffect(() => {
     if (!("cart" in window)) {
       const projectID = getProjectID();
       if (projectID == null) {
@@ -80,6 +87,7 @@ function BitsnapCart({
                 name: zod.string().optional(),
                 country: zod.string().optional(),
                 marketingAgreement: zod.boolean().optional(),
+                locale: zod.string().optional(),
               })
               .parse(args);
             const methods = getCheckoutMethods(projectID);
@@ -262,6 +270,7 @@ function BitsnapCart({
       </button>
       <CartComponent
         isVisible={isCartVisible}
+        locale={locale}
         shouldHide={() => {
           hideCart();
         }}

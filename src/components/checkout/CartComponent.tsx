@@ -2,13 +2,15 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { createPortal } from "react-dom";
 import CartComponentContent from "./CartComponentContent";
 import CartProvider from "./CartProvider";
+import { getLocale, translate } from "./locale";
 
 interface Props {
   isVisible: boolean;
   shouldHide: () => void;
+  locale?: string;
 }
 
-function CartComponent({ isVisible, shouldHide }: Props) {
+function CartComponent({ isVisible, shouldHide, locale }: Props) {
   const [parent] = useAutoAnimate(/* optional config */);
 
   return (
@@ -31,7 +33,9 @@ function CartComponent({ isVisible, shouldHide }: Props) {
             }
           >
             <div className={"mx-3 mt-7 flex justify-between items-center"}>
-              <h1 className={"text-2xl font-medium"}>Koszyk</h1>
+              <h1 className={"text-2xl font-medium"}>
+                {translate("cart", locale ?? getLocale())}
+              </h1>
               <button
                 className="rounded-xl dark:hover:bg-neutral-700 hover:bg-neutral-400 p-2 transition"
                 onClick={shouldHide}
@@ -54,7 +58,7 @@ function CartComponent({ isVisible, shouldHide }: Props) {
               </button>
             </div>
 
-            <CartComponentContent className={"grow"} />
+            <CartComponentContent className={"grow"} locale={locale} />
           </div>
         </>
       )}
@@ -68,7 +72,7 @@ const WrapperCartComponent = (props: Props) => {
   }
 
   return createPortal(
-    <CartProvider>
+    <CartProvider locale={props.locale}>
       <CartComponent {...props} />
     </CartProvider>,
     document.body,
