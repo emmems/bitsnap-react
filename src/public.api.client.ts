@@ -8,13 +8,15 @@ export namespace PublicApiClient {
     return createClient(PublicApiService, getTransport(host));
   }
 
-  let transport: Transport | undefined;
+  const transports = new Map<string, Transport>();
   function getTransport(host: string): Transport {
+    let transport = transports.get(host);
     if (transport == null) {
       transport = createConnectTransport({
         useBinaryFormat: true,
         baseUrl: host + "/api/rpc",
       });
+      transports.set(host, transport);
     }
     return transport;
   }

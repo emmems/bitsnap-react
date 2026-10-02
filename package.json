@@ -7,6 +7,7 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsup",
+    "test:returns-ssr": "pnpm build && node --test test/returns-widget.ssr.test.cjs",
     "build:publish": "pnpm build --env.publish",
     "clean": "rimraf ./dist",
     "dev": "tsup --watch",
@@ -133,13 +134,24 @@
         "default": "./dist/errors.js"
       }
     },
+    "./returns": {
+      "import": {
+        "types": "./dist/returns.d.mts",
+        "default": "./dist/returns.mjs"
+      },
+      "require": {
+        "types": "./dist/returns.d.ts",
+        "default": "./dist/returns.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
       "models": ["./dist/models.d.ts"],
       "internal": ["./dist/internal.d.ts"],
-      "errors": ["./dist/errors.d.ts"]
+      "errors": ["./dist/errors.d.ts"],
+      "returns": ["./dist/returns.d.ts"]
     }
   }
 }

@@ -14,3 +14,13 @@ export const updateOrderDataAndGetRedirectionIfSucceded = CommonOrderService.met
  * @generated from rpc public_api.v1.CommonOrderService.CheckCouponCode
  */
 export const checkCouponCode = CommonOrderService.method.checkCouponCode;
+
+/**
+ * @generated from rpc public_api.v1.CommonOrderService.AddSuggestedProduct
+ */
+export const addSuggestedProduct = CommonOrderService.method.addSuggestedProduct;
+
+/**
+ * @generated from rpc public_api.v1.CommonOrderService.UndoSuggestedProduct
+ */
+export const undoSuggestedProduct = CommonOrderService.method.undoSuggestedProduct;

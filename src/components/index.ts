@@ -36,6 +36,17 @@ export { getLocale, setLocale } from "./checkout/locale";
 export { setCustomHost } from "./checkout/constants";
 export { type LinkRequest } from "./checkout/link.request.schema";
 export * from "./checkout/methods";
+export { Environment } from "../gen/proto/common/v1/environment_pb";
+export {
+  BitsnapReturns,
+  BitsnapReturnsProvider,
+  useCreateReturn,
+  useMyReturns,
+  useReturnableOrder,
+  useReturnOrders,
+  useReturnSession,
+} from "../returns/BitsnapReturns";
+export type { BitsnapReturnsProps, BitsnapReturnsProviderProps } from "../returns/BitsnapReturns";
 
 export {
   buildAccessTokenRedirect,

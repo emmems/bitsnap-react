@@ -88,6 +88,21 @@ export const pushEvent = PublicApiService.method.pushEvent;
 export const shouldShopProducts = PublicApiService.method.shouldShopProducts;
 
 /**
+ * @generated from rpc public_api.v1.PublicApiService.ShouldShowGuestCatalog
+ */
+export const shouldShowGuestCatalog = PublicApiService.method.shouldShowGuestCatalog;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetGuestCatalog
+ */
+export const getGuestCatalog = PublicApiService.method.getGuestCatalog;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.UserPanelResolveProductAccess
+ */
+export const userPanelResolveProductAccess = PublicApiService.method.userPanelResolveProductAccess;
+
+/**
  * @generated from rpc public_api.v1.PublicApiService.GetShopProducts
  */
 export const getShopProducts = PublicApiService.method.getShopProducts;
@@ -96,6 +111,36 @@ export const getShopProducts = PublicApiService.method.getShopProducts;
  * @generated from rpc public_api.v1.PublicApiService.DidBuyProduct
  */
 export const didBuyProduct = PublicApiService.method.didBuyProduct;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetAppStoreAccountToken
+ */
+export const getAppStoreAccountToken = PublicApiService.method.getAppStoreAccountToken;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.VerifyAppStorePurchase
+ */
+export const verifyAppStorePurchase = PublicApiService.method.verifyAppStorePurchase;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetAppStoreEntitlements
+ */
+export const getAppStoreEntitlements = PublicApiService.method.getAppStoreEntitlements;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.RestoreAppStorePurchases
+ */
+export const restoreAppStorePurchases = PublicApiService.method.restoreAppStorePurchases;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.ClearAppStoreAccountToken
+ */
+export const clearAppStoreAccountToken = PublicApiService.method.clearAppStoreAccountToken;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetStoreKitCatalog
+ */
+export const getStoreKitCatalog = PublicApiService.method.getStoreKitCatalog;
 
 /**
  * Notification settings
@@ -118,6 +163,11 @@ export const updateGlobalNotificationSettings = PublicApiService.method.updateGl
  * @generated from rpc public_api.v1.PublicApiService.UpdateNotificationSettings
  */
 export const updateNotificationSettings = PublicApiService.method.updateNotificationSettings;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetNotificationHistory
+ */
+export const getNotificationHistory = PublicApiService.method.getNotificationHistory;
 
 /**
  * Product V2 requests

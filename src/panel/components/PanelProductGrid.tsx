@@ -12,8 +12,10 @@ import { renderText } from "@/src/lib/render.text";
 import { fromJsonString, toJsonString } from "@bufbuild/protobuf";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
+import { clearPanelSession } from "../session-storage";
 
 interface PanelProductGridComponentProps {
+  projectID: string;
   accessToken: string;
   loginURL: string;
   styles: CSSProperties;
@@ -24,6 +26,7 @@ interface PanelProductGridComponentProps {
 
 const PanelProductGridComponent = ({
   accessToken,
+  projectID,
   loginURL,
   styles,
   activeScreen,
@@ -50,7 +53,7 @@ const PanelProductGridComponent = ({
 
   if (products && products.result.case === "failure") {
     console.warn("error:", `Kod błędu: ${products.result.value}`);
-    localStorage.removeItem("__access_token");
+    clearPanelSession(projectID);
     window.location.href = loginURL;
     return null;
   }

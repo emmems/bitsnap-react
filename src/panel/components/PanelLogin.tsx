@@ -37,6 +37,7 @@ import {
   persistReturnURL,
   readPersistedReturnURL,
 } from "../return-url";
+import { getPanelSession, savePanelSession } from "../session-storage";
 
 type LoginResponseStatus = "success" | "error" | "default";
 
@@ -53,6 +54,8 @@ if (typeof window !== "undefined") {
 }
 
 interface LoginUserPanelProps {
+  projectID?: string;
+  host?: string;
   reveal: () => void;
   email: string;
   setEmail: (input: string) => void;
@@ -62,6 +65,8 @@ interface LoginUserPanelProps {
 }
 
 interface VerifyCodePanelProps {
+  projectID?: string;
+  host?: string;
   email: string;
   reveal: () => void;
   setEmail: (input: string) => void;
@@ -85,6 +90,8 @@ interface VerifyCodePanelProps {
 }
 
 const LoginUserPanel = ({
+  projectID,
+  host,
   reveal,
   email,
   setEmail,
@@ -92,9 +99,10 @@ const LoginUserPanel = ({
   isLoginLoading,
   errMsg,
 }: LoginUserPanelProps) => {
+  const { projectID: configuredProjectID, host: configuredHost } = usePanelConfig();
   if (
     typeof window !== "undefined" &&
-    localStorage.getItem("__access_token") != null
+    getPanelSession(projectID ?? configuredProjectID, host ?? configuredHost) != null
   ) {
     // @ts-ignore
     window.location.href = window.location.href.replaceAll("login", "");
@@ -203,6 +211,8 @@ const LoginUserPanel = ({
 };
 
 const VerifyCodePanel = ({
+  projectID,
+  host,
   email,
   reveal,
   setEmail,
@@ -269,8 +279,7 @@ const VerifyCodePanel = ({
 
     if (status === "ok") {
       if (accessToken) {
-        localStorage.setItem("__access_token", accessToken);
-        localStorage.setItem("__user-email", email);
+        savePanelSession(projectID, accessToken, email, host);
       }
       const returnURL = typeof window !== "undefined"
         ? readPersistedReturnURL()
@@ -379,9 +388,6 @@ const VerifyCodePanel = ({
                   type="submit"
                   disabled={isLoginLoading || isVerifyLoading}
                   className="relative w-full"
-                  onClick={() => {
-                    login();
-                  }}
                 >
                   {(isLoginLoading || isVerifyLoading) && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -413,7 +419,7 @@ const VerifyCodePanel = ({
 };
 
 const PanelLoginComponentWrapper = () => {
-  const { theme, allowedReturnOrigins } = usePanelConfig();
+  const { theme, allowedReturnOrigins, projectID, host } = usePanelConfig();
 
   const styles = {
     "--button-background-color": theme?.colors?.brand ?? "#FFFFFF",
@@ -461,12 +467,12 @@ const PanelLoginComponentWrapper = () => {
     const returnURL = queryReturnURL ?? readPersistedReturnURL();
     if (!returnURL) return;
 
-    const existingToken = window.localStorage.getItem("__access_token");
+    const existingToken = getPanelSession(projectID, host);
     if (!existingToken) return;
 
     window.location.href = buildAccessTokenRedirect(returnURL, existingToken);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowedReturnOrigins]);
+  }, [allowedReturnOrigins, projectID, host]);
 
   async function loginUser() {
     setErrMsg("");
@@ -529,6 +535,8 @@ const PanelLoginComponentWrapper = () => {
         </header>
         {activeScreen === "login" && (
           <LoginUserPanel
+            projectID={projectID}
+            host={host}
             reveal={reveal}
             email={email}
             setEmail={setEmail}
@@ -539,6 +547,8 @@ const PanelLoginComponentWrapper = () => {
         )}
         {activeScreen === "verifyCode" && (
           <VerifyCodePanel
+            projectID={projectID}
+            host={host}
             email={email}
             reveal={reveal}
             setEmail={setEmail}

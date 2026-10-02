@@ -83,6 +83,7 @@ export const linkRequestSchema = zod.object({
     zod.object({
       id: zod.string(),
       quantity: zod.number().min(1),
+      priceVersion: zod.string().optional(),
 
       name: zod.string().optional(),
       description: zod.string().optional(),

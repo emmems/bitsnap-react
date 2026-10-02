@@ -13,6 +13,7 @@ import { useState } from "react";
 
 interface PanelOrderHistoryComponentProps {
   projectID: string;
+  accessToken: string;
   openOrderDetails: (orderId: string) => void;
 }
 
@@ -54,15 +55,14 @@ const statusColor: Record<string, string> = {
 function PanelOrderHistory({
   openOrderDetails,
   projectID,
+  accessToken,
 }: PanelOrderHistoryComponentProps) {
-  const accessToken = localStorage.getItem("__access_token");
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  console.log("projectID", projectID, accessToken);
   const { data, isFetching } = useQuery(rpcProvider.publicApi.getOrders, {
     projectId: projectID,
-    accessToken: accessToken ?? "",
+    accessToken,
     offset,
     limit,
   });

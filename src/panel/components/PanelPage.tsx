@@ -17,6 +17,7 @@ import PanelProductGridComponent from "./PanelProductGrid";
 import PanelProductHeaderComponent from "./PanelProductHeader";
 import PanelProfileComponent from "./PanelProfile";
 import PublicOrderPage from "./PublicOrderPage";
+import { clearPanelSession, getPanelEmail, getPanelSession } from "../session-storage";
 
 export type PanelScreen =
   | "products"
@@ -33,14 +34,10 @@ export type PanelSearchParamsType = {
 };
 
 const PanelPage = () => {
-  const { projectID, theme, loginURL } = usePanelConfig();
+  const { projectID, theme, loginURL, host } = usePanelConfig();
 
-  let accessToken: string | null = null;
-  if (typeof window !== "undefined") {
-    accessToken = localStorage.getItem("__access_token");
-  }
-  const email =
-    typeof window !== "undefined" ? localStorage.getItem("__user-email") : null;
+  const accessToken = getPanelSession(projectID, host);
+  const email = getPanelEmail(projectID, host);
 
   const { mutateAsync: logoutUserAsync } = useMutation(
     rpcProvider.publicApi.userPanelLogout,
@@ -53,8 +50,7 @@ const PanelPage = () => {
       });
     }
     if (typeof window !== "undefined") {
-      localStorage.removeItem("__access_token");
-      localStorage.removeItem("__user-email");
+      clearPanelSession(projectID, host);
       window.location.reload();
     }
   }
@@ -151,6 +147,7 @@ useEffect(() => {
       <main className="flex h-[calc(100vh-80px)] flex-col overflow-y-auto w-full p-5 md:h-screen">
         {activeScreen === "products" && (
           <PanelProductGridComponent
+            projectID={projectID ?? ""}
             accessToken={accessToken!}
             loginURL={loginURL ?? "/panel/login"}
             styles={styles}
@@ -169,6 +166,7 @@ useEffect(() => {
         {activeScreen === "orders" && (
           <PanelOrderHistoryComponent
             projectID={projectID ?? ""}
+            accessToken={accessToken ?? ""}
             openOrderDetails={handleOpenOrderDetails}
           />
         )}

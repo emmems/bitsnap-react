@@ -40,6 +40,7 @@ type CartProduct = {
   name?: string;
   price?: number;
   currency?: string;
+  priceVersion?: string;
 };
 
 export interface CartMethods {
@@ -289,6 +290,7 @@ const checkoutProduct = zod.object({
   id: zod.string(),
   productID: zod.string(),
   quantity: zod.number(),
+  priceVersion: zod.string().optional(),
   metadata: zod.record(zod.string(), zod.string().optional()).optional(),
 });
 type CheckoutProduct = zod.infer<typeof checkoutProduct>;
@@ -327,7 +329,12 @@ function getCheckout(): Checkout {
   }
 }
 
-function addProducts(products: CartProduct[]) {
+async function addProducts(projectID: string, products: CartProduct[]) {
+  const latestProducts = await getProducts(projectID, {
+    items: products.map((item, index) => ({ ...item, id: `price-check-${index}` })),
+  });
+  if (isErr(latestProducts)) return latestProducts;
+
   const checkout = getCheckout();
   if (checkout.products == null) {
     checkout.products = [];
@@ -337,6 +344,7 @@ function addProducts(products: CartProduct[]) {
       id: Math.random().toString(36).substring(7),
       productID: el.productID,
       quantity: el.quantity,
+      priceVersion: latestProducts.find((product) => product.productID === el.productID)?.details?.pricing?.priceVersion,
       metadata: el.metadata,
     })),
   );
@@ -353,6 +361,7 @@ function addProducts(products: CartProduct[]) {
   });
   saveCheckout(checkout);
   updateNumberOfProductsInCart();
+  return undefined;
 }
 
 function removeProductFromCheckout(ids: string[]) {
@@ -611,7 +620,7 @@ export const getCheckoutMethods: (
     },
 
     async addProduct(args: CartProduct): Promise<Err | void> {
-      return addProducts([args]);
+      return await addProducts(projectID, [args]);
     },
 
     async updateQuantity(args: {
@@ -655,6 +664,7 @@ export const getCheckoutMethods: (
           return {
             id: el.productID,
             quantity: el.quantity,
+            priceVersion: el.priceVersion,
           };
         }),
         askForNote: true,
@@ -940,7 +950,7 @@ export const getCheckoutMethods: (
             checkout.products.map((el) => el.productID),
           );
         }
-        addProducts(args.expectedItems);
+        await addProducts(projectID, args.expectedItems);
       }
 
       const products = await getProducts(projectID, { locale });
@@ -1077,6 +1087,7 @@ function resolveProductDetailsFromSingleProduct(
         name: product.name + " " + variant.name,
         price: variant.price,
         currency: variant.currency,
+        pricing: variant.pricing,
       };
     }
     return product;
@@ -1093,6 +1104,7 @@ function resolveProductDetailsFromSingleProduct(
     name: product.name + " " + variant.name,
     price: variant.price,
     currency: variant.currency,
+    pricing: variant.pricing,
     metadata: product.metadata,
     availableQuantity: variant.availableQuantity,
     isDeliverable: variant.isDeliverable,

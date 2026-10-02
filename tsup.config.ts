@@ -12,6 +12,7 @@ export default defineConfig((overrideOptions) => {
       internal: "src/internal.ts",
       errors: "src/errors.ts",
       models: "src/models.ts",
+      returns: "src/returns/index.ts",
     },
     dts: true,
     onSuccess: shouldPublish ? "pnpm publish" : undefined,

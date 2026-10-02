@@ -11,6 +11,7 @@ import { Transport } from "@connectrpc/connect";
 import { HOST, setCustomHost } from "./components/checkout/constants";
 import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
 import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
+import * as returnsRouter from "./gen/proto/public/v1/returns-ReturnsService_connectquery";
 
 let currentFinalTransportHost: string | undefined;
 let finalTransport: Transport | undefined;
@@ -23,6 +24,7 @@ BigInt.prototype.toJSON = function () {
 export const rpcProvider = {
   publicApi: publicApiRouter,
   notifications: notificationsRouter,
+  returns: returnsRouter,
 };
 
 export const useQuery = uq;
