@@ -10,8 +10,10 @@ import { Skeleton } from "./Skeleton";
 import { ApplePayButton, GooglePayButton } from "..";
 import { Spinner } from "@/src/ui/spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { cn } from "@/src/lib/utils";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { getLocale, translate } from "./locale";
+import { useCheckoutSlot } from "./appearance.context";
 
 const CartComponentContent = ({
   className,
@@ -22,6 +24,18 @@ const CartComponentContent = ({
 }) => {
   const provider = useCartProvider();
   const currentLocale = locale ?? getLocale();
+
+  const productList = useCheckoutSlot("productList");
+  const summary = useCheckoutSlot("summary");
+  const totalLabel = useCheckoutSlot("totalLabel");
+  const totalValue = useCheckoutSlot("totalValue");
+  const deliveryText = useCheckoutSlot("deliveryText");
+  const countryLabel = useCheckoutSlot("countryLabel");
+  const paymentButtons = useCheckoutSlot("paymentButtons");
+  const checkoutButton = useCheckoutSlot("checkoutButton");
+  const emptyState = useCheckoutSlot("emptyState");
+  const error = useCheckoutSlot("error");
+  const skeleton = useCheckoutSlot("skeleton");
 
   const { mutateAsync: removeProduct } = useMutation({
     mutationFn: provider.removeProductFromCart,
@@ -150,20 +164,39 @@ const CartComponentContent = ({
     <div className={`${className} flex flex-col`} ref={productsParent}>
       {isLoading && (
         <div className={"relative flex w-full justify-center flex-col gap-4"}>
-          <Skeleton className={"w-full h-32"} />
-          <Skeleton className={"w-full h-32"} />
+          <Skeleton
+            data-bitsnap-checkout-slot="skeleton"
+            className={cn("w-full h-32", skeleton.className)}
+            style={skeleton.style}
+          />
+          <Skeleton
+            data-bitsnap-checkout-slot="skeleton"
+            className={cn("w-full h-32", skeleton.className)}
+            style={skeleton.style}
+          />
         </div>
       )}
 
       {!isLoading && (products == null || products.length == 0) && (
         <div className={"flex flex-col gap-4 p-4"}>
-          <p className={"dark:text-neutral-400 text-neutral-700"}>
+          <p
+            data-bitsnap-checkout-slot="emptyState"
+            className={cn(emptyState.className)}
+            style={emptyState.style}
+          >
             {translate("emptyCart", currentLocale)}
           </p>
         </div>
       )}
 
-      <div className={"max-h-[70vh] overflow-clip overflow-y-scroll"}>
+      <div
+        data-bitsnap-checkout-slot="productList"
+        className={cn(
+          "max-h-[70vh] overflow-clip overflow-y-scroll",
+          productList.className,
+        )}
+        style={productList.style}
+      >
         {products != null && products.length > 0 && (
           <ul className={"mt-5"}>
             {products.map((product) => (
@@ -180,7 +213,7 @@ const CartComponentContent = ({
                         shouldUpdate(product.id, newQuantity).then().catch();
                       }}
                     />
-                    <hr className="h-1 dark:border-neutral-700 border-neutral-400" />
+                    <hr className="h-1" />
                   </li>
                 )}
               </React.Fragment>
@@ -193,21 +226,36 @@ const CartComponentContent = ({
 
       {sumOfProducts > 0 && currency != null && (
         <>
-          <div className="mx-3 flex flex-col">
+          <div
+            data-bitsnap-checkout-slot="summary"
+            className={cn("mx-3 flex flex-col", summary.className)}
+            style={summary.style}
+          >
             <div className={"flex flex-row justify-between text-lg"}>
-              <p className={"dark:text-neutral-200 text-neutral-800 text-xl"}>
+              <p
+                data-bitsnap-checkout-slot="totalLabel"
+                className={cn("text-xl", totalLabel.className)}
+                style={totalLabel.style}
+              >
                 {translate("total", currentLocale)}
               </p>
               <div className={"flex flex-col items-end"}>
                 <p
-                  className={
-                    "dark:text-neutral-200 text-neutral-800 font-medium"
-                  }
+                  data-bitsnap-checkout-slot="totalValue"
+                  className={cn("font-medium", totalValue.className)}
+                  style={totalValue.style}
                 >
                   {formatCurrency(sumOfProducts, currency)}
                 </p>
                 {isSomeProductDeliverable && (
-                  <p className={"opacity-70 text-right text-base"}>
+                  <p
+                    data-bitsnap-checkout-slot="deliveryText"
+                    className={cn(
+                      "opacity-70 text-right text-base",
+                      deliveryText.className,
+                    )}
+                    style={deliveryText.style}
+                  >
                     {translate("delivery", currentLocale)}
                   </p>
                 )}
@@ -218,9 +266,9 @@ const CartComponentContent = ({
           {countries && countries?.length > 1 && (
             <div>
               <h4
-                className={
-                  "ml-3 text-sm dark:text-neutral-400 text-neutral-700"
-                }
+                data-bitsnap-checkout-slot="countryLabel"
+                className={cn("ml-3 text-sm", countryLabel.className)}
+                style={countryLabel.style}
               >
                 {translate("chooseCountry", currentLocale)}
               </h4>
@@ -243,7 +291,11 @@ const CartComponentContent = ({
 
           <div className={"mb-3 flex flex-col"}>
             {isApplePayAvailable && products != null && products.length > 0 && (
-              <div className="w-full px-2">
+              <div
+                data-bitsnap-checkout-slot="paymentButtons"
+                className={cn("w-full px-2", paymentButtons.className)}
+                style={paymentButtons.style}
+              >
                 <ApplePayButton
                   colorType="white"
                   style={{ width: "100%" }}
@@ -259,7 +311,11 @@ const CartComponentContent = ({
               </div>
             )}
             {products != null && products.length > 0 && (
-              <div className="w-full px-2">
+              <div
+                data-bitsnap-checkout-slot="paymentButtons"
+                className={cn("w-full px-2", paymentButtons.className)}
+                style={paymentButtons.style}
+              >
                 <GooglePayButton
                   buttonSizeMode="fill"
                   buttonColor="white"
@@ -276,15 +332,18 @@ const CartComponentContent = ({
               </div>
             )}
             <button
+              data-bitsnap-checkout-slot="checkoutButton"
               onClick={continueToCheckout}
               disabled={
                 isLoading ||
                 isContinueToCheckoutLoading ||
                 selectedCountry == null
               }
-              className={
-                "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed dark:bg-neutral-300 dark:hover:bg-neutral-100 dark:text-neutral-800 hover:bg-neutral-900 text-neutral-200 bg-neutral-800 transition font-bold"
-              }
+              className={cn(
+                "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition font-bold",
+                checkoutButton.className,
+              )}
+              style={checkoutButton.style}
             >
               {isContinueToCheckoutLoading ? (
                 <Spinner />
@@ -293,7 +352,13 @@ const CartComponentContent = ({
               )}
             </button>
             {errMsg.length > 0 && (
-              <p className={"text-red-500 text-sm text-center"}>{errMsg}</p>
+              <p
+                data-bitsnap-checkout-slot="error"
+                className={cn("text-sm text-center", error.className)}
+                style={error.style}
+              >
+                {errMsg}
+              </p>
             )}
           </div>
         </>

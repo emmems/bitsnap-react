@@ -1,7 +1,5 @@
-.env
-dist
-.test-dist
 node_modules
+dist
 .DS_Store
 .vscode
 .zed

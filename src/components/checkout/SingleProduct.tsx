@@ -5,6 +5,7 @@ import { Button } from "@/src/ui/button";
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { ButtonGroup } from "@/src/ui/button-group";
 import { cn } from "@/src/lib/utils";
+import { useCheckoutSlot } from "./appearance.context";
 
 const SingleProduct = ({
   isNotAvailable,
@@ -18,24 +19,48 @@ const SingleProduct = ({
   details: SingleProduct;
   shouldUpdate: (newQuantity?: number) => void;
 }) => {
+  const product = useCheckoutSlot("product");
+  const productImage = useCheckoutSlot("productImage");
+  const productName = useCheckoutSlot("productName");
+  const productPrice = useCheckoutSlot("productPrice");
+  const removeButton = useCheckoutSlot("removeButton");
+
   return (
     <div
+      data-bitsnap-checkout-slot="product"
+      data-bitsnap-checkout-unavailable={isNotAvailable ? "" : undefined}
       className={cn(
         "flex items-center gap-3 mx-3",
-        isNotAvailable ? "outline outline-1 rounded-md outline-red-600 m-1" : ""
+        isNotAvailable ? "outline outline-1 rounded-md m-1" : "",
+        product.className,
       )}
+      style={product.style}
     >
       <img
-        className={
-          "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden"
-        }
+        data-bitsnap-checkout-slot="productImage"
+        className={cn(
+          "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden",
+          productImage.className,
+        )}
+        style={productImage.style}
         src={details.image_url ?? ""}
         alt={details.name}
       />
 
       <div className={"flex flex-col w-full"}>
-        <p className={"font-medium"}>{details.name}</p>
-        <p className={"text-sm"} suppressHydrationWarning>
+        <p
+          data-bitsnap-checkout-slot="productName"
+          className={cn("font-medium", productName.className)}
+          style={productName.style}
+        >
+          {details.name}
+        </p>
+        <p
+          data-bitsnap-checkout-slot="productPrice"
+          className={cn("text-sm", productPrice.className)}
+          style={productPrice.style}
+          suppressHydrationWarning
+        >
           {formatCurrency(details.price, details.currency)}
         </p>
         <div className={"flex justify-between"}>
@@ -44,7 +69,14 @@ const SingleProduct = ({
             quantity={quantity}
             shouldUpdate={shouldUpdate}
           />
-          <Button variant="ghost" size="sm" onClick={() => shouldUpdate(0)}>
+          <Button
+            data-bitsnap-checkout-slot="removeButton"
+            variant="ghost"
+            size="sm"
+            className={removeButton.className}
+            style={removeButton.style}
+            onClick={() => shouldUpdate(0)}
+          >
             Usuń
           </Button>
         </div>
@@ -66,6 +98,10 @@ const QuantityComponent = ({
 }) => {
   const [quantityString, setQuantityString] = useState(quantity.toString());
   const [quantityValue, setQuantityValue] = useState(quantity);
+
+  const quantityControl = useCheckoutSlot("quantityControl");
+  const quantityInput = useCheckoutSlot("quantityInput");
+  const quantityButton = useCheckoutSlot("quantityButton");
 
   useEffect(() => {
     shouldUpdate(quantityValue);
@@ -107,20 +143,36 @@ const QuantityComponent = ({
   }
 
   return (
-    <div className={`flex ${className}`}>
+    <div
+      data-bitsnap-checkout-slot="quantityControl"
+      className={cn("flex", className, quantityControl.className)}
+      style={quantityControl.style}
+    >
       <ButtonGroup aria-label="Ilość">
-        <Button onClick={decreaseQuantity}>
+        <Button
+          data-bitsnap-checkout-slot="quantityButton"
+          className={quantityButton.className}
+          style={quantityButton.style}
+          onClick={decreaseQuantity}
+        >
           <MinusIcon />
         </Button>
         <input
-          className={"w-8 bg-transparent text-center"}
+          data-bitsnap-checkout-slot="quantityInput"
+          className={cn("w-8 bg-transparent text-center", quantityInput.className)}
+          style={quantityInput.style}
           value={quantityString}
           onInput={(e) => {
             setNewQuantity(e.currentTarget.value);
           }}
           type="text"
         />
-        <Button onClick={increaseQuantity}>
+        <Button
+          data-bitsnap-checkout-slot="quantityButton"
+          className={quantityButton.className}
+          style={quantityButton.style}
+          onClick={increaseQuantity}
+        >
           <PlusIcon />
         </Button>
       </ButtonGroup>

@@ -57,6 +57,159 @@ It uses modern React patterns and libraries like:
 - Customizable host URL
 - Supports test/production environments
 
+## Checkout appearance
+
+`BitsnapCheckout` accepts an optional `appearance` prop. Omitting it - or passing
+`{}` - keeps the current presentation exactly as it is, so existing integrations
+do not have to change.
+
+### Import the stylesheet
+
+```tsx
+import "bitsnap-react/dist/index.css";
+```
+
+The stylesheet ships ready to use. Do not run it through a PostCSS prefixer or
+compile the library's Tailwind source again: the rules are already scoped.
+
+### Brand colors, font and radius
+
+```tsx
+import { BitsnapCheckout } from "bitsnap-react";
+
+function MyComponent() {
+  return (
+    <BitsnapCheckout
+      projectID="your-project-id"
+      appearance={{
+        tokens: {
+          fontFamily: '"Inter", sans-serif',
+          background: "#ffffff",
+          foreground: "#202020",
+          buttonBackground: "#635bff",
+          buttonForeground: "#ffffff",
+          radius: "12px",
+        },
+      }}
+    />
+  );
+}
+```
+
+Fonts are not loaded by the library - load the font file in your application, the
+checkout only applies the family you pass.
+
+### Light theme
+
+```tsx
+<BitsnapCheckout projectID="your-project-id" appearance={{ theme: "light" }} />
+```
+
+`theme` accepts `"dark"` (the default presentation) and `"light"`. There is no
+automatic system theme selection.
+
+### Individual elements
+
+Every part of the checkout is addressable through a stable slot. Slots accept a
+`className` (merged after the built-in classes) and a `style` (merged after the
+built-in styles):
+
+```tsx
+<BitsnapCheckout
+  projectID="your-project-id"
+  appearance={{
+    elements: {
+      title: { style: { fontFamily: '"Georgia", serif', fontSize: "28px" } },
+      checkoutButton: { className: "store-checkout-button" },
+      countryOption: { className: "px-4" },
+    },
+  }}
+/>
+```
+
+| Slot                 | Element                                     |
+| -------------------- | ------------------------------------------- |
+| `root`               | Theme boundary of the drawer                |
+| `overlay`            | Backdrop behind the drawer                   |
+| `panel`              | Drawer panel                                |
+| `header`             | Drawer header row                           |
+| `title`              | "Cart" heading                              |
+| `closeButton`        | Close button                                |
+| `productList`        | Scrollable product list                     |
+| `product`            | Single product row                          |
+| `productImage`       | Product image                               |
+| `productName`        | Product name                                |
+| `productPrice`       | Product price                               |
+| `quantityControl`    | Quantity stepper                            |
+| `quantityInput`      | Quantity value input                        |
+| `quantityButton`     | Quantity `-`/`+` buttons                    |
+| `removeButton`       | "Remove" button                             |
+| `summary`            | Total block                                 |
+| `totalLabel`         | "Total" label                               |
+| `totalValue`         | Total amount                                |
+| `deliveryText`       | Delivery note                               |
+| `countryLabel`       | "Choose country" label                      |
+| `countryTrigger`     | Country select trigger                      |
+| `countryDropdown`    | Portalled country list                      |
+| `countrySearch`      | Country search field                        |
+| `countryOption`      | Single country option                       |
+| `paymentButtons`     | Apple Pay / Google Pay wrappers              |
+| `checkoutButton`     | "Next step" button                          |
+| `emptyState`         | Empty cart message                          |
+| `error`              | Checkout error message                      |
+| `skeleton`           | Loading placeholder                         |
+
+The same names are rendered as `data-bitsnap-checkout-slot` attributes, and the
+drawer/dropdown boundaries carry `data-bitsnap-checkout`, so plain CSS works too:
+
+```css
+/* brand hover and focus states that the library cannot express */
+.store-checkout-button:hover {
+  filter: brightness(1.1);
+}
+
+[data-bitsnap-checkout-slot="countryOption"]:hover {
+  background: #eef2ff;
+}
+```
+
+Custom classes follow the normal CSS cascade; `className` is merged with `cn`, so
+conflicting Tailwind utilities from the library are resolved in your favor.
+
+### Tokens
+
+| Token                     | Applies to                                              |
+| ------------------------- | ------------------------------------------------------- |
+| `fontFamily`              | The whole checkout                                      |
+| `fontSize`                | The whole checkout                                      |
+| `background`              | Panel, country trigger                                  |
+| `surface`                 | Country dropdown, search bar, loading skeletons         |
+| `foreground`              | Titles, prices, total                                   |
+| `mutedForeground`         | Empty cart, delivery note, country label, search field  |
+| `border`                  | Country trigger, dropdown, product separators            |
+| `buttonBackground`        | "Next step" button                                      |
+| `buttonForeground`        | "Next step" button                                      |
+| `buttonHoverBackground`   | "Next step" button on hover                             |
+| `hoverSurface`            | Close button, country options                           |
+| `focusRing`               | Focus rings of the shared controls                      |
+| `error`                   | Error message, unavailable product outline              |
+| `overlay`                 | Drawer backdrop                                         |
+| `radius`                  | Radius of the rounded elements                          |
+
+### What stays untouched
+
+- The trigger button (`className`, `children`, `numberOfProductsInCartOptions`) and
+  every callback keep their current meaning.
+- The appearance lives in the checkout component only. It is not a global setting
+  and does not reuse the panel's `setTheme`.
+- Apple Pay and Google Pay keep their native artwork and fonts; only the space
+  around them is themed.
+- Layout, responsive widths and checkout actions are unchanged. Override widths
+  from your own CSS.
+- The country list is rendered in a portal. It receives the theme (colors, font,
+  focus ring and stacking) as soon as you pass an `appearance`; without one it
+  renders exactly as before.
+
 # Examples
 
 1. `BitsnapCheckout` Component:

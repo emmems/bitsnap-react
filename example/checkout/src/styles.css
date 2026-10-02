@@ -1,0 +1,21 @@
+/* Plain CSS, compiled by the app and not by the library: slot classes and
+   pseudo states have to work from the outside as well. */
+
+.example-checkout-button {
+  border-radius: 999px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.example-country-trigger {
+  border-radius: 999px;
+}
+
+.external-checkout-button {
+  box-shadow: 0 0 0 3px #16a34a;
+  border-radius: 0;
+}
+
+.external-country-option:hover {
+  outline: 2px solid #dc2626;
+}

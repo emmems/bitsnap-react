@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import zod from "zod";
+import type { CheckoutAppearance } from "./appearance";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
 import { sendAnalyticEvent } from "./frontent.analytics";
@@ -30,6 +31,11 @@ export type BitsnapCartProps = {
     style?: React.CSSProperties;
     isVisible?: boolean;
   };
+  /**
+   * Optional checkout appearance. Omitting it (or passing `{}`) keeps the
+   * current presentation; every token and element slot is partial.
+   */
+  appearance?: CheckoutAppearance;
 };
 
 function BitsnapCart({
@@ -39,6 +45,7 @@ function BitsnapCart({
   onVisibleChange,
   className,
   numberOfProductsInCartOptions,
+  appearance,
 }: BitsnapCartProps) {
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
@@ -271,6 +278,7 @@ function BitsnapCart({
       <CartComponent
         isVisible={isCartVisible}
         locale={locale}
+        appearance={appearance}
         shouldHide={() => {
           hideCart();
         }}

@@ -7,6 +7,15 @@ export {
   type BitsnapCartProps,
 } from "./checkout/BitsnapCart";
 export {
+  CHECKOUT_SLOT_NAMES,
+  type CheckoutAppearance,
+  type CheckoutAppearanceElements,
+  type CheckoutAppearanceTokens,
+  type CheckoutSlotAppearance,
+  type CheckoutSlotName,
+  type CheckoutTheme,
+} from "./checkout/appearance";
+export {
   default as GooglePayButton,
   type Props as GooglePayButtonProps,
 } from "./checkout/GooglePay";

@@ -10,7 +10,10 @@
     "build:publish": "pnpm build --env.publish",
     "clean": "rimraf ./dist",
     "dev": "tsup --watch",
-    "dev:publish": "pnpm dev --env.publish"
+    "dev:publish": "pnpm dev --env.publish",
+    "test": "tsup src/components/checkout/appearance.test.ts --format esm --out-dir .test-dist --no-config --silent && node --test \".test-dist/**/*.test.mjs\"",
+    "test:types": "tsc -p test/consumer/tsconfig.json",
+    "test:package": "node test/consumer/verify-package.mjs"
   },
   "repository": {
     "type": "git",

@@ -1,5 +1,12 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { createPortal } from "react-dom";
+import { cn } from "@/src/lib/utils";
+import {
+  CheckoutAppearanceProvider,
+  useCheckoutAppearance,
+  useCheckoutSlot,
+} from "./appearance.context";
+import type { CheckoutAppearance } from "./appearance";
 import CartComponentContent from "./CartComponentContent";
 import CartProvider from "./CartProvider";
 import { getLocale, translate } from "./locale";
@@ -8,36 +15,68 @@ interface Props {
   isVisible: boolean;
   shouldHide: () => void;
   locale?: string;
+  appearance?: CheckoutAppearance;
 }
 
 function CartComponent({ isVisible, shouldHide, locale }: Props) {
   const [parent] = useAutoAnimate(/* optional config */);
+  const { boundaryClassName, boundaryStyle } = useCheckoutAppearance();
+  const root = useCheckoutSlot("root");
+  const overlay = useCheckoutSlot("overlay");
+  const panel = useCheckoutSlot("panel");
+  const header = useCheckoutSlot("header");
+  const title = useCheckoutSlot("title");
+  const closeButton = useCheckoutSlot("closeButton");
 
   return (
     <div
       ref={parent}
-      className={"bitsnap-react dark"}
-      style={{ zIndex: 999999 }}
+      data-bitsnap-checkout="root"
+      data-bitsnap-checkout-slot="root"
+      className={cn("bitsnap-react", boundaryClassName, root.className)}
+      style={{ zIndex: 999999, ...boundaryStyle, ...root.style }}
     >
       {isVisible && (
         <>
           <div
-            className={
-              "fixed top-0 right-0 left-0 bottom-0 bg-black/30 cursor-pointer z-10"
-            }
+            data-bitsnap-checkout-slot="overlay"
+            className={cn(
+              "fixed top-0 right-0 left-0 bottom-0 cursor-pointer z-10",
+              overlay.className,
+            )}
+            style={overlay.style}
             onClick={shouldHide}
           ></div>
           <div
-            className={
-              "fixed z-20 top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] dark:bg-neutral-900 bg-neutral-300 dark:text-neutral-200 text-neutral-900 flex flex-col"
-            }
+            data-bitsnap-checkout-slot="panel"
+            className={cn(
+              "fixed z-20 top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] flex flex-col",
+              panel.className,
+            )}
+            style={panel.style}
           >
-            <div className={"mx-3 mt-7 flex justify-between items-center"}>
-              <h1 className={"text-2xl font-medium"}>
+            <div
+              data-bitsnap-checkout-slot="header"
+              className={cn(
+                "mx-3 mt-7 flex justify-between items-center",
+                header.className,
+              )}
+              style={header.style}
+            >
+              <h1
+                data-bitsnap-checkout-slot="title"
+                className={cn("text-2xl font-medium", title.className)}
+                style={title.style}
+              >
                 {translate("cart", locale ?? getLocale())}
               </h1>
               <button
-                className="rounded-xl dark:hover:bg-neutral-700 hover:bg-neutral-400 p-2 transition"
+                data-bitsnap-checkout-slot="closeButton"
+                className={cn(
+                  "rounded-xl p-2 transition",
+                  closeButton.className,
+                )}
+                style={closeButton.style}
                 onClick={shouldHide}
               >
                 <svg
@@ -72,9 +111,11 @@ const WrapperCartComponent = (props: Props) => {
   }
 
   return createPortal(
-    <CartProvider locale={props.locale}>
-      <CartComponent {...props} />
-    </CartProvider>,
+    <CheckoutAppearanceProvider appearance={props.appearance}>
+      <CartProvider locale={props.locale}>
+        <CartComponent {...props} />
+      </CartProvider>
+    </CheckoutAppearanceProvider>,
     document.body,
   );
 };

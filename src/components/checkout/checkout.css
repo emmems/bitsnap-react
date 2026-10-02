@@ -1,0 +1,169 @@
+/*
+ * Checkout appearance.
+ *
+ * Selectors in this file are deliberately excluded from the `.bitsnap-react`
+ * prefixing done in postcss.config.js (they all start with
+ * `[data-bitsnap-checkout`), because:
+ *
+ * - the theme boundary element has to match its own selectors, and
+ * - the country dropdown is portalled outside of the checkout root.
+ *
+ * Every rule is scoped to `[data-bitsnap-checkout]`, so nothing here can leak
+ * into the host page, the panel or the notifications.
+ *
+ * Every declaration falls back to the value the checkout renders today when the
+ * matching token is not set, which is what keeps `appearance` backward
+ * compatible. A few slots fall back to a slightly different value than the
+ * "primary" one for the same token because that is what they render today;
+ * those are marked below.
+ *
+ * The rules live in the `components` layer, so plain Tailwind utilities (and
+ * any stylesheet the consuming application ships later) keep winning over them.
+ */
+
+@layer components {
+    [data-bitsnap-checkout] {
+        font-family: var(
+            --bitsnap-checkout-font-family,
+            var(
+                --default-font-family,
+                ui-sans-serif,
+                system-ui,
+                sans-serif,
+                "Apple Color Emoji",
+                "Segoe UI Emoji",
+                "Segoe UI Symbol",
+                "Noto Color Emoji"
+            )
+        );
+        font-size: var(--bitsnap-checkout-font-size, inherit);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"] {
+        background-color: var(--bitsnap-checkout-overlay, oklab(0 0 0 / 0.3));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+        background-color: var(
+            --bitsnap-checkout-background,
+            var(--color-neutral-900)
+        );
+        color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="closeButton"]:hover {
+        background-color: var(
+            --bitsnap-checkout-hover-surface,
+            var(--color-neutral-700)
+        );
+    }
+
+    /* Product separators render with `border-neutral-700` today. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] hr {
+        border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
+    }
+
+    /* Only rendered with an outline when the product is unavailable. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="product"][data-bitsnap-checkout-unavailable] {
+        outline-color: var(--bitsnap-checkout-error, var(--color-red-600));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
+        background-color: var(
+            --bitsnap-checkout-button-background,
+            var(--color-neutral-300)
+        );
+        color: var(--bitsnap-checkout-button-foreground, var(--color-neutral-800));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:hover:not(:disabled) {
+        background-color: var(
+            --bitsnap-checkout-button-hover-background,
+            var(--color-neutral-100)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
+        color: var(--bitsnap-checkout-error, var(--color-red-500));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="emptyState"] {
+        color: var(
+            --bitsnap-checkout-muted-foreground,
+            var(--color-neutral-400)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="deliveryText"] {
+        color: var(--bitsnap-checkout-muted-foreground, inherit);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryLabel"] {
+        color: var(
+            --bitsnap-checkout-muted-foreground,
+            var(--color-neutral-400)
+        );
+    }
+
+    /* Skeletons render with `bg-neutral-700` today, the dropdown with
+     * `neutral-800`; both follow the `surface` token once it is provided. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="skeleton"] {
+        background-color: var(
+            --bitsnap-checkout-surface,
+            var(--color-neutral-700)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] {
+        background-color: var(
+            --bitsnap-checkout-background,
+            var(--color-neutral-900)
+        );
+        border-color: var(
+            --bitsnap-checkout-border,
+            var(--color-neutral-500)
+        );
+    }
+
+    /* The portalled dropdown is its own theme boundary, so the slot selector
+       has to match the boundary element itself. Its background comes from the
+       shared `bg-popover` utility, which is driven by `--popover`, and it needs
+       an explicit stacking level because the portal lives outside of the drawer
+       stacking context. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryDropdown"],
+    [data-bitsnap-checkout-slot="countryDropdown"][data-bitsnap-checkout] {
+        z-index: 999999;
+        background-color: var(
+            --bitsnap-checkout-surface,
+            var(--color-neutral-800)
+        );
+        border-color: var(--bitsnap-checkout-border, var(--border));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] {
+        background-color: var(
+            --bitsnap-checkout-surface,
+            var(--color-neutral-800)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] input {
+        color: var(
+            --bitsnap-checkout-muted-foreground,
+            var(--color-neutral-400)
+        );
+    }
+
+    /* Options have no hover background today, hence the `transparent` fallback. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:hover {
+        background-color: var(--bitsnap-checkout-hover-surface, transparent);
+    }
+
+    /* Listed after `:hover` so the selected option keeps its own surface. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"][data-state="checked"] {
+        background-color: var(
+            --bitsnap-checkout-hover-surface,
+            var(--color-neutral-700)
+        );
+    }
+}
