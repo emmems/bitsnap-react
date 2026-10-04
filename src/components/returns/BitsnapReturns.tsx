@@ -10,8 +10,11 @@ import {
   ReturnsOrderList,
   ReturnsResult,
 } from "./OrderSteps";
-import { toReturnsProviderProps, type BitsnapReturnsProps } from "./legacy";
-import { ReturnsProvider, useReturnsContext } from "./ReturnsProvider";
+import {
+  ReturnsProvider,
+  useReturnsContext,
+  type ReturnsProviderProps,
+} from "./ReturnsProvider";
 import {
   initialReturnsStep,
   reduceReturnsStep,
@@ -20,7 +23,7 @@ import {
 } from "./state-machine";
 import { useReturnsText } from "./texts.context";
 
-export type { BitsnapReturnsProps } from "./legacy";
+export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children">;
 
 function StepIndicator({ current }: { current: number }) {
   const text = useReturnsText();
@@ -38,7 +41,7 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 /** Default step router. All transitions come from the pure state machine. */
-function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
+function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
   const { status } = useReturnsContext("BitsnapReturns");
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
@@ -55,7 +58,9 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
     }
   }, [status]);
 
-  if (status === "hydrating" || status === "exchanging") {
+  // Without a panel token the server render and the first client render show
+  // the email step; a stored session switches to the orders after hydration.
+  if (status === "exchanging" || (status === "hydrating" && panelToken)) {
     return <SkeletonRows />;
   }
 
@@ -75,7 +80,7 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
       )}
       {step.name === "orders" && (
         <ReturnsOrderList
-          showLogout={showLogout}
+          showLogout={!panelToken}
           onSelectOrder={(orderId) =>
             dispatch({ type: "SELECT_ORDER", orderId })
           }
@@ -141,8 +146,8 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
  */
 export function BitsnapReturns(props: BitsnapReturnsProps) {
   return (
-    <ReturnsProvider {...toReturnsProviderProps(props)}>
-      <ReturnsRouter showLogout={props.panelAccessToken == null} />
+    <ReturnsProvider {...props}>
+      <ReturnsRouter panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""} />
     </ReturnsProvider>
   );
 }

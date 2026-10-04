@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -87,6 +88,68 @@ for (const method of ["addProductToCart", "showCart", "hideCart"]) {
   );
 }
 
+const returnsNames = [
+  // 1.6.0 names
+  "BitsnapReturns",
+  "BitsnapReturnsProvider",
+  "useCreateReturn",
+  "useMyReturns",
+  "useReturnableOrder",
+  "useReturnOrders",
+  "useReturnSession",
+  // new API
+  "ReturnsProvider",
+  "ReturnsEmailStep",
+  "ReturnsCodeStep",
+  "ReturnsOrderList",
+  "ReturnsOrderDetail",
+  "ReturnsConfirmation",
+  "ReturnsResult",
+  "ReturnsMyReturnsList",
+  "ReturnsMyReturnDetail",
+  "useMyReturn",
+  "ReturnsAppearanceProvider",
+  "useReturnsAppearance",
+  "useReturnsText",
+];
+
+const returnsEntries = [
+  ["index.mjs", "esm"],
+  ["returns.mjs", "esm"],
+  ["index.js", "cjs"],
+  ["returns.js", "cjs"],
+];
+
+for (const [file, kind] of returnsEntries) {
+  const target = join(dist, file);
+  const loaded =
+    kind === "esm" ? await import(target) : createRequire(import.meta.url)(target);
+  for (const name of returnsNames) {
+    assert.equal(
+      typeof loaded[name],
+      "function",
+      `missing returns export ${name} in dist/${file}`,
+    );
+  }
+  assert.ok(
+    loaded.Environment != null &&
+      loaded.Environment.PRODUCTION === 0 &&
+      loaded.Environment.TEST === 1,
+    `missing Environment enum in dist/${file}`,
+  );
+  assert.equal(
+    typeof loaded.RETURNS_SLOT_NAMES === "object" && loaded.RETURNS_SLOT_NAMES != null,
+    true,
+    `missing RETURNS_SLOT_NAMES in dist/${file}`,
+  );
+}
+
+for (const file of ["index.d.ts", "returns.d.ts"]) {
+  const text = readFileSync(join(dist, file), "utf8");
+  assert.match(text, /BitsnapReturnsProps/, `dist/${file} lacks BitsnapReturnsProps`);
+  assert.match(text, /BitsnapReturnsProviderProps/, `dist/${file} lacks BitsnapReturnsProviderProps`);
+}
+
 const declaration = readFileSync(join(dist, "index.d.ts"), "utf8");
 
 assert.match(
@@ -119,6 +182,15 @@ assert.ok(
 assert.ok(
   css.includes("--bitsnap-checkout-button-background"),
   "checkout tokens are missing from the packaged CSS",
+);
+
+assert.ok(
+  css.includes("[data-bitsnap-returns"),
+  "returns appearance rules are missing from the packaged CSS",
+);
+assert.ok(
+  !css.includes(".bitsnap-react [data-bitsnap-returns"),
+  "returns appearance rules must not be rewritten into descendant selectors",
 );
 
 console.log("packaging checks passed");

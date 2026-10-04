@@ -2,6 +2,12 @@ import { useMutation, useQuery } from "@connectrpc/connect-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  CreateReturnRequestResponse,
+  GetReturnableOrderResponse,
+  ListMyReturnsResponse,
+  ListReturnOrdersResponse,
+  StartReturnSessionResponse,
+  VerifyReturnSessionResponse,
   ReturnOrderDetail,
   ReturnOrderSummary,
   ReturnHistoryEntry,
@@ -10,6 +16,7 @@ import type {
 import { rpcProvider } from "@/src/rpc-provider";
 import { isSessionExpiredError, mapReturnsError } from "./errors";
 import { createIdempotencyKey } from "./idempotency";
+import { resolvePagedArguments } from "./legacy";
 import {
   returnsQueryKey,
   useReturnsContext,
@@ -19,7 +26,17 @@ import {
 import { expiryToMillis } from "./session-storage";
 import type { ReturnsTextKey } from "./texts";
 
-const DEFAULT_PAGE_SIZE = 10;
+/** React Query style status shared by the query and mutation results. */
+type QueryStatus = "pending" | "error" | "success";
+type MutationStatus = "idle" | QueryStatus;
+
+/** Anything thrown becomes an `Error`, as React Query results expose them. */
+function asError(error: unknown): Error | null {
+  if (error == null) {
+    return null;
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
 
 /** Text key of a failure, `undefined` while there is none. */
 function errorKeyOf(error: unknown): ReturnsTextKey | undefined {
@@ -65,8 +82,26 @@ export type UseReturnSessionResult = {
   isStarting: boolean;
   isVerifying: boolean;
   /** Last failure of `start` or `verify`, or of the panel token exchange. */
-  error: unknown;
+  error: Error | null;
   errorKey: ReturnsTextKey | undefined;
+  /** Same as `isStarting` (`bitsnap-react` 1.6.0 name). */
+  starting: boolean;
+  /** Same as `isVerifying` (`bitsnap-react` 1.6.0 name). */
+  verifying: boolean;
+  /**
+   * `bitsnap-react` 1.6.0 API: sends a code and resolves with the response
+   * (including `challengeId`). Rejects on failure. Also stores the challenge
+   * like `start`.
+   */
+  startSession: (email: string) => Promise<StartReturnSessionResponse>;
+  /**
+   * `bitsnap-react` 1.6.0 API: verifies a code, stores the session like
+   * `verify` and resolves with the response. Rejects on failure.
+   */
+  verifySession: (input: {
+    challengeId: string;
+    code: string;
+  }) => Promise<VerifyReturnSessionResponse>;
   /** Sends a code to `email`. Resolves to `true` when the code was sent. */
   start: (email: string) => Promise<boolean>;
   /** Verifies the code of the pending challenge. Resolves to `true` on success. */
@@ -84,28 +119,54 @@ export function useReturnSession(): UseReturnSessionResult {
   const verifyMutation = useMutation(rpcProvider.returns.verifyReturnSession);
   const { setChallenge, authenticate, clearSession } = ctx;
 
-  const start = useCallback(
+  const startSession = useCallback(
     async (email: string) => {
       verifyMutation.reset();
+      const trimmed = email.trim();
+      const response = await startMutation.mutateAsync({
+        projectId: ctx.projectID,
+        email: trimmed,
+        environment: ctx.environment,
+      });
+      setChallenge({
+        challengeId: response.challengeId,
+        email: trimmed,
+        resendAvailableAt:
+          Date.now() + Math.max(0, response.resendAfterSeconds) * 1000,
+      });
+      return response;
+    },
+    [ctx.projectID, ctx.environment, setChallenge, startMutation, verifyMutation],
+  );
+
+  const verifySession = useCallback(
+    async (input: { challengeId: string; code: string }) => {
+      const response = await verifyMutation.mutateAsync({
+        projectId: ctx.projectID,
+        challengeId: input.challengeId,
+        code: input.code,
+        environment: ctx.environment,
+      });
+      const expiresAt = expiryToMillis(response.expiresAt);
+      if (response.sessionToken === "" || expiresAt == null) {
+        throw new Error("EMPTY_SESSION");
+      }
+      authenticate({ token: response.sessionToken, expiresAt });
+      return response;
+    },
+    [ctx.projectID, ctx.environment, authenticate, verifyMutation],
+  );
+
+  const start = useCallback(
+    async (email: string) => {
       try {
-        const trimmed = email.trim();
-        const response = await startMutation.mutateAsync({
-          projectId: ctx.projectID,
-          email: trimmed,
-          environment: ctx.environment,
-        });
-        setChallenge({
-          challengeId: response.challengeId,
-          email: trimmed,
-          resendAvailableAt:
-            Date.now() + Math.max(0, response.resendAfterSeconds) * 1000,
-        });
+        await startSession(email);
         return true;
       } catch {
         return false;
       }
     },
-    [ctx.projectID, ctx.environment, setChallenge, startMutation, verifyMutation],
+    [startSession],
   );
 
   const verify = useCallback(
@@ -114,23 +175,16 @@ export function useReturnSession(): UseReturnSessionResult {
         return false;
       }
       try {
-        const response = await verifyMutation.mutateAsync({
-          projectId: ctx.projectID,
+        await verifySession({
           challengeId: ctx.challenge.challengeId,
           code: code.trim(),
-          environment: ctx.environment,
         });
-        const expiresAt = expiryToMillis(response.expiresAt);
-        if (response.sessionToken === "" || expiresAt == null) {
-          return false;
-        }
-        authenticate({ token: response.sessionToken, expiresAt });
         return true;
       } catch {
         return false;
       }
     },
-    [ctx.projectID, ctx.environment, ctx.challenge, authenticate, verifyMutation],
+    [ctx.challenge, verifySession],
   );
 
   const resend = useCallback(
@@ -138,8 +192,9 @@ export function useReturnSession(): UseReturnSessionResult {
     [ctx.challenge, start],
   );
 
-  const error =
-    startMutation.error ?? verifyMutation.error ?? ctx.exchangeError;
+  const error = asError(
+    startMutation.error ?? verifyMutation.error ?? ctx.exchangeError,
+  );
 
   return {
     status: ctx.status,
@@ -147,9 +202,13 @@ export function useReturnSession(): UseReturnSessionResult {
     challenge: ctx.challenge,
     isStarting: startMutation.isPending,
     isVerifying: verifyMutation.isPending,
+    starting: startMutation.isPending,
+    verifying: verifyMutation.isPending,
     error,
     errorKey: errorKeyOf(error),
     start,
+    startSession,
+    verifySession,
     verify,
     resend,
     logout: clearSession,
@@ -165,25 +224,49 @@ export type UseReturnOrdersResult = {
   orders: ReturnOrderSummary[];
   /** Total number of returnable orders. */
   total: number;
+  /** Response for the requested page (React Query style). */
+  data: ListReturnOrdersResponse | undefined;
   isLoading: boolean;
   isFetching: boolean;
-  error: unknown;
+  error: Error | null;
   errorKey: ReturnsTextKey | undefined;
+  status: QueryStatus;
+  isError: boolean;
+  isSuccess: boolean;
   /** 1-based number of the current page. */
   page: number;
   hasNext: boolean;
   hasPrevious: boolean;
   next: () => void;
   previous: () => void;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 };
 
-/** Orders of the signed-in customer that have lines to return, page by page. */
+/**
+ * `true` while the session is still being restored or a panel token is being
+ * exchanged. A logged out customer is not "loading", as in 1.6.0.
+ */
+function isSessionPending(ctx: { status: string }): boolean {
+  return ctx.status === "hydrating" || ctx.status === "exchanging";
+}
+
+/**
+ * Orders of the signed-in customer that have lines to return, page by page.
+ * Call it with `{ pageSize }` (pages are walked with `next`/`previous`) or, as
+ * in `bitsnap-react` 1.6.0, with `(pageSize, pageToken)`; then the explicit
+ * token is requested and `data.nextPageToken` drives paging.
+ */
+export function useReturnOrders(options?: PagedOptions): UseReturnOrdersResult;
 export function useReturnOrders(
-  options: PagedOptions = {},
+  pageSize?: number,
+  pageToken?: string,
+): UseReturnOrdersResult;
+export function useReturnOrders(
+  first?: number | PagedOptions,
+  token?: string,
 ): UseReturnOrdersResult {
   const ctx = useReturnsContext("useReturnOrders");
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+  const { pageSize, explicitPageToken } = resolvePagedArguments(first, token);
   const pages = usePageTokens(ctx.token);
 
   const query = useQuery(
@@ -192,7 +275,7 @@ export function useReturnOrders(
       projectId: ctx.projectID,
       sessionToken: ctx.token ?? "",
       pageSize,
-      pageToken: pages.pageToken,
+      pageToken: explicitPageToken ?? pages.pageToken,
     },
     { enabled: ctx.token != null },
   );
@@ -203,10 +286,14 @@ export function useReturnOrders(
   return {
     orders: query.data?.orders ?? [],
     total: query.data?.total ?? 0,
-    isLoading: ctx.token == null || query.isLoading,
+    data: query.data,
+    isLoading: isSessionPending(ctx) || query.isLoading,
     isFetching: query.isFetching,
-    error: query.error,
+    error: asError(query.error),
     errorKey: errorKeyOf(query.error),
+    status: query.status,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
     page: pages.page,
     hasNext: nextPageToken !== "",
     hasPrevious: pages.page > 1,
@@ -216,7 +303,7 @@ export function useReturnOrders(
       }
     },
     previous: pages.pop,
-    refetch: () => void query.refetch(),
+    refetch: () => query.refetch(),
   };
 }
 
@@ -224,14 +311,22 @@ export type UseReturnableOrderResult = {
   order: ReturnOrderDetail | undefined;
   /** Earlier return requests for this order. */
   returnHistory: ReturnHistoryEntry[];
+  /** Response (React Query style): `data.order` is the order. */
+  data: GetReturnableOrderResponse | undefined;
   isLoading: boolean;
-  error: unknown;
+  error: Error | null;
   errorKey: ReturnsTextKey | undefined;
-  refetch: () => void;
+  status: QueryStatus;
+  isError: boolean;
+  isSuccess: boolean;
+  refetch: () => Promise<unknown>;
 };
 
-/** One order with the eligibility of each line. */
-export function useReturnableOrder(orderId: string): UseReturnableOrderResult {
+/**
+ * One order with the eligibility of each line. Without an `orderId` the query
+ * is disabled.
+ */
+export function useReturnableOrder(orderId?: string): UseReturnableOrderResult {
   const ctx = useReturnsContext("useReturnableOrder");
 
   const query = useQuery(
@@ -239,19 +334,24 @@ export function useReturnableOrder(orderId: string): UseReturnableOrderResult {
     {
       projectId: ctx.projectID,
       sessionToken: ctx.token ?? "",
-      canonicalOrderId: orderId,
+      canonicalOrderId: orderId ?? "",
     },
-    { enabled: ctx.token != null },
+    { enabled: ctx.token != null && orderId != null && orderId !== "" },
   );
   useDropSessionOnExpiry(query.error, ctx.clearSession);
 
   return {
     order: query.data?.order,
     returnHistory: query.data?.returnHistory ?? [],
-    isLoading: ctx.token == null || query.isLoading,
-    error: query.error,
+    data: query.data,
+    isLoading:
+      orderId != null && orderId !== "" && (isSessionPending(ctx) || query.isLoading),
+    error: asError(query.error),
     errorKey: errorKeyOf(query.error),
-    refetch: () => void query.refetch(),
+    status: query.status,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    refetch: () => query.refetch(),
   };
 }
 
@@ -259,6 +359,15 @@ export type CreateReturnInput = {
   orderId: string;
   items: { lineId: string; quantity: number }[];
   note?: string;
+};
+
+/** Input of the `bitsnap-react` 1.6.0 `mutateAsync`/`mutate`. */
+export type LegacyCreateReturnInput = {
+  canonicalOrderID: string;
+  items: { lineId: string; quantity: number }[];
+  note?: string;
+  /** Used as given. A fresh key is generated per call when omitted. */
+  idempotencyKey?: string;
 };
 
 export type UseCreateReturnResult = {
@@ -269,13 +378,35 @@ export type UseCreateReturnResult = {
    */
   submit: (input: CreateReturnInput) => Promise<ReturnRequestView | undefined>;
   isPending: boolean;
-  error: unknown;
+  error: Error | null;
   errorKey: ReturnsTextKey | undefined;
+  /**
+   * `bitsnap-react` 1.6.0 API (React Query mutation semantics): resolves with
+   * the response (`result.request`) and rejects on failure.
+   */
+  mutateAsync: (
+    input: LegacyCreateReturnInput,
+  ) => Promise<CreateReturnRequestResponse>;
+  /** Fire and forget version of `mutateAsync`; failures land in `error`. */
+  mutate: (
+    input: LegacyCreateReturnInput,
+    options?: {
+      onSuccess?: (response: CreateReturnRequestResponse) => void;
+      onError?: (error: Error) => void;
+    },
+  ) => void;
+  /** Response of the last successful request. */
+  data: CreateReturnRequestResponse | undefined;
+  reset: () => void;
+  status: MutationStatus;
+  isError: boolean;
+  isSuccess: boolean;
 };
 
 /**
- * Creates a return request. The idempotency key is generated once per hook
- * instance, which is once per confirmation screen, and reused on retry.
+ * Creates a return request. With `submit` the idempotency key is generated
+ * once per hook instance, which is once per confirmation screen, and reused on
+ * retry.
  */
 export function useCreateReturn(): UseCreateReturnResult {
   const ctx = useReturnsContext("useCreateReturn");
@@ -284,9 +415,8 @@ export function useCreateReturn(): UseCreateReturnResult {
   const idempotencyKey = useRef<string | undefined>(undefined);
   const { clearSession } = ctx;
 
-  const submit = useCallback(
-    async (input: CreateReturnInput) => {
-      idempotencyKey.current ??= createIdempotencyKey();
+  const send = useCallback(
+    async (input: CreateReturnInput, key: string) => {
       try {
         const response = await mutation.mutateAsync({
           projectId: ctx.projectID,
@@ -294,49 +424,119 @@ export function useCreateReturn(): UseCreateReturnResult {
           canonicalOrderId: input.orderId,
           items: input.items,
           note: input.note ?? "",
-          idempotencyKey: idempotencyKey.current,
+          idempotencyKey: key,
         });
-        idempotencyKey.current = undefined;
         // Quantities and the list of returns changed.
         void queryClient.invalidateQueries({ queryKey: returnsQueryKey() });
-        return response.request;
+        return response;
       } catch (error) {
         if (isSessionExpiredError(error)) {
           clearSession();
         }
-        return undefined;
+        throw error;
       }
     },
     [ctx.projectID, ctx.token, mutation, queryClient, clearSession],
   );
 
+  const submit = useCallback(
+    async (input: CreateReturnInput) => {
+      idempotencyKey.current ??= createIdempotencyKey();
+      try {
+        const response = await send(input, idempotencyKey.current);
+        idempotencyKey.current = undefined;
+        return response.request;
+      } catch {
+        return undefined;
+      }
+    },
+    [send],
+  );
+
+  const mutateAsync = useCallback(
+    async (input: LegacyCreateReturnInput) => {
+      if (ctx.token == null) {
+        throw new Error("Verify your email to continue.");
+      }
+      return send(
+        {
+          orderId: input.canonicalOrderID,
+          items: input.items,
+          note: input.note,
+        },
+        input.idempotencyKey ?? createIdempotencyKey(),
+      );
+    },
+    [ctx.token, send],
+  );
+
+  const mutate = useCallback(
+    (
+      input: LegacyCreateReturnInput,
+      options?: {
+        onSuccess?: (response: CreateReturnRequestResponse) => void;
+        onError?: (error: Error) => void;
+      },
+    ) => {
+      mutateAsync(input).then(
+        (response) => options?.onSuccess?.(response),
+        (error: unknown) => options?.onError?.(asError(error) as Error),
+      );
+    },
+    [mutateAsync],
+  );
+
   return {
     submit,
     isPending: mutation.isPending,
-    error: mutation.error,
+    error: asError(mutation.error),
     errorKey: errorKeyOf(mutation.error),
+    mutateAsync,
+    mutate,
+    data: mutation.data,
+    reset: mutation.reset,
+    status: mutation.status,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
   };
 }
 
 export type UseMyReturnsResult = {
   returns: ReturnRequestView[];
   total: number;
+  /** Response for the requested page (React Query style). */
+  data: ListMyReturnsResponse | undefined;
   isLoading: boolean;
   isFetching: boolean;
-  error: unknown;
+  error: Error | null;
   errorKey: ReturnsTextKey | undefined;
+  status: QueryStatus;
+  isError: boolean;
+  isSuccess: boolean;
   page: number;
   hasNext: boolean;
   hasPrevious: boolean;
   next: () => void;
   previous: () => void;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 };
 
-/** Return requests of the signed-in customer, page by page. */
-export function useMyReturns(options: PagedOptions = {}): UseMyReturnsResult {
+/**
+ * Return requests of the signed-in customer, page by page. Accepts
+ * `{ pageSize }` or the `bitsnap-react` 1.6.0 `(pageSize, pageToken)` form,
+ * like `useReturnOrders`.
+ */
+export function useMyReturns(options?: PagedOptions): UseMyReturnsResult;
+export function useMyReturns(
+  pageSize?: number,
+  pageToken?: string,
+): UseMyReturnsResult;
+export function useMyReturns(
+  first?: number | PagedOptions,
+  token?: string,
+): UseMyReturnsResult {
   const ctx = useReturnsContext("useMyReturns");
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+  const { pageSize, explicitPageToken } = resolvePagedArguments(first, token);
   const pages = usePageTokens(ctx.token);
 
   const query = useQuery(
@@ -345,7 +545,7 @@ export function useMyReturns(options: PagedOptions = {}): UseMyReturnsResult {
       projectId: ctx.projectID,
       sessionToken: ctx.token ?? "",
       pageSize,
-      pageToken: pages.pageToken,
+      pageToken: explicitPageToken ?? pages.pageToken,
     },
     { enabled: ctx.token != null },
   );
@@ -356,10 +556,14 @@ export function useMyReturns(options: PagedOptions = {}): UseMyReturnsResult {
   return {
     returns: query.data?.returns ?? [],
     total: query.data?.total ?? 0,
-    isLoading: ctx.token == null || query.isLoading,
+    data: query.data,
+    isLoading: isSessionPending(ctx) || query.isLoading,
     isFetching: query.isFetching,
-    error: query.error,
+    error: asError(query.error),
     errorKey: errorKeyOf(query.error),
+    status: query.status,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
     page: pages.page,
     hasNext: nextPageToken !== "",
     hasPrevious: pages.page > 1,
@@ -369,7 +573,7 @@ export function useMyReturns(options: PagedOptions = {}): UseMyReturnsResult {
       }
     },
     previous: pages.pop,
-    refetch: () => void query.refetch(),
+    refetch: () => query.refetch(),
   };
 }
 
@@ -398,9 +602,9 @@ export function useMyReturn(returnId: string): UseMyReturnResult {
 
   return {
     request: query.data?.request,
-    isLoading: ctx.token == null || query.isLoading,
+    isLoading: isSessionPending(ctx) || query.isLoading,
     error: query.error,
     errorKey: errorKeyOf(query.error),
-    refetch: () => void query.refetch(),
+    refetch: () => query.refetch(),
   };
 }

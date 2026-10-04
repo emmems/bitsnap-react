@@ -61,13 +61,7 @@ function ReturnsScreens({
   setActiveScreen,
 }: Pick<
   Props,
-  | "projectID"
-  | "host"
-  | "loginURL"
-  | "screen"
-  | "params"
-  | "setParams"
-  | "setActiveScreen"
+  "projectID" | "host" | "loginURL" | "screen" | "params" | "setParams" | "setActiveScreen"
 >) {
   const { status, exchangeError } = useReturnsContext("PanelReturns");
   const text = useReturnsText();
@@ -197,8 +191,6 @@ function ReturnsScreens({
  * session.
  */
 export default function PanelReturns({
-  projectID,
-  host,
   accessToken,
   appearance,
   texts,
@@ -206,13 +198,13 @@ export default function PanelReturns({
 }: Props) {
   return (
     <ReturnsProvider
-      projectID={projectID}
-      host={host}
+      projectID={rest.projectID}
+      host={rest.host}
       appearance={appearance}
       texts={texts}
       panelAccessToken={accessToken}
     >
-      <ReturnsScreens projectID={projectID} host={host} {...rest} />
+      <ReturnsScreens {...rest} />
     </ReturnsProvider>
   );
 }

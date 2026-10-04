@@ -38,7 +38,14 @@ import {
   writeStoredSession,
   type StoredReturnsSession,
 } from "./session-storage";
-import type { ReturnsTexts } from "./texts";
+import {
+  mapLegacyTexts,
+  resolveBrandAppearance,
+  resolveReturnsEnvironment,
+  type LegacyReturnsTheme,
+  type ReturnsEnvironmentInput,
+  type ReturnsTextsInput,
+} from "./legacy";
 import { ReturnsTextsProvider } from "./texts.context";
 
 /**
@@ -105,12 +112,21 @@ export type ReturnsProviderProps = {
    * `https://bitsnap.pl`. Each provider keeps its own transport.
    */
   host?: string;
-  /** Backend environment, `"production"` unless set to `"test"`. */
-  environment?: ReturnsEnvironment;
+  /**
+   * Backend environment, `"production"` unless set to `"test"`. The proto
+   * `Environment` enum is accepted too.
+   */
+  environment?: ReturnsEnvironmentInput;
   /** Theme, tokens and per-element overrides. */
   appearance?: ReturnsAppearance;
-  /** Text overrides, applied whatever the locale. */
-  texts?: Partial<ReturnsTexts>;
+  /**
+   * Text overrides, applied whatever the locale. The keys of `bitsnap-react`
+   * 1.6.0 (`title`, `email`, `sendCode`, ...) are accepted too; our own keys
+   * win when both are given.
+   */
+  texts?: ReturnsTextsInput;
+  /** `bitsnap-react` 1.6.0 brand color. Explicit `appearance.tokens` win. */
+  theme?: LegacyReturnsTheme;
   /** Locale of texts, dates and money. Defaults to the library locale. */
   locale?: string;
   /**
@@ -123,10 +139,6 @@ export type ReturnsProviderProps = {
   className?: string;
   children?: ReactNode;
 };
-
-function toEnvironment(environment?: ReturnsEnvironment): Environment {
-  return environment === "test" ? Environment.TEST : Environment.PRODUCTION;
-}
 
 /** Key prefix that matches every returns query, for invalidation and removal. */
 export function returnsQueryKey(): readonly unknown[] {
@@ -332,6 +344,7 @@ export function ReturnsProvider({
   environment,
   appearance,
   texts,
+  theme,
   locale,
   panelAccessToken,
   className,
@@ -350,13 +363,20 @@ export function ReturnsProvider({
     [resolvedHost],
   );
 
+  const brandColor = theme?.brandColor;
+  const resolvedAppearance = useMemo(
+    () => resolveBrandAppearance(appearance, { brandColor }),
+    [appearance, brandColor],
+  );
+  const resolvedTexts = useMemo(() => mapLegacyTexts(texts), [texts]);
+
   const content = (
     <TransportProvider transport={transport}>
-      <ReturnsAppearanceProvider appearance={appearance}>
-        <ReturnsTextsProvider texts={texts} locale={locale}>
+      <ReturnsAppearanceProvider appearance={resolvedAppearance}>
+        <ReturnsTextsProvider texts={resolvedTexts} locale={locale}>
           <SessionProvider
             projectID={projectID}
-            environment={toEnvironment(environment)}
+            environment={resolveReturnsEnvironment(environment)}
             transport={transport}
             panelAccessToken={panelAccessToken}
             className={className}
@@ -374,3 +394,8 @@ export function ReturnsProvider({
     content
   );
 }
+
+/** Name of {@link ReturnsProvider} in `bitsnap-react` 1.6.0. */
+export const BitsnapReturnsProvider = ReturnsProvider;
+
+export type BitsnapReturnsProviderProps = ReturnsProviderProps;
