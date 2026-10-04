@@ -10,11 +10,8 @@ import {
   ReturnsOrderList,
   ReturnsResult,
 } from "./OrderSteps";
-import {
-  ReturnsProvider,
-  useReturnsContext,
-  type ReturnsProviderProps,
-} from "./ReturnsProvider";
+import { toReturnsProviderProps, type BitsnapReturnsProps } from "./legacy";
+import { ReturnsProvider, useReturnsContext } from "./ReturnsProvider";
 import {
   initialReturnsStep,
   reduceReturnsStep,
@@ -23,7 +20,7 @@ import {
 } from "./state-machine";
 import { useReturnsText } from "./texts.context";
 
-export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children">;
+export type { BitsnapReturnsProps } from "./legacy";
 
 function StepIndicator({ current }: { current: number }) {
   const text = useReturnsText();
@@ -144,7 +141,7 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
  */
 export function BitsnapReturns(props: BitsnapReturnsProps) {
   return (
-    <ReturnsProvider {...props}>
+    <ReturnsProvider {...toReturnsProviderProps(props)}>
       <ReturnsRouter showLogout={props.panelAccessToken == null} />
     </ReturnsProvider>
   );

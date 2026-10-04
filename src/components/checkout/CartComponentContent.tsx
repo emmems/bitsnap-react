@@ -98,7 +98,7 @@ const CartComponentContent = ({
       if (curr.details == null) {
         return prev;
       }
-      return prev + curr.details.price * curr.quantity;
+      return prev + (curr.details.pricing?.effectivePrice ?? curr.details.price) * curr.quantity;
     }, 0) ?? 0;
   const currency = products?.[0]?.details?.currency ?? "PLN";
 
@@ -310,7 +310,7 @@ const CartComponentContent = ({
                   items={products?.map((el) => ({
                     name: el.details?.name ?? "",
                     id: el.productID,
-                    price: el.details?.price ?? 0,
+                    price: el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0,
                     quantity: el.quantity,
                     isDeliverable: el.details?.isDeliverable ?? false,
                     metadata: el.metadata,
@@ -331,7 +331,7 @@ const CartComponentContent = ({
                   items={products?.map((el) => ({
                     name: el.details?.name ?? "",
                     id: el.productID,
-                    price: el.details?.price ?? 0,
+                    price: el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0,
                     quantity: el.quantity,
                     isDeliverable: el.details?.isDeliverable ?? false,
                     metadata: el.metadata,

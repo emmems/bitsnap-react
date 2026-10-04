@@ -20,6 +20,7 @@ import type { SelectedReturnLine } from "../../components/returns/state-machine"
 import type { ReturnsAppearance } from "../../components/returns/appearance";
 import type { ReturnsTexts } from "../../components/returns/texts";
 import { Button } from "../../ui/button";
+import { clearPanelSession } from "../session-storage";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 
 type Props = {
@@ -37,15 +38,22 @@ type Props = {
 
 type Draft = { items: SelectedReturnLine[]; note: string };
 
-function redirectToLogin(loginURL: string, dropToken: boolean) {
+function redirectToLogin(
+  loginURL: string,
+  dropToken: boolean,
+  projectID: string,
+  host?: string,
+) {
   if (typeof window === "undefined") return;
   if (dropToken) {
-    localStorage.removeItem("__access_token");
+    clearPanelSession(projectID, host);
   }
   window.location.href = loginURL;
 }
 
 function ReturnsScreens({
+  projectID,
+  host,
   loginURL,
   screen,
   params,
@@ -53,7 +61,13 @@ function ReturnsScreens({
   setActiveScreen,
 }: Pick<
   Props,
-  "loginURL" | "screen" | "params" | "setParams" | "setActiveScreen"
+  | "projectID"
+  | "host"
+  | "loginURL"
+  | "screen"
+  | "params"
+  | "setParams"
+  | "setActiveScreen"
 >) {
   const { status, exchangeError } = useReturnsContext("PanelReturns");
   const text = useReturnsText();
@@ -65,9 +79,9 @@ function ReturnsScreens({
     (exchangeError == null || isSessionExpiredError(exchangeError));
   useEffect(() => {
     if (expired) {
-      redirectToLogin(loginURL, exchangeError != null);
+      redirectToLogin(loginURL, exchangeError != null, projectID, host);
     }
-  }, [expired, loginURL, exchangeError]);
+  }, [expired, loginURL, exchangeError, projectID, host]);
 
   const [view, setView] = useState<"orders" | "myReturns" | "confirmation" | "result">(
     "orders",
@@ -198,7 +212,7 @@ export default function PanelReturns({
       texts={texts}
       panelAccessToken={accessToken}
     >
-      <ReturnsScreens {...rest} />
+      <ReturnsScreens projectID={projectID} host={host} {...rest} />
     </ReturnsProvider>
   );
 }

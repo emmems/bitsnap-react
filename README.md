@@ -230,6 +230,14 @@ function ReturnsPage() {
 It is an inline page section, not an overlay, and it is safe to render on the
 server.
 
+**Upgrading from 1.6.0.** `BitsnapReturns` still accepts the 1.6.0 props: the
+`Environment` enum, `theme.brandColor` (prefer `appearance.tokens`) and the old
+text keys (`title`, `email`, `sendCode`, `code`, `verify`, `orders`, `submit`,
+`note`, `loading`, `history`). The returns hooks exported from `bitsnap-react`
+now work under `ReturnsProvider` and return richer results. The 1.6.0 widget,
+`BitsnapReturnsProvider` and its hooks remain available, unchanged and
+deprecated, from `bitsnap-react/returns`.
+
 | Prop                | Meaning                                                                    |
 | ------------------- | -------------------------------------------------------------------------- |
 | `projectID`         | Bitsnap project ID                                                          |
