@@ -3,6 +3,8 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
 import { usePanelConfig } from "../PanelProvider";
+import { resolvePanelReturnsAppearance } from "../returns-appearance";
+import type { PanelProps } from "../types";
 import {
   buildAccessTokenRedirect,
   getReturnURLFromSearch,
@@ -13,6 +15,7 @@ import {
 import PanelNotificationsComponent from "./PanelNotifications";
 import PanelOrderHistoryComponent from "./PanelOrderHistory";
 import PanelPlansComponent from "./PanelPlans";
+import PanelReturnsComponent from "./PanelReturns";
 import PanelProductGridComponent from "./PanelProductGrid";
 import PanelProductHeaderComponent from "./PanelProductHeader";
 import PanelProfileComponent from "./PanelProfile";
@@ -24,16 +27,22 @@ export type PanelScreen =
   | "profile"
   | "plans"
   | "orders"
-  | "order-details";
+  | "order-details"
+  | "returns"
+  | "return-details";
 
 export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
   orderId?: string;
+  returnId?: string;
 };
 
-const PanelPage = () => {
-  const { projectID, theme, loginURL } = usePanelConfig();
+const PanelPage = ({
+  returnsAppearance,
+  returnsTexts,
+}: Pick<PanelProps, "returnsAppearance" | "returnsTexts"> = {}) => {
+  const { projectID, theme, loginURL, host } = usePanelConfig();
 
   let accessToken: string | null = null;
   if (typeof window !== "undefined") {
@@ -68,12 +77,15 @@ const PanelPage = () => {
       "plans",
       "orders",
       "order-details",
+      "returns",
+      "return-details",
     ].includes(value as string);
 
   const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
     product: undefined,
     state: "products",
     orderId: undefined,
+    returnId: undefined,
   });
 
   const [activeScreen, setActiveScreen] = useState<PanelScreen>(
@@ -95,6 +107,11 @@ const PanelPage = () => {
     });
     setActiveScreen("orders");
   };
+
+  // Navigation starts a screen from scratch, so ids of the previous screen
+  // must not leak into it.
+  const navigate = (next: { product?: string; state: PanelScreen }) =>
+    setParams({ orderId: undefined, returnId: undefined, ...next });
 
   const styles = {
     "--button-background-color": theme?.colors?.brand ?? "#000000",
@@ -142,7 +159,7 @@ useEffect(() => {
       <PanelProductHeaderComponent
         activeScreen={activeScreen}
         setActiveScreen={setActiveScreen}
-        setParams={setParams}
+        setParams={navigate}
         styles={styles}
         theme={theme}
         logout={logout}
@@ -179,6 +196,25 @@ useEffect(() => {
             onBack={handleBackToOrders}
           />
         )}
+
+        {(activeScreen === "returns" || activeScreen === "return-details") &&
+          accessToken && (
+            <PanelReturnsComponent
+              projectID={projectID ?? ""}
+              host={host}
+              accessToken={accessToken}
+              loginURL={loginURL ?? "/panel/login"}
+              appearance={resolvePanelReturnsAppearance(
+                returnsAppearance,
+                theme?.colors?.brand,
+              )}
+              texts={returnsTexts}
+              screen={activeScreen}
+              params={params as PanelSearchParamsType}
+              setParams={setParams}
+              setActiveScreen={setActiveScreen}
+            />
+          )}
 
         {activeScreen === "profile" && (
           <PanelProfileComponent email={email} logout={logout} />

@@ -1,4 +1,11 @@
 import type { CSSProperties } from "react";
+import {
+  getSlotAppearance,
+  resolveAppearanceCore,
+  type AppearanceElements,
+  type ShadcnVariableMapping,
+  type SlotAppearance,
+} from "@/src/lib/appearance-core";
 
 /**
  * Checkout appearance API.
@@ -88,16 +95,9 @@ export const CHECKOUT_SLOT_NAMES = [
 
 export type CheckoutSlotName = (typeof CHECKOUT_SLOT_NAMES)[number];
 
-export type CheckoutSlotAppearance = {
-  /** Merged after the built-in classes with `cn`, so Tailwind conflicts resolve. */
-  className?: string;
-  /** Merged after the built-in inline styles. */
-  style?: CSSProperties;
-};
+export type CheckoutSlotAppearance = SlotAppearance;
 
-export type CheckoutAppearanceElements = Partial<
-  Record<CheckoutSlotName, CheckoutSlotAppearance>
->;
+export type CheckoutAppearanceElements = AppearanceElements<CheckoutSlotName>;
 
 export type CheckoutAppearance = {
   /**
@@ -191,10 +191,7 @@ export const CHECKOUT_THEME_PRESETS: Record<
  * dropdown and themed primitives stay consistent. They are only written when
  * the matching token is in effect, so untouched tokens change nothing.
  */
-const CHECKOUT_SHADCN_VARIABLES: {
-  token: CheckoutTokenName;
-  variable: string;
-}[] = [
+const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [
   { token: "background", variable: "--background" },
   { token: "foreground", variable: "--foreground" },
   { token: "surface", variable: "--card" },
@@ -207,48 +204,6 @@ const CHECKOUT_SHADCN_VARIABLES: {
   { token: "error", variable: "--destructive" },
   { token: "radius", variable: "--radius" },
 ];
-
-function omitUndefined(
-  tokens: CheckoutAppearanceTokens,
-): CheckoutAppearanceTokens {
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(tokens)) {
-    if (value != null) {
-      result[key] = value;
-    }
-  }
-
-  return result as CheckoutAppearanceTokens;
-}
-
-function hasAnyElement(elements: CheckoutAppearanceElements): boolean {
-  return Object.values(elements).some(
-    (element) =>
-      element != null &&
-      (element.className != null || element.style != null),
-  );
-}
-
-function resolveBoundaryStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
-  const style: Record<string, string> = {};
-
-  for (const [token, variable] of Object.entries(CHECKOUT_TOKEN_VARIABLES)) {
-    const value = tokens[token as CheckoutTokenName];
-    if (value != null) {
-      style[variable] = value;
-    }
-  }
-
-  for (const { token, variable } of CHECKOUT_SHADCN_VARIABLES) {
-    const value = tokens[token];
-    if (value != null) {
-      style[variable] = value;
-    }
-  }
-
-  return style as CSSProperties;
-}
 
 /**
  * The portalled dropdown renders `bg-popover`/`text-popover-foreground` from the
@@ -265,26 +220,25 @@ function resolveDropdownStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
 export function resolveCheckoutAppearance(
   appearance?: CheckoutAppearance,
 ): ResolvedCheckoutAppearance {
-  const theme: CheckoutTheme = appearance?.theme ?? "dark";
-
-  const tokens = omitUndefined({
-    ...CHECKOUT_THEME_PRESETS[theme],
-    ...appearance?.tokens,
+  const resolved = resolveAppearanceCore<
+    CheckoutTokenName,
+    CheckoutTheme,
+    CheckoutSlotName
+  >(appearance, {
+    defaultTheme: "dark",
+    presets: CHECKOUT_THEME_PRESETS,
+    variables: CHECKOUT_TOKEN_VARIABLES,
+    shadcnVariables: CHECKOUT_SHADCN_VARIABLES,
   });
 
-  const elements = appearance?.elements ?? {};
-
   return {
-    theme,
-    isCustomized:
-      appearance?.theme != null ||
-      Object.keys(tokens).length > 0 ||
-      hasAnyElement(elements),
-    tokens,
-    elements,
-    boundaryClassName: theme,
-    boundaryStyle: resolveBoundaryStyle(tokens),
-    dropdownStyle: resolveDropdownStyle(tokens),
+    theme: resolved.theme,
+    isCustomized: resolved.isCustomized,
+    tokens: resolved.tokens,
+    elements: resolved.elements,
+    boundaryClassName: resolved.theme,
+    boundaryStyle: resolved.boundaryStyle,
+    dropdownStyle: resolveDropdownStyle(resolved.tokens),
   };
 }
 
@@ -293,5 +247,5 @@ export function getCheckoutSlotAppearance(
   resolved: ResolvedCheckoutAppearance,
   slot: CheckoutSlotName,
 ): CheckoutSlotAppearance | undefined {
-  return resolved.elements[slot];
+  return getSlotAppearance(resolved.elements, slot);
 }

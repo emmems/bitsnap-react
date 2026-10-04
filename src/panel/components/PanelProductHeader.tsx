@@ -1,11 +1,12 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { LogOut } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { LogOut, Undo2 } from "lucide-react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "../../ui/button";
 import type { GetThemeOutput } from "../types";
 
 import type { PanelScreen } from "../types";
+import { getPanelTexts } from "../texts";
 
 interface PanelProductHeaderComponentProps {
   activeScreen: PanelScreen;
@@ -56,6 +57,8 @@ function MobileMenu({
   setActiveScreen,
   setParams,
 }: MobileMenuProps) {
+  const { returnsNavLabel } = getPanelTexts();
+
   return (
     <nav className="flex w-full items-center justify-evenly gap-4 md:hidden">
       <MobileButton
@@ -77,6 +80,15 @@ function MobileMenu({
       />
 
       <MobileButton
+        panelScreen="returns"
+        label={returnsNavLabel}
+        icon={<Undo2 className="h-5 w-5 text-white" aria-hidden />}
+        activeScreen={activeScreen}
+        setActiveScreen={setActiveScreen}
+        setParams={setParams}
+      />
+
+      <MobileButton
         panelScreen="profile"
         label="Profil"
         imageURL="/icons/profile-24x24.svg"
@@ -91,7 +103,8 @@ function MobileMenu({
 interface MobileButtonProps {
   panelScreen: PanelScreen;
   label: string;
-  imageURL: string;
+  imageURL?: string;
+  icon?: ReactNode;
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
   setParams: (params: { product?: string; state: PanelScreen }) => void;
@@ -101,6 +114,7 @@ function MobileButton({
   panelScreen,
   label,
   imageURL,
+  icon,
   activeScreen,
   setActiveScreen,
   setParams,
@@ -121,7 +135,7 @@ function MobileButton({
         activeScreen === panelScreen ? "opacity-100" : "opacity-50",
       )}
     >
-      <img src={imageURL} alt={label} className="scale-75" />
+      {icon ?? <img src={imageURL} alt={label} className="scale-75" />}
       <span className="text-xs font-normal text-white">{label}</span>
     </Button>
   );
@@ -130,8 +144,9 @@ function MobileButton({
 interface SidebarButtonProps {
   panelScreen: PanelScreen;
   label: string;
-  imageURL: string;
-  darkImageURL: string;
+  imageURL?: string;
+  darkImageURL?: string;
+  icon?: ReactNode;
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
   setParams: (params: { product?: string; state: PanelScreen }) => void;
@@ -143,6 +158,7 @@ function SidebarButton({
   label,
   imageURL,
   darkImageURL,
+  icon,
   activeScreen,
   setActiveScreen,
   setParams,
@@ -160,22 +176,35 @@ function SidebarButton({
       variant={activeScreen === panelScreen ? "secondary" : "ghost"}
       className="justify-start"
     >
-      <img
-        src={imageURL}
-        alt={label}
-        className={cn(
-          "aspect-auto h-5 w-5 dark:hidden",
-          isExpanded ? "mr-4" : "mr-2",
-        )}
-      />
-      <img
-        src={darkImageURL}
-        alt={label}
-        className={cn(
-          "hidden aspect-auto h-5 w-5 dark:inline",
-          isExpanded ? "mr-4" : "mr-2",
-        )}
-      />
+      {icon != null ? (
+        <span
+          className={cn(
+            "inline-flex h-5 w-5 items-center justify-center",
+            isExpanded ? "mr-4" : "mr-2",
+          )}
+        >
+          {icon}
+        </span>
+      ) : (
+        <>
+          <img
+            src={imageURL}
+            alt={label}
+            className={cn(
+              "aspect-auto h-5 w-5 dark:hidden",
+              isExpanded ? "mr-4" : "mr-2",
+            )}
+          />
+          <img
+            src={darkImageURL}
+            alt={label}
+            className={cn(
+              "hidden aspect-auto h-5 w-5 dark:inline",
+              isExpanded ? "mr-4" : "mr-2",
+            )}
+          />
+        </>
+      )}
       {isExpanded && (
         <span className="md:text-medium hidden md:inline">{label}</span>
       )}
@@ -200,6 +229,7 @@ function SidebarMenu({
 }: SidebarMenuProps) {
   const [sidebarExpandRef] = useAutoAnimate();
   const [isExpanded, setIsExpanded] = useState(true);
+  const { returnsNavLabel } = getPanelTexts();
 
   return (
     <div
@@ -232,6 +262,16 @@ function SidebarMenu({
           label="Zamówienia"
           imageURL="/icons/category-dark-24x24.svg"
           darkImageURL="/icons/category-24x24.svg"
+          activeScreen={activeScreen}
+          setActiveScreen={setActiveScreen}
+          setParams={setParams}
+          isExpanded={isExpanded}
+        />
+
+        <SidebarButton
+          panelScreen="returns"
+          label={returnsNavLabel}
+          icon={<Undo2 className="h-5 w-5" aria-hidden />}
           activeScreen={activeScreen}
           setActiveScreen={setActiveScreen}
           setParams={setParams}

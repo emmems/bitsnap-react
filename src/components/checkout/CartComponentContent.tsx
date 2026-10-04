@@ -12,7 +12,8 @@ import { Spinner } from "@/src/ui/spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { cn } from "@/src/lib/utils";
 import { sendAnalyticEvent } from "./frontent.analytics";
-import { getLocale, translate } from "./locale";
+import { getLocale } from "./locale";
+import { useCheckoutText } from "./texts.context";
 import { useCheckoutSlot } from "./appearance.context";
 
 const CartComponentContent = ({
@@ -36,6 +37,13 @@ const CartComponentContent = ({
   const emptyState = useCheckoutSlot("emptyState");
   const error = useCheckoutSlot("error");
   const skeleton = useCheckoutSlot("skeleton");
+
+  const unavailableProductsText = useCheckoutText("unavailableProducts");
+  const emptyCartText = useCheckoutText("emptyCart");
+  const totalText = useCheckoutText("total");
+  const deliveryCopy = useCheckoutText("delivery");
+  const chooseCountryText = useCheckoutText("chooseCountry");
+  const nextStepText = useCheckoutText("nextStep");
 
   const { mutateAsync: removeProduct } = useMutation({
     mutationFn: provider.removeProductFromCart,
@@ -143,7 +151,7 @@ const CartComponentContent = ({
 
       if (isErr(response)) {
         if (response.error == "item-ids-not-found") {
-          setErrMsg(translate("unavailableProducts", currentLocale));
+          setErrMsg(unavailableProductsText);
           if ("data" in response && Array.isArray(response.data)) {
             setMissingItemIds(response.data as string[]);
           }
@@ -184,7 +192,7 @@ const CartComponentContent = ({
             className={cn(emptyState.className)}
             style={emptyState.style}
           >
-            {translate("emptyCart", currentLocale)}
+            {emptyCartText}
           </p>
         </div>
       )}
@@ -237,7 +245,7 @@ const CartComponentContent = ({
                 className={cn("text-xl", totalLabel.className)}
                 style={totalLabel.style}
               >
-                {translate("total", currentLocale)}
+                {totalText}
               </p>
               <div className={"flex flex-col items-end"}>
                 <p
@@ -256,7 +264,7 @@ const CartComponentContent = ({
                     )}
                     style={deliveryText.style}
                   >
-                    {translate("delivery", currentLocale)}
+                    {deliveryCopy}
                   </p>
                 )}
               </div>
@@ -270,7 +278,7 @@ const CartComponentContent = ({
                 className={cn("ml-3 text-sm", countryLabel.className)}
                 style={countryLabel.style}
               >
-                {translate("chooseCountry", currentLocale)}
+                {chooseCountryText}
               </h4>
               <CountrySelector
                 id={Math.random().toString()}
@@ -348,7 +356,7 @@ const CartComponentContent = ({
               {isContinueToCheckoutLoading ? (
                 <Spinner />
               ) : (
-                translate("nextStep", currentLocale)
+                nextStepText
               )}
             </button>
             {errMsg.length > 0 && (

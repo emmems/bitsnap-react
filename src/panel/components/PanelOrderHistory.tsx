@@ -59,7 +59,6 @@ function PanelOrderHistory({
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  console.log("projectID", projectID, accessToken);
   const { data, isFetching } = useQuery(rpcProvider.publicApi.getOrders, {
     projectId: projectID,
     accessToken: accessToken ?? "",

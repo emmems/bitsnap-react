@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import zod from "zod";
 import type { CheckoutAppearance } from "./appearance";
+import type { CheckoutTexts } from "./texts";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
 import { sendAnalyticEvent } from "./frontent.analytics";
@@ -36,6 +37,11 @@ export type BitsnapCartProps = {
    * current presentation; every token and element slot is partial.
    */
   appearance?: CheckoutAppearance;
+  /**
+   * Optional text overrides. Any key given here replaces the built-in string
+   * whatever the locale; omitted keys keep the `pl`/`en` defaults.
+   */
+  texts?: Partial<CheckoutTexts>;
 };
 
 function BitsnapCart({
@@ -46,6 +52,7 @@ function BitsnapCart({
   className,
   numberOfProductsInCartOptions,
   appearance,
+  texts,
 }: BitsnapCartProps) {
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
@@ -279,6 +286,7 @@ function BitsnapCart({
         isVisible={isCartVisible}
         locale={locale}
         appearance={appearance}
+        texts={texts}
         shouldHide={() => {
           hideCart();
         }}

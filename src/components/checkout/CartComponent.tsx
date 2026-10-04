@@ -9,13 +9,15 @@ import {
 import type { CheckoutAppearance } from "./appearance";
 import CartComponentContent from "./CartComponentContent";
 import CartProvider from "./CartProvider";
-import { getLocale, translate } from "./locale";
+import { CheckoutTextsProvider, useCheckoutText } from "./texts.context";
+import type { CheckoutTexts } from "./texts";
 
 interface Props {
   isVisible: boolean;
   shouldHide: () => void;
   locale?: string;
   appearance?: CheckoutAppearance;
+  texts?: Partial<CheckoutTexts>;
 }
 
 function CartComponent({ isVisible, shouldHide, locale }: Props) {
@@ -27,6 +29,7 @@ function CartComponent({ isVisible, shouldHide, locale }: Props) {
   const header = useCheckoutSlot("header");
   const title = useCheckoutSlot("title");
   const closeButton = useCheckoutSlot("closeButton");
+  const cartText = useCheckoutText("cart");
 
   return (
     <div
@@ -68,7 +71,7 @@ function CartComponent({ isVisible, shouldHide, locale }: Props) {
                 className={cn("text-2xl font-medium", title.className)}
                 style={title.style}
               >
-                {translate("cart", locale ?? getLocale())}
+                {cartText}
               </h1>
               <button
                 data-bitsnap-checkout-slot="closeButton"
@@ -112,9 +115,11 @@ const WrapperCartComponent = (props: Props) => {
 
   return createPortal(
     <CheckoutAppearanceProvider appearance={props.appearance}>
-      <CartProvider locale={props.locale}>
-        <CartComponent {...props} />
-      </CartProvider>
+      <CheckoutTextsProvider texts={props.texts} locale={props.locale}>
+        <CartProvider locale={props.locale}>
+          <CartComponent {...props} />
+        </CartProvider>
+      </CheckoutTextsProvider>
     </CheckoutAppearanceProvider>,
     document.body,
   );

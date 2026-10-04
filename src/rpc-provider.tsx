@@ -11,6 +11,7 @@ import { Transport } from "@connectrpc/connect";
 import { HOST, setCustomHost } from "./components/checkout/constants";
 import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
 import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
+import * as returnsRouter from "./gen/proto/public/v1/returns-ReturnsService_connectquery";
 
 let currentFinalTransportHost: string | undefined;
 let finalTransport: Transport | undefined;
@@ -23,6 +24,7 @@ BigInt.prototype.toJSON = function () {
 export const rpcProvider = {
   publicApi: publicApiRouter,
   notifications: notificationsRouter,
+  returns: returnsRouter,
 };
 
 export const useQuery = uq;
@@ -35,8 +37,38 @@ export function setHost(host: string): void {
   setCustomHost(host);
 }
 
-function getTransportHost(): string {
+export function getTransportHost(): string {
   return customHost ?? HOST;
+}
+
+function createRpcTransport(host: string): Transport {
+  return createConnectTransport({
+    baseUrl: host + "/api/rpc",
+    useBinaryFormat: true,
+    // @ts-ignore
+    fetch: async (input, init?) => {
+      return fetch(input, {
+        ...init,
+        keepalive: false,
+        credentials: "include",
+      });
+    },
+  });
+}
+
+const transportsByHost = new Map<string, Transport>();
+
+/**
+ * Transport for an explicit host, created once per host. Unlike the shared
+ * transport behind `RpcProvider`, several hosts can be in use at the same time.
+ */
+export function getRpcTransport(host: string): Transport {
+  let transport = transportsByHost.get(host);
+  if (transport == null) {
+    transport = createRpcTransport(host);
+    transportsByHost.set(host, transport);
+  }
+  return transport;
 }
 
 export const RpcProvider: React.FC<{
@@ -46,18 +78,7 @@ export const RpcProvider: React.FC<{
 
   if (finalTransport == null || currentFinalTransportHost !== transportHost) {
     currentFinalTransportHost = transportHost;
-    finalTransport = createConnectTransport({
-      baseUrl: transportHost + "/api/rpc",
-      useBinaryFormat: true,
-      // @ts-ignore
-      fetch: async (input, init?) => {
-        return fetch(input, {
-          ...init,
-          keepalive: false,
-          credentials: "include",
-        });
-      },
-    });
+    finalTransport = createRpcTransport(transportHost);
   }
 
   const [queryClient] = useState(

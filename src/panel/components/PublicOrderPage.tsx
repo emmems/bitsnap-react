@@ -146,7 +146,6 @@ function PublicOrderPageContent({
   const [verifyEmail, setVerifyEmail] = useState(initialEmail || "");
   const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
 
-  console.log("accessTOKEN", accessToken, projectID, orderID);
   const {
     data: orderData,
     isLoading,

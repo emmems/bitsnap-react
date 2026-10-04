@@ -210,6 +210,317 @@ conflicting Tailwind utilities from the library are resolved in your favor.
   focus ring and stacking) as soon as you pass an `appearance`; without one it
   renders exactly as before.
 
+## Returns
+
+`BitsnapReturns` is the customer return flow: email, verification code, orders,
+line and quantity selection, confirmation, result, plus a list of earlier returns
+with their status. The views are themeable from the start, with the same
+`appearance` shape as the checkout. It needs the same stylesheet
+(`bitsnap-react/dist/index.css`).
+
+```tsx
+import { BitsnapReturns } from "bitsnap-react";
+import "bitsnap-react/dist/index.css";
+
+function ReturnsPage() {
+  return <BitsnapReturns projectID="your-project-id" />;
+}
+```
+
+It is an inline page section, not an overlay, and it is safe to render on the
+server.
+
+| Prop                | Meaning                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `projectID`         | Bitsnap project ID                                                          |
+| `host`              | API host. Falls back to `setCustomHost`, then `https://bitsnap.pl`         |
+| `environment`       | `"production"` (default) or `"test"`                                        |
+| `appearance`        | `{ theme, tokens, elements }`, see below                                    |
+| `texts`             | Partial text overrides, see [Texts](#texts)                                 |
+| `locale`            | Locale of texts, dates and money. Defaults to `getLocale()`                 |
+| `panelAccessToken`  | Customer panel token; skips email and code, see [Panel](#returns-in-the-customer-panel) |
+| `className`         | Class of the themed root element                                            |
+
+The session token lives in React state and `sessionStorage` (one key per project),
+never in `localStorage`, and is never logged. An expired session returns the flow
+to the email step.
+
+### Shared brand
+
+One object can style the checkout and the returns views:
+
+```tsx
+import { BitsnapCheckout, BitsnapReturns } from "bitsnap-react";
+
+const brand = {
+  theme: "light",
+  tokens: {
+    fontFamily: '"Inter", sans-serif',
+    buttonBackground: "#635bff",
+    buttonForeground: "#ffffff",
+    radius: "12px",
+  },
+} as const;
+
+<BitsnapCheckout projectID="your-project-id" appearance={brand} />
+<BitsnapReturns
+  projectID="your-project-id"
+  appearance={{
+    ...brand,
+    elements: {
+      title: { style: { fontFamily: '"Georgia", serif' } },
+      submitButton: { className: "store-primary-button" },
+    },
+  }}
+/>
+```
+
+`theme` is `"light"` or `"dark"`. The default for returns is `"light"`; the
+checkout keeps its `"dark"` default. `elements` take `{ className, style }`,
+merged after the built-in classes and styles, exactly like the checkout slots.
+
+### Return tokens
+
+The returns views use the checkout tokens, plus five more. `overlay` is
+checkout-only and ignored by returns.
+
+| Token                     | Applies to                                                 | Returns only |
+| ------------------------- | ---------------------------------------------------------- | ------------ |
+| `fontFamily`, `fontSize`  | All returns views                                          |              |
+| `background`              | Page background                                            |              |
+| `surface`                 | Cards, summaries, loading skeletons                         |              |
+| `foreground`              | Titles, names, amounts                                     |              |
+| `mutedForeground`         | Descriptions, dates, hints                                  |              |
+| `border`                  | Cards, inputs, separators                                   |              |
+| `buttonBackground`        | Primary buttons                                            |              |
+| `buttonForeground`        | Primary buttons                                            |              |
+| `buttonHoverBackground`   | Primary buttons on hover                                    |              |
+| `hoverSurface`            | Secondary buttons, selectable cards                         |              |
+| `focusRing`               | Focus rings                                                |              |
+| `error`                   | Error messages                                             |              |
+| `radius`                  | Rounded elements                                           |              |
+| `success`                 | Result screen, completed and refunded statuses              | yes          |
+| `warning`                 | Statuses that need attention                                | yes          |
+| `badgeBackground`         | Status badges                                              | yes          |
+| `badgeForeground`         | Status badges                                              | yes          |
+| `inputBackground`         | Text inputs and the note field                              | yes          |
+
+### Return slots
+
+Slots are exported as `RETURNS_SLOT_NAMES` and rendered as
+`data-bitsnap-returns-slot` attributes.
+
+| Group                     | Slots                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Frame                     | `root`, `header`, `title`, `description`, `backButton`, `stepIndicator`, `error`, `emptyState`, `skeleton`                  |
+| Auth                      | `emailForm`, `emailInput`, `codeForm`, `codeInput`, `resendButton`, `logoutButton`                                         |
+| Orders                    | `orderList`, `orderCard`, `orderReference`, `orderDate`, `orderTotal`, `pagination`                                         |
+| Selection                 | `lineList`, `line`, `lineName`, `linePrice`, `lineQuantityControl`, `quantityButton`, `quantityInput`, `lineIneligibleReason`, `noteInput` |
+| Confirmation and result   | `summary`, `submitButton`, `secondaryButton`, `successState`, `returnReference`, `returnInstructions`                       |
+| My returns                | `returnList`, `returnCard`, `statusBadge`, `history`, `historyEntry`                                                       |
+
+### Texts
+
+Both `BitsnapCheckout` and `BitsnapReturns` accept a `texts` prop: a partial
+object that overrides the default strings whatever the locale. Without it the
+strings are unchanged, and `setLocale`/`getLocale` keep working. For different
+copy per language, pass a different object.
+
+```tsx
+<BitsnapCheckout
+  projectID="your-project-id"
+  texts={{ cart: "Your basket", nextStep: "Pay now" }}
+/>
+
+<BitsnapReturns
+  projectID="your-project-id"
+  locale="en"
+  texts={{
+    emailStepTitle: "Return a product",
+    successDescription: "We'll email you once it arrives.",
+    statusAwaitingReceipt: "On its way to us",
+  }}
+/>
+```
+
+Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
+`chooseCountry`, `nextStep`, `unavailableProducts`.
+
+Returns keys (`ReturnsTexts`) cover each step (`emailStepTitle`,
+`codeStepDescription`, `ordersEmpty`, `confirmationSubmit`, `successTitle`,
+`myReturnsTitle`, ...), the request statuses (`statusSubmitted`,
+`statusApproved`, `statusAwaitingReceipt`, `statusReceived`, `statusRefunded`,
+`statusFallback`, ...) and the error messages (`errorGeneric`,
+`errorInvalidCode`, `errorSessionExpired`, ...). Strings with placeholders such
+as `{reference}` or `{count}` keep them in overrides. See `ReturnsTexts` and
+`CheckoutTexts` in the type declarations for the full list and the placeholders.
+
+### Custom layout
+
+Compose your own page from the step components under `ReturnsProvider`. The
+provider holds the session, appearance, texts and the transport, and renders the
+themed root. Each step takes small navigation callbacks and the IDs it needs, and
+throws a clear error when rendered outside the provider.
+
+```tsx
+import {
+  ReturnsConfirmation,
+  ReturnsEmailStep,
+  ReturnsCodeStep,
+  ReturnsOrderDetail,
+  ReturnsOrderList,
+  ReturnsProvider,
+  ReturnsResult,
+  useReturnSession,
+  type SelectedReturnLine,
+} from "bitsnap-react";
+
+function Flow() {
+  const { isAuthenticated } = useReturnSession();
+  const [step, setStep] = useState<"email" | "code" | "orders" | "order" | "confirm" | "done">("email");
+  const [orderId, setOrderId] = useState("");
+  const [items, setItems] = useState<SelectedReturnLine[]>([]);
+  const [note, setNote] = useState("");
+  const [returnId, setReturnId] = useState("");
+
+  if (!isAuthenticated) {
+    return step === "code" ? (
+      <ReturnsCodeStep onBack={() => setStep("email")} />
+    ) : (
+      <ReturnsEmailStep onSubmitted={() => setStep("code")} />
+    );
+  }
+  if (step === "order") {
+    return (
+      <ReturnsOrderDetail
+        orderId={orderId}
+        initialItems={items}
+        initialNote={note}
+        onBack={() => setStep("orders")}
+        onContinue={(selection) => {
+          setItems(selection.items);
+          setNote(selection.note);
+          setStep("confirm");
+        }}
+      />
+    );
+  }
+  if (step === "confirm") {
+    return (
+      <ReturnsConfirmation
+        orderId={orderId}
+        items={items}
+        note={note}
+        onBack={() => setStep("order")}
+        onSubmitted={(id) => {
+          setReturnId(id);
+          setStep("done");
+        }}
+      />
+    );
+  }
+  if (step === "done") {
+    return <ReturnsResult returnId={returnId} onContinue={() => setStep("orders")} />;
+  }
+  return (
+    <ReturnsOrderList
+      onSelectOrder={(id) => {
+        setOrderId(id);
+        setStep("order");
+      }}
+    />
+  );
+}
+
+<ReturnsProvider projectID="your-project-id" appearance={brand}>
+  <Flow />
+</ReturnsProvider>;
+```
+
+Available steps: `ReturnsEmailStep`, `ReturnsCodeStep`, `ReturnsOrderList`
+(`onSelectOrder`, `onOpenMyReturns`, `showLogout`), `ReturnsOrderDetail`,
+`ReturnsConfirmation`, `ReturnsResult`, `ReturnsMyReturnsList` and
+`ReturnsMyReturnDetail`. Each accepts its own `className`. A session left in
+`sessionStorage` is picked up on the next visit, so `useReturnSession().status`
+is `"hydrating"` until the provider has read it on the client.
+
+### Headless hooks
+
+To build the markup yourself, use the hooks under `ReturnsProvider`: they return
+data, loading and error state, and actions, and no markup.
+
+| Hook                         | Returns                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `useReturnSession()`         | `status`, `isAuthenticated`, `start(email)`, `verify(code)`, `resend()`, `logout()`, `error` |
+| `useReturnOrders(options?)`  | Paged returnable `orders`, `total`, `next()`, `previous()`, `refetch()` |
+| `useReturnableOrder(id)`     | `order` with per-line eligibility, `returnHistory`                      |
+| `useCreateReturn()`          | `submit({ orderId, items, note })`; retries reuse one idempotency key    |
+| `useMyReturns(options?)`     | Paged earlier returns                                                   |
+| `useMyReturn(id)`            | One return with its status and history                                  |
+
+```tsx
+function Orders() {
+  const { orders, isLoading, errorKey } = useReturnOrders();
+  if (isLoading) return null;
+  return <ul>{orders.map((order) => <li key={order.canonicalOrderId}>{order.displayReference}</li>)}</ul>;
+}
+```
+
+A request that fails with `SESSION_EXPIRED` drops the session, so
+`useReturnSession().status` becomes `"anonymous"`.
+
+### CSS only
+
+Everything is also addressable without props. The root carries
+`data-bitsnap-returns` and the theme class (`light` or `dark`), and every slot
+carries `data-bitsnap-returns-slot`. The library rules sit in `@layer components`,
+so ordinary stylesheets win:
+
+```css
+/* the theme is applied as inline custom properties, so overrides need !important */
+[data-bitsnap-returns] {
+  --bitsnap-returns-button-background: #635bff !important;
+  --bitsnap-returns-radius: 12px !important;
+}
+
+[data-bitsnap-returns-slot="orderCard"]:hover {
+  border-color: #635bff;
+}
+
+[data-bitsnap-returns-slot="line"][data-ineligible] {
+  opacity: 0.5;
+}
+```
+
+Token variables are named `--bitsnap-returns-<token in kebab case>`, for example
+`--bitsnap-returns-muted-foreground`.
+
+### Returns in the customer panel
+
+The `Panel` has a Returns screen (`/panel?state=returns`, with `orderId` and
+`returnId` in the URL for the selected order and return). It is built from the
+step components above and reuses the panel login: the panel access token is
+exchanged for a returns session, so the customer sees their orders with no
+second code, and there is no email, code or logout step. When the panel session
+has expired, the customer is sent to the panel login.
+
+```tsx
+<Panel
+  returnsAppearance={{ theme: "light", tokens: { buttonBackground: "#635bff" } }}
+  returnsTexts={{ ordersTitle: "Choose an order to return" }}
+/>
+```
+
+| Prop                | Meaning                                                                         |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `returnsAppearance` | `ReturnsAppearance` of the screen                                                |
+| `returnsTexts`      | `Partial<ReturnsTexts>` of the screen                                            |
+
+Without `returnsAppearance`, `buttonBackground` and `focusRing` come from the
+panel's `theme.colors.brand` (set with `setTheme`) and `buttonForeground` is
+chosen for contrast. Other panel screens and `setTheme` are unchanged. The
+navigation label follows `setLocale` ("Zwroty" / "Returns").
+
 # Examples
 
 1. `BitsnapCheckout` Component:
@@ -603,6 +914,7 @@ The panel provides the following screens:
 | Profile       | `/panel?state=profile`       | User profile and settings          |
 | Notifications | `/panel?state=notifications` | Notification preferences           |
 | Plans         | `/panel?state=plans`         | Subscription management            |
+| Returns       | `/panel?state=returns`       | Return products, track returns     |
 
 ## Features Detail
 
