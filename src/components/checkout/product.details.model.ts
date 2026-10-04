@@ -4,6 +4,7 @@ export interface SingleProduct {
   name: string;
   description: string | null;
   price: number;
+  pricing?: ProductPricing;
   currency: string;
   metadata: unknown;
   image_url: string | null;
@@ -40,11 +41,35 @@ export interface SingleProductVariant {
   id: string;
   name: string;
   price: number;
+  pricing?: ProductPricing;
   currency: string;
   metadata?: unknown;
   images?: string[];
   availableQuantity?: number;
   isDeliverable?: boolean;
+}
+
+export interface ProductPricing {
+  regularPrice: number;
+  effectivePrice: number;
+  currency: string;
+  discount?: {
+    id: string;
+    type: "FIXED" | "PERCENTAGE";
+    value: number;
+    status: "ACTIVE" | "SCHEDULED" | "EXPIRED" | "DISABLED";
+    startsAt?: number;
+    endsAt?: number;
+  };
+  referencePrice: {
+    amount?: number;
+    windowDays: 30;
+    asOf: number;
+    basis: "observed-history";
+    historyAvailable: boolean;
+  };
+  priceVersion: string;
+  nextPriceChangeAt?: number;
 }
 
 export interface Recurring {

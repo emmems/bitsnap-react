@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { formatCurrency } from "./lib/round.number";
 import type { SingleProduct } from "./product.details.model";
 import { Button } from "@/src/ui/button";
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { ButtonGroup } from "@/src/ui/button-group";
 import { cn } from "@/src/lib/utils";
 import { useCheckoutSlot } from "./appearance.context";
+import { ProductPrice } from "./ProductPrice";
 
 const SingleProduct = ({
   isNotAvailable,
@@ -61,7 +61,12 @@ const SingleProduct = ({
           style={productPrice.style}
           suppressHydrationWarning
         >
-          {formatCurrency(details.price, details.currency)}
+          <ProductPrice
+            price={details.price}
+            currency={details.currency}
+            pricing={details.pricing}
+            quantity={quantity}
+          />
         </p>
         <div className={"flex justify-between"}>
           <QuantityComponent

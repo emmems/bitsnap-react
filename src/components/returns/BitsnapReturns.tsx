@@ -41,7 +41,7 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 /** Default step router. All transitions come from the pure state machine. */
-function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
+function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
   const { status } = useReturnsContext("BitsnapReturns");
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
@@ -58,7 +58,9 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
     }
   }, [status]);
 
-  if (status === "hydrating" || status === "exchanging") {
+  // Without a panel token the server render and the first client render show
+  // the email step; a stored session switches to the orders after hydration.
+  if (status === "exchanging" || (status === "hydrating" && panelToken)) {
     return <SkeletonRows />;
   }
 
@@ -78,7 +80,7 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
       )}
       {step.name === "orders" && (
         <ReturnsOrderList
-          showLogout={showLogout}
+          showLogout={!panelToken}
           onSelectOrder={(orderId) =>
             dispatch({ type: "SELECT_ORDER", orderId })
           }
@@ -145,7 +147,7 @@ function ReturnsRouter({ showLogout }: { showLogout: boolean }) {
 export function BitsnapReturns(props: BitsnapReturnsProps) {
   return (
     <ReturnsProvider {...props}>
-      <ReturnsRouter showLogout={props.panelAccessToken == null} />
+      <ReturnsRouter panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""} />
     </ReturnsProvider>
   );
 }

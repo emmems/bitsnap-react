@@ -9,7 +9,8 @@ export function round(num: number, numberOfDecimals: number = 2): number {
 }
 
 export function formatCurrency(amount: number, currency: string): string {
-  const formatter = Intl.NumberFormat(navigator.language, {
+  const language = typeof navigator === "undefined" ? "pl-PL" : navigator.language;
+  const formatter = Intl.NumberFormat(language, {
     style: "currency",
     currency: currency,
     currencyDisplay: "symbol",

@@ -18,7 +18,9 @@ export {
 export { type CheckoutTexts } from "./checkout/texts";
 export { BitsnapReturns, type BitsnapReturnsProps } from "./returns/BitsnapReturns";
 export {
+  BitsnapReturnsProvider,
   ReturnsProvider,
+  type BitsnapReturnsProviderProps,
   type ReturnsChallenge,
   type ReturnsEnvironment,
   type ReturnsProviderProps,
@@ -54,6 +56,7 @@ export {
   useReturnOrders,
   useReturnSession,
   type CreateReturnInput,
+  type LegacyCreateReturnInput,
   type UseCreateReturnResult,
   type UseMyReturnResult,
   type UseMyReturnsResult,
@@ -75,6 +78,12 @@ export {
   useReturnsAppearance,
   useReturnsSlot,
 } from "./returns/appearance.context";
+export {
+  type LegacyReturnsTexts,
+  type LegacyReturnsTheme,
+  type ReturnsEnvironmentInput,
+  type ReturnsTextsInput,
+} from "./returns/legacy";
 export { useReturnsText } from "./returns/texts.context";
 export { type ReturnsTextKey, type ReturnsTexts } from "./returns/texts";
 export { type SelectedReturnLine } from "./returns/state-machine";
@@ -99,7 +108,7 @@ export { getLocale, setLocale } from "./checkout/locale";
 export { setCustomHost } from "./checkout/constants";
 export { type LinkRequest } from "./checkout/link.request.schema";
 export * from "./checkout/methods";
-
+export { Environment } from "../gen/proto/common/v1/environment_pb";
 export {
   buildAccessTokenRedirect,
   getAllowedReturnOrigins,
