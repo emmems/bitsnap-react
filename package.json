@@ -27,7 +27,7 @@
     "url": "https://github.com/emmems/bitsnap-react/issues"
   },
   "sideEffects": ["*.css"],
-  "files": ["dist"],
+  "files": ["dist", "AGENTS.md"],
   "types": "./dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",
   "devDependencies": {

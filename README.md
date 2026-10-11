@@ -1,5 +1,12 @@
 # Bitsnap Checkout
 
+## Instructions for coding agents
+
+Read [AGENTS.md](./AGENTS.md) before integrating this package. Follow the
+[Next.js](https://docs.bitsnap.pl/en/guides/nextjs/) or
+[Astro](https://docs.bitsnap.pl/en/guides/astro/) recipe. Keep API keys and webhook
+secrets on the server.
+
 The library is designed to provide a complete e-commerce checkout solution that can be easily integrated into web applications, with focus on:
 
 - User experience
