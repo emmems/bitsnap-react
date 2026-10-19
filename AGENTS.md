@@ -79,6 +79,9 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
 - Neither checkout UI component has a test API key prop. For test purchases, use
   `Bitsnap.createCheckout(projectID, { items, apiKey, testMode: true })` from
   `bitsnap-js` on the server. Do not pass keys to React's `createCheckout`.
+- `bitsnap-react`'s own `createCheckout` sends `apiKey` as an `Authorization:
+  Bearer` header and is server-side only. Never call it from a client component,
+  island or browser bundle. A normal checkout needs no key; omit `apiKey`.
 - `bitsnap-react` does not export `handleWebhook`. Import it from `bitsnap-js`
   only in a server route. Pass `request.text()` unchanged, full URL and headers.
   Verify `X-Content-Signature` or `sig` before processing or fulfilment.
