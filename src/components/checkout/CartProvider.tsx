@@ -18,6 +18,7 @@ import { sendAnalyticEvent } from "./frontent.analytics";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
 import { buildURL } from "./helper.methods";
 import { Err, isErr } from "./lib/err";
+import { findMissingProductIDs, findProductForCartItem } from "./cart-items";
 import { round } from "./lib/round.number";
 import { LinkRequest } from "./link.request.schema";
 import {
@@ -238,33 +239,22 @@ const getProducts: (
     result?: SingleProduct[] | undefined;
   } = await result.json();
 
-  products.forEach((product) => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    product["details"] = payload.result?.find((el) => {
-      if (el.id === product.productID) {
-        return true;
-      }
-      if (el.variants != null && el.variants.length > 0) {
-        const index = el.variants.findIndex(
-          (variant) => variant.id === product.productID,
-        );
-        return index !== -1;
-      }
-      return false;
-    });
+  // Items the backend does not know (removed product, wrong id) are dropped.
+  return products.flatMap((product) => {
+    const details = findProductForCartItem(product.productID, payload.result);
+    if (details == null) {
+      return [];
+    }
+    return [
+      {
+        ...product,
+        details: resolveProductDetailsFromSingleProduct(
+          product.productID,
+          details,
+        ),
+      },
+    ];
   });
-
-  // @ts-ignore
-  return products
-    .filter((el) => "details" in el)
-    .map((el) => {
-      el.details = resolveProductDetailsFromSingleProduct(
-        el.productID,
-        el.details as SingleProduct,
-      );
-      return el;
-    });
 };
 
 export const useCartProvider = () => {
@@ -334,6 +324,13 @@ async function addProducts(projectID: string, products: CartProduct[]) {
     items: products.map((item, index) => ({ ...item, id: `price-check-${index}` })),
   });
   if (isErr(latestProducts)) return latestProducts;
+  const missingIDs = findMissingProductIDs(
+    products.map((el) => el.productID),
+    latestProducts,
+  );
+  if (missingIDs.length > 0) {
+    return Err("item-ids-not-found", "notFound", missingIDs);
+  }
 
   const checkout = getCheckout();
   if (checkout.products == null) {

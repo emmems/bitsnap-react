@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -13,7 +13,7 @@
     "clean": "rimraf ./dist",
     "dev": "tsup --watch",
     "dev:publish": "pnpm dev --env.publish",
-    "test": "tsup src/components/checkout/appearance.test.ts src/components/checkout/texts.test.ts src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts src/components/products/appearance.test.ts src/components/products/texts.test.ts src/components/products/format.test.ts src/components/products/fetch.test.ts src/components/products/useProducts.test.ts src/components/products/cart-target.test.ts --format esm --out-dir .test-dist --no-config --silent && node --test \".test-dist/**/*.test.mjs\"",
+    "test": "tsup src/components/checkout/appearance.test.ts src/components/checkout/texts.test.ts src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts src/components/products/appearance.test.ts src/components/products/texts.test.ts src/components/products/format.test.ts src/components/products/fetch.test.ts src/components/products/useProducts.test.ts src/components/products/cart-target.test.ts src/components/checkout/cart-items.test.ts --format esm --out-dir .test-dist --no-config --silent && node --test \".test-dist/**/*.test.mjs\"",
     "test:types": "tsc -p test/consumer/tsconfig.json",
     "test:package": "node test/consumer/verify-package.mjs"
   },

@@ -6,6 +6,11 @@ import { LinkRequest } from "./link.request.schema";
 import { useCheckoutStore } from "./state";
 
 export namespace Bitsnap {
+  /**
+   * Adds a product or variant to the cart. Returns an `Err` instead of adding
+   * anything when the backend does not know the id
+   * (`item-ids-not-found`, with the unknown ids in `data`).
+   */
   export async function addProductToCart(
     id: string,
     quantity: number = 1,
