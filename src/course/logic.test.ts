@@ -141,10 +141,10 @@ describe("initial item", () => {
 });
 
 describe("playback", () => {
-  it("completes at 90 percent", () => {
-    assert.equal(COMPLETE_AT_FRACTION, 0.9);
-    assert.equal(isPlaybackComplete(89, 100), false);
-    assert.equal(isPlaybackComplete(90, 100), true);
+  it("completes at 80 percent, like the LMS", () => {
+    assert.equal(COMPLETE_AT_FRACTION, 0.8);
+    assert.equal(isPlaybackComplete(79, 100), false);
+    assert.equal(isPlaybackComplete(80, 100), true);
     assert.equal(isPlaybackComplete(100, 100), true);
   });
 

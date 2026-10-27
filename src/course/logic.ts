@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 /** Playback share from which a lesson counts as watched. */
-export const COMPLETE_AT_FRACTION = 0.9;
+export const COMPLETE_AT_FRACTION = 0.8;
 
 /** How often the player reports the position while it plays. */
 export const PROGRESS_SAVE_INTERVAL_MS = 15_000;
