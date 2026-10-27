@@ -19,6 +19,7 @@ import PanelReturnsComponent from "./PanelReturns";
 import PanelProductGridComponent from "./PanelProductGrid";
 import PanelProductHeaderComponent from "./PanelProductHeader";
 import PanelProfileComponent from "./PanelProfile";
+import LazyPanelCourse from "./LazyPanelCourse";
 import PublicOrderPage from "./PublicOrderPage";
 import { clearPanelSession, getPanelEmail, getPanelSession } from "../session-storage";
 
@@ -30,13 +31,18 @@ export type PanelScreen =
   | "orders"
   | "order-details"
   | "returns"
-  | "return-details";
+  | "return-details"
+  | "course";
 
 export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
   orderId?: string;
   returnId?: string;
+  /** `state: "course"`: `UserProduct.accessId` of the open course. */
+  course?: string;
+  /** `state: "course"`: id of the open lesson or test. */
+  item?: string;
 };
 
 const PanelPage = ({
@@ -75,6 +81,7 @@ const PanelPage = ({
       "order-details",
       "returns",
       "return-details",
+      "course",
     ].includes(value as string);
 
   const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
@@ -82,6 +89,8 @@ const PanelPage = ({
     state: "products",
     orderId: undefined,
     returnId: undefined,
+    course: undefined,
+    item: undefined,
   });
 
   const [activeScreen, setActiveScreen] = useState<PanelScreen>(
@@ -107,7 +116,43 @@ const PanelPage = ({
   // Navigation starts a screen from scratch, so ids of the previous screen
   // must not leak into it.
   const navigate = (next: { product?: string; state: PanelScreen }) =>
-    setParams({ orderId: undefined, returnId: undefined, ...next });
+    setParams({
+      orderId: undefined,
+      returnId: undefined,
+      course: undefined,
+      item: undefined,
+      ...next,
+    });
+
+  const handleOpenCourse = (accessId: string) => {
+    setParams({
+      state: "course",
+      course: accessId,
+      item: undefined,
+      product: undefined,
+    });
+    setActiveScreen("course");
+  };
+
+  const handleLeaveCourse = () => {
+    setParams({
+      state: "products",
+      course: undefined,
+      item: undefined,
+      product: undefined,
+    });
+    setActiveScreen("products");
+  };
+
+  // The browser's back and forward buttons move between the lessons of a
+  // course and in and out of it.
+  useEffect(() => {
+    if (!isScreen(params.state)) return;
+    if (params.state === "course" || activeScreen === "course") {
+      setActiveScreen(params.state);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.state]);
 
   const styles = {
     "--button-background-color": theme?.colors?.brand ?? "#000000",
@@ -171,6 +216,18 @@ useEffect(() => {
             activeScreen={activeScreen}
             params={params as PanelSearchParamsType}
             setParams={setParams}
+            openCourse={handleOpenCourse}
+          />
+        )}
+
+        {activeScreen === "course" && params.course && accessToken && (
+          <LazyPanelCourse
+            accessId={params.course}
+            accessToken={accessToken}
+            theme={theme}
+            itemId={params.item}
+            onItemChange={(item) => setParams({ item })}
+            onBack={handleLeaveCourse}
           />
         )}
 

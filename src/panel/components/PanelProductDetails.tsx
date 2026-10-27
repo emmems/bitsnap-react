@@ -13,6 +13,7 @@ import AudioPlayer, {
   type AudioPlayerMethods,
 } from "../audio-player/AudioPlayer";
 import LoadingIndicator from "../LoadingIndicator";
+import { getPanelTexts } from "../texts";
 
 import { ProgressBar } from "./ProgressBar";
 
@@ -21,6 +22,8 @@ interface PanelProductDetailsProps {
   product: UserProduct;
   styles: CSSProperties;
   reveal: (product?: UserProduct) => void;
+  /** Opens the course screen of a course product. */
+  onOpenCourse: (accessId: string) => void;
 }
 
 function warn(message: string, ...args: unknown[]) {
@@ -36,6 +39,7 @@ const PanelProductDetails = ({
   product,
   styles,
   reveal,
+  onOpenCourse,
 }: PanelProductDetailsProps) => {
   const productType: UserProductType = product.productType;
 
@@ -60,8 +64,6 @@ const PanelProductDetails = ({
     isAvailableToDownloadInMobileApp,
     setIsAvailableToDownloadInMobileApp,
   ] = useState(false);
-  const [isCourseLoading, setIsCourseLoading] = useState(false);
-  const [courseError, setCourseError] = useState<string | null>(null);
   const { mutateAsync: audioDetailsAsync, isPending: isAudioLoading } =
     useMutation(rpcProvider.publicApi.userPanelGetAudiobookDetails);
   const {
@@ -69,9 +71,6 @@ const PanelProductDetails = ({
     isPending: isAudioDownloadURLsLoading,
   } = useMutation(
     rpcProvider.publicApi.userPanelGetAudiobookDetailsDownloadURLs,
-  );
-  const { mutateAsync: courseDetailsAsync } = useMutation(
-    rpcProvider.publicApi.userPanelGetCourseDetails,
   );
 
   type ChapterWithPublicUrl = {
@@ -165,37 +164,6 @@ const PanelProductDetails = ({
   }, []);
 
   useEffect(() => {
-    if (productType !== UserProductType.COURSE) return;
-
-    async function handleCourseRedirect() {
-      setIsCourseLoading(true);
-      setCourseError(null);
-      try {
-        const courseResult = await courseDetailsAsync({
-          accessId: product.accessId,
-          accessToken: accessToken as string,
-        });
-
-        if (courseResult.result.case === "redirectUrl") {
-          window.location.href = courseResult.result.value;
-        } else {
-          setCourseError(
-            "Wystąpił błąd, proszę skontaktować się z pomocą techniczną.",
-          );
-        }
-      } catch {
-        setCourseError(
-          "Wystąpił błąd, proszę skontaktować się z pomocą techniczną.",
-        );
-      } finally {
-        setIsCourseLoading(false);
-      }
-    }
-
-    handleCourseRedirect();
-  }, []);
-
-  useEffect(() => {
     if (audioResponse != null && audioDownloadURLs != null) {
       const audioChapters = (
         audioResponse as { chapters?: ChapterWithPublicUrl[] }
@@ -285,19 +253,13 @@ const PanelProductDetails = ({
 
           {productType === UserProductType.COURSE && (
             <div className="flex flex-col items-center justify-center rounded-xl bg-white p-6 drop-shadow-xl dark:bg-neutral-900 dark:drop-shadow-none">
-              {isCourseLoading && (
-                <div className="flex flex-col items-center gap-3">
-                  <LoadingIndicator />
-                  <p className="text-lg font-semibold">
-                    Trwa przekierowanie do kursu...
-                  </p>
-                </div>
-              )}
-              {courseError && (
-                <p className="text-center text-sm font-medium text-red-600 dark:text-red-400">
-                  {courseError}
-                </p>
-              )}
+              <Button
+                onClick={() => onOpenCourse(product.accessId)}
+                className="text-sm font-medium transition-opacity duration-300 ease-in-out hover:opacity-80 active:opacity-80"
+                style={styles}
+              >
+                {getPanelTexts().openCourse}
+              </Button>
             </div>
           )}
 

@@ -18,13 +18,18 @@ export type PanelScreen =
   | "orders"
   | "order-details"
   | "returns"
-  | "return-details";
+  | "return-details"
+  | "course";
 
 export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
   orderId?: string;
   returnId?: string;
+  /** `state: "course"`: `UserProduct.accessId` of the open course. */
+  course?: string;
+  /** `state: "course"`: id of the open lesson or test. */
+  item?: string;
 };
 
 export interface PanelProps {

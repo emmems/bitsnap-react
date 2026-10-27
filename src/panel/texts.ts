@@ -4,11 +4,12 @@ import { pickLocaleTable, type LocaleTables } from "../lib/texts";
 /** Panel strings that are not part of the returns views. */
 export type PanelTexts = {
   returnsNavLabel: string;
+  openCourse: string;
 };
 
 const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
-  pl: { returnsNavLabel: "Zwroty" },
-  en: { returnsNavLabel: "Returns" },
+  pl: { returnsNavLabel: "Zwroty", openCourse: "Otwórz kurs" },
+  en: { returnsNavLabel: "Returns", openCourse: "Open the course" },
 };
 
 /** Panel strings for the library locale (`setLocale`), Polish by default. */

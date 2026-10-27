@@ -22,6 +22,7 @@ interface PanelProductGridComponentProps {
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
   setParams: (params: PanelSearchParamsType) => void;
+  openCourse: (accessId: string) => void;
 }
 
 const PanelProductGridComponent = ({
@@ -32,6 +33,7 @@ const PanelProductGridComponent = ({
   activeScreen,
   params,
   setParams,
+  openCourse,
 }: PanelProductGridComponentProps) => {
   const { data: products, isLoading: isProductsLoading } = useQuery(
     rpcProvider.publicApi.userPanelGetProducts,
@@ -72,6 +74,7 @@ const PanelProductGridComponent = ({
       activeScreen={activeScreen}
       params={params}
       setParams={setParams}
+      openCourse={openCourse}
     />
   );
 };
@@ -86,6 +89,7 @@ interface ProductsComponentProps {
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
   setParams: (params: PanelSearchParamsType) => void;
+  openCourse: (accessId: string) => void;
 }
 
 const ProductsComponent = ({
@@ -96,6 +100,7 @@ const ProductsComponent = ({
   activeScreen,
   params,
   setParams,
+  openCourse,
 }: ProductsComponentProps) => {
   if (products.length === 0) {
     window.location.href = loginURL;
@@ -141,6 +146,11 @@ const ProductsComponent = ({
   }
 
   function handleSelectedProduct(product: UserProduct) {
+    // A course opens in its own screen, not in the product details.
+    if (product.productType === UserProductType.COURSE) {
+      openCourse(product.accessId);
+      return;
+    }
     setSelectedProduct(product);
     reveal(product);
   }
@@ -152,6 +162,7 @@ const ProductsComponent = ({
         product={selectedProduct}
         styles={styles}
         reveal={reveal}
+        onOpenCourse={openCourse}
       />
     );
   }
