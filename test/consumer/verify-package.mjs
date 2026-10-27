@@ -31,6 +31,10 @@ const requiredFiles = [
   "catalog.mjs",
   "catalog.d.ts",
   "catalog.d.mts",
+  "course.js",
+  "course.mjs",
+  "course.d.ts",
+  "course.d.mts",
 ];
 
 for (const file of requiredFiles) {
@@ -148,6 +152,46 @@ assert.ok(
   !/from"\.\/(CartProvider|methods)-/.test(catalogEsm),
   "dist/catalog.mjs imports the checkout statically",
 );
+
+// The course view is a subpath that `Panel` loads on demand: the main ESM
+// entry must reach it only through a dynamic import, so the video player,
+// the sanitizer and the tests stay out of the main bundle.
+{
+  const courseNames = [
+    "PanelCourse",
+    "createRpcCourseDataSource",
+    "createCourseDataSource",
+    "sanitizeLessonHtml",
+    "getCourseTexts",
+    "CourseError",
+  ];
+  const require = createRequire(import.meta.url);
+  const esmCourse = await import(join(dist, "course.mjs"));
+  const cjsCourse = require(join(dist, "course.js"));
+  for (const name of courseNames) {
+    assert.equal(typeof esmCourse[name], "function", `missing course export ${name} in dist/course.mjs`);
+    assert.equal(typeof cjsCourse[name], "function", `missing course export ${name} in dist/course.js`);
+  }
+
+  const indexEsm = readFileSync(join(dist, "index.mjs"), "utf8");
+  const chunks = [...indexEsm.matchAll(/from"\.\/(chunk-[\w-]+\.mjs)"/g)].map(
+    (match) => readFileSync(join(dist, match[1]), "utf8"),
+  );
+  const mainBundle = [indexEsm, ...chunks].join("\n");
+  assert.ok(
+    /import\("\.\/course\.mjs"\)/.test(mainBundle),
+    "Panel does not load the course view through import(\"./course.mjs\")",
+  );
+  assert.ok(
+    !mainBundle.includes("data-bitsnap-course"),
+    "the course view is part of the main ESM bundle",
+  );
+
+  const courseDeclaration = readFileSync(join(dist, "course.d.ts"), "utf8");
+  for (const name of ["PanelCourseProps", "CourseDataSource", "createRpcCourseDataSource"]) {
+    assert.match(courseDeclaration, new RegExp(name), `dist/course.d.ts lacks ${name}`);
+  }
+}
 
 const returnsNames = [
   // 1.6.0 names

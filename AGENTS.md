@@ -52,6 +52,43 @@ Rules:
 - Do not use React Query, `setProjectID` or `setCustomHost` for the list
   itself; `useProducts` takes everything as arguments.
 
+## Course view (`PanelCourse`)
+
+The customer panel opens a purchased course inside the panel (no redirect to
+kursy.bitsnap.pl). Import `PanelCourse` from `bitsnap-react/course`; the panel
+itself loads it with a dynamic import, so the video player (hls.js), DOMPurify
+and the tests are not in the main ESM bundle.
+
+```tsx
+import { PanelCourse } from "bitsnap-react/course";
+
+<PanelCourse accessId={product.accessId} onBack={() => history.back()} />
+```
+
+Rules:
+
+- Data goes through `CourseDataSource` (`src/course/types.ts`). The default is
+  `createRpcCourseDataSource({ accessId })`: `UserPanelCourseService` on
+  `{host}/api/rpc` with the panel session token (`accessId` + `accessToken`
+  like `userPanelGetCourseDetails`; no project or course id in requests).
+  Pass `dataSource` to feed another source (the creator preview of the
+  dashboard) and `preview` to show the "Podgląd" badge and skip progress saving.
+- Deep links: the panel keeps the course in the URL, `?state=course&course=<accessId>&item=<lessonOrTestId>`
+  (values are JSON-encoded by `useUrlSearchParams` like the other params; plain
+  values work too). Reload keeps the lesson; browser back/forward move between
+  lessons. `PanelProductGrid` opens courses directly; `PanelProductDetails` of a
+  course product shows an "open the course" button.
+- Lesson HTML is always rendered through `sanitizeLessonHtml` (DOMPurify; no
+  iframes, forms, inline styles). It returns `""` without a DOM, so lesson HTML
+  never appears in server-rendered output.
+- Video: `hls.js`, native HLS on Safari. Position is saved every ~15 s while
+  playing and on pause/end/leaving; a lesson completes at 90 % (`logic.ts`).
+- Texts: `texts` prop over Polish/English tables (`src/course/texts.ts`).
+- The contract is drafted in `proto-draft/` (see its README); generated code in
+  `src/gen/proto/public/v1/user_panel_course_*` comes from
+  `./proto-course-draft.sh`.
+
 Tests: `npm test` (unit), `pnpm test:catalog-ssr` (builds, then renders the
-list on the server from `initialData`). Never run `pnpm build:publish` unless
+list on the server from `initialData`), `pnpm test:course-ssr` (builds, then
+renders the course view on the server). Never run `pnpm build:publish` unless
 asked to release: it publishes to npm.

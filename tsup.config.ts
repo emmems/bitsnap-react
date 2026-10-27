@@ -54,6 +54,7 @@ export default defineConfig((overrideOptions) => {
       models: "src/models.ts",
       returns: "src/returns/index.ts",
       catalog: "src/catalog/index.ts",
+      course: "src/course/index.ts",
     },
     dts: true,
     onSuccess: shouldPublish ? "pnpm publish" : undefined,
