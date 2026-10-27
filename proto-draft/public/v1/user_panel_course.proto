@@ -1,0 +1,485 @@
+syntax = "proto3";
+package public_api.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Course view of the customer panel (`bitsnap-react/course`).
+//
+// DRAFT. The panel talks only to Bitsnap's /api/rpc. Bitsnap checks the paid
+// access of the customer on every call, calls the internal LMS server to
+// server and returns content with URLs that are already signed:
+//   - attachments: presigned S3 URLs,
+//   - video: a Cloudflare Stream HLS manifest URL with a signed token.
+// The client never sees LMS ids or LMS credentials.
+//
+// Authentication follows the other UserPanel* calls (UserPanelGetCourseDetails,
+// UserPanelGetFileDetails): `access_token` is the panel session token and
+// `access_id` is UserProduct.access_id of the purchased course. The course is
+// resolved on the server from `access_id`, so there is no project_id and no
+// course_id in the requests. All other ids are opaque strings returned by
+// GetCourse.
+//
+// Every response is `oneof result { success, failure }` like the other panel
+// calls. Gateway level errors (network, 5xx) surface as Connect errors.
+service UserPanelCourseService {
+  // Course structure with the progress of the customer.
+  rpc GetCourse(UserPanelGetCourseRequest) returns (UserPanelGetCourseResponse);
+  // One lesson: content, signed video and attachment URLs.
+  rpc GetLesson(UserPanelGetLessonRequest) returns (UserPanelGetLessonResponse);
+  // Reports the playback position and/or completion of a lesson.
+  rpc SaveLessonProgress(UserPanelSaveLessonProgressRequest) returns (UserPanelSaveLessonProgressResponse);
+  // A test without the correct answers.
+  rpc GetTest(UserPanelGetTestRequest) returns (UserPanelGetTestResponse);
+  rpc SubmitTest(UserPanelSubmitTestRequest) returns (UserPanelSubmitTestResponse);
+  rpc ListTestSubmissions(UserPanelListTestSubmissionsRequest) returns (UserPanelListTestSubmissionsResponse);
+  rpc ListLessonQuestions(UserPanelListLessonQuestionsRequest) returns (UserPanelListLessonQuestionsResponse);
+  rpc AskLessonQuestion(UserPanelAskLessonQuestionRequest) returns (UserPanelAskLessonQuestionResponse);
+  rpc RateLesson(UserPanelRateLessonRequest) returns (UserPanelRateLessonResponse);
+}
+
+enum PanelCourseFailure {
+  PANEL_COURSE_FAILURE_UNKNOWN = 0;
+  // Missing, expired or foreign access token, or no paid access to access_id.
+  PANEL_COURSE_FAILURE_UNAUTHORIZED = 1;
+  PANEL_COURSE_FAILURE_COURSE_NOT_FOUND = 2;
+  // Unknown lesson or test (or one of another course).
+  PANEL_COURSE_FAILURE_ITEM_NOT_FOUND = 3;
+  // The item is locked by a gating test (see PanelCourseItem.lock_reason).
+  PANEL_COURSE_FAILURE_ITEM_LOCKED = 4;
+  // SubmitTest after the last allowed attempt.
+  PANEL_COURSE_FAILURE_NO_ATTEMPTS_LEFT = 5;
+  // Malformed request, e.g. an answer to an unknown question, a rating out of
+  // 1..5 or an empty question.
+  PANEL_COURSE_FAILURE_INVALID_ARGUMENT = 6;
+  PANEL_COURSE_FAILURE_RATE_LIMITED = 7;
+  // LMS is not reachable. The client may retry.
+  PANEL_COURSE_FAILURE_UNAVAILABLE = 8;
+}
+
+// ---------------------------------------------------------------------------
+// Course structure
+// ---------------------------------------------------------------------------
+
+enum PanelCourseType {
+  PANEL_COURSE_TYPE_UNKNOWN = 0;
+  // Modules of lessons with HTML content, an optional video, attachments and
+  // tests.
+  PANEL_COURSE_TYPE_STANDARD = 1;
+  // Sections of videos: a lesson is a video with a description, a thumbnail and
+  // attachments.
+  PANEL_COURSE_TYPE_VIDEO = 2;
+}
+
+enum PanelCourseItemKind {
+  PANEL_COURSE_ITEM_KIND_UNKNOWN = 0;
+  PANEL_COURSE_ITEM_KIND_LESSON = 1;
+  PANEL_COURSE_ITEM_KIND_TEST = 2;
+}
+
+// Why an item is locked.
+message PanelLockReason {
+  // The test (of an earlier module) that has to be passed first.
+  string gating_test_id = 1;
+  string gating_test_title = 2;
+}
+
+// A lesson or a test in the list of a course.
+message PanelCourseItem {
+  // Unique among all items of the course, lessons and tests alike.
+  string id = 1;
+  PanelCourseItemKind kind = 2;
+  string title = 3;
+  // Free for everyone, shown as a badge.
+  bool is_free = 4;
+  // A locked item can't be opened (GetLesson/GetTest fail with ITEM_LOCKED).
+  bool locked = 5;
+  // Set when locked.
+  optional PanelLockReason lock_reason = 6;
+  // A lesson: completed. A test: passed.
+  bool completed = 7;
+  // Video length in seconds; 0 when unknown or the lesson has no video.
+  int32 duration_seconds = 8;
+  // Signed URL of the thumbnail; unset when there is none.
+  optional string thumbnail_url = 9;
+  // Tests only: lessons of the following sections stay locked until it is passed.
+  bool gating = 10;
+}
+
+// A module (standard course) or a section (video course).
+message PanelCourseSection {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  // Lessons in order, then the tests of the section.
+  repeated PanelCourseItem items = 4;
+}
+
+message PanelCourse {
+  // Id of the course in Bitsnap (stable, used in the URL of the panel).
+  string id = 1;
+  PanelCourseType type = 2;
+  string title = 3;
+  string description = 4;
+  // Signed URL of the cover; unset when the course has none.
+  optional string cover_url = 5;
+  int32 total_lessons = 6;
+  int32 completed_lessons = 7;
+  // 0 to 100.
+  int32 progress_percent = 8;
+  repeated PanelCourseSection sections = 9;
+  // Tests of the whole course, shown after the last section.
+  repeated PanelCourseItem final_items = 10;
+  // Item to continue with (first unfinished and unlocked lesson); empty when
+  // everything is done.
+  string resume_item_id = 11;
+}
+
+message UserPanelGetCourseRequest {
+  string access_token = 1;
+  string access_id = 2;
+}
+
+message UserPanelGetCourseResponse {
+  oneof result {
+    PanelCourse success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lesson
+// ---------------------------------------------------------------------------
+
+message PanelVideo {
+  // Cloudflare Stream HLS manifest URL with a signed token.
+  string hls_url = 1;
+  optional string poster_url = 2;
+  int32 duration_seconds = 3;
+}
+
+message PanelAttachment {
+  string id = 1;
+  string name = 2;
+  // Bytes.
+  int64 size = 3;
+  // Presigned S3 URL.
+  string url = 4;
+}
+
+// Neighbour of a lesson in the course order.
+message PanelItemRef {
+  string id = 1;
+  PanelCourseItemKind kind = 2;
+}
+
+message PanelLesson {
+  string id = 1;
+  string section_id = 2;
+  string title = 3;
+  // Plain text, mainly for video lessons.
+  string description = 4;
+  // HTML from the editor of the creator. The client sanitises it before it
+  // renders it, the server should too.
+  string content_html = 5;
+  // Unset when the lesson has no video.
+  optional PanelVideo video = 6;
+  repeated PanelAttachment attachments = 7;
+  // Unset for the first / last item of the course.
+  optional PanelItemRef prev = 8;
+  optional PanelItemRef next = 9;
+  bool completed = 10;
+  // Where the customer stopped the video, to resume from.
+  int32 position_seconds = 11;
+  // Rating of the customer, 0 when not rated.
+  int32 my_rating = 12;
+  float average_rating = 13;
+  int32 rating_count = 14;
+  // When the signed URLs (video, attachments) stop working; unset when unknown.
+  optional google.protobuf.Timestamp urls_expire_at = 15;
+}
+
+message UserPanelGetLessonRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string lesson_id = 3;
+}
+
+message UserPanelGetLessonResponse {
+  oneof result {
+    PanelLesson success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+message UserPanelSaveLessonProgressRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string lesson_id = 3;
+  // Mark the lesson completed. Never un-completes a lesson.
+  bool completed = 4;
+  // Playback position in seconds.
+  int32 position_seconds = 5;
+  // Length of the video in seconds, so the server can compute the percentage.
+  int32 duration_seconds = 6;
+}
+
+message UserPanelSaveLessonProgressResponse {
+  message Result {
+    bool completed = 1;
+    // Updated numbers of the whole course.
+    int32 completed_lessons = 2;
+    int32 progress_percent = 3;
+  }
+
+  oneof result {
+    Result success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+message PanelChoice {
+  string id = 1;
+  string label = 2;
+}
+
+// Multiple choice question.
+message PanelMcqConfig {
+  repeated PanelChoice choices = 1;
+  // True when more than one choice may be selected (checkboxes), false for
+  // radio buttons. Does not tell how many answers are correct.
+  bool multiple = 2;
+}
+
+// A checklist: all required steps have to be checked.
+message PanelTodolistConfig {
+  message Step {
+    string id = 1;
+    string label = 2;
+    bool required = 3;
+  }
+
+  repeated Step steps = 1;
+}
+
+// Text with gaps.
+message PanelFillGapConfig {
+  // Text with placeholders `{{blank_id}}`, one for each id in `blanks`.
+  string template = 1;
+  repeated string blanks = 2;
+}
+
+// Order the items. The server returns them already shuffled.
+message PanelSortOrderConfig {
+  repeated PanelChoice items = 1;
+}
+
+message PanelTestQuestion {
+  string id = 1;
+  string prompt = 2;
+  int32 points = 3;
+  oneof config {
+    PanelMcqConfig mcq = 10;
+    PanelTodolistConfig todolist = 11;
+    PanelFillGapConfig fill_gap = 12;
+    PanelSortOrderConfig sort_order = 13;
+  }
+}
+
+message PanelTest {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  // Passing it unlocks the following sections.
+  bool gating = 4;
+  // Minimum score for a pass, 0 to 100.
+  int32 pass_threshold_percent = 5;
+  // 0 means unlimited.
+  int32 attempts_allowed = 6;
+  // Unset when the number of attempts is unlimited.
+  optional int32 attempts_left = 7;
+  int32 attempt_count = 8;
+  int32 best_score_percent = 9;
+  bool passed = 10;
+  // Questions in order, without the correct answers.
+  repeated PanelTestQuestion questions = 11;
+}
+
+message UserPanelGetTestRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string test_id = 3;
+}
+
+message UserPanelGetTestResponse {
+  oneof result {
+    PanelTest success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+message PanelMcqAnswer {
+  repeated string selected_ids = 1;
+}
+
+message PanelTodolistAnswer {
+  repeated string checked_ids = 1;
+}
+
+message PanelFillGapAnswer {
+  // blank id -> text typed by the customer.
+  map<string, string> values = 1;
+}
+
+message PanelSortOrderAnswer {
+  repeated string ordered_ids = 1;
+}
+
+// An answer to one question. The variant has to match the question's config.
+message PanelAnswer {
+  string question_id = 1;
+  oneof value {
+    PanelMcqAnswer mcq = 10;
+    PanelTodolistAnswer todolist = 11;
+    PanelFillGapAnswer fill_gap = 12;
+    PanelSortOrderAnswer sort_order = 13;
+  }
+}
+
+message PanelTestSubmission {
+  string id = 1;
+  int32 score_percent = 2;
+  bool passed = 3;
+  int64 duration_ms = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message PanelQuestionResult {
+  string question_id = 1;
+  bool correct = 2;
+  int32 points = 3;
+  // The correct answer; only set when the "show answers" rule of the test
+  // allows it (after submit / after pass / never).
+  optional PanelAnswer correct_answer = 4;
+}
+
+message UserPanelSubmitTestRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string test_id = 3;
+  // Unanswered questions may be omitted; they score zero.
+  repeated PanelAnswer answers = 4;
+  // Time spent on the test.
+  int64 duration_ms = 5;
+}
+
+message UserPanelSubmitTestResponse {
+  message Result {
+    PanelTestSubmission submission = 1;
+    repeated PanelQuestionResult results = 2;
+    // Unset when the number of attempts is unlimited.
+    optional int32 attempts_left = 3;
+  }
+
+  oneof result {
+    Result success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+message UserPanelListTestSubmissionsRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string test_id = 3;
+}
+
+message UserPanelListTestSubmissionsResponse {
+  message Result {
+    // Newest first.
+    repeated PanelTestSubmission submissions = 1;
+    int32 best_score_percent = 2;
+    int32 attempt_count = 3;
+  }
+
+  oneof result {
+    Result success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Questions and ratings
+// ---------------------------------------------------------------------------
+
+message PanelQuestionAnswer {
+  string content = 1;
+  google.protobuf.Timestamp created_at = 2;
+}
+
+message PanelLessonQuestion {
+  string id = 1;
+  string content = 2;
+  // Display name resolved by Bitsnap; empty for an anonymous customer.
+  string author_name = 3;
+  bool is_mine = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // Unset until the course team answers.
+  optional PanelQuestionAnswer answer = 6;
+}
+
+message UserPanelListLessonQuestionsRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string lesson_id = 3;
+}
+
+message UserPanelListLessonQuestionsResponse {
+  message Result {
+    // Newest first.
+    repeated PanelLessonQuestion questions = 1;
+  }
+
+  oneof result {
+    Result success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+message UserPanelAskLessonQuestionRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string lesson_id = 3;
+  string content = 4;
+}
+
+message UserPanelAskLessonQuestionResponse {
+  oneof result {
+    PanelLessonQuestion success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
+
+message UserPanelRateLessonRequest {
+  string access_token = 1;
+  string access_id = 2;
+  string lesson_id = 3;
+  // 1 to 5. Rating again replaces the previous rating.
+  int32 score = 4;
+  string comment = 5;
+}
+
+message UserPanelRateLessonResponse {
+  message Result {
+    int32 my_rating = 1;
+    float average_rating = 2;
+    int32 rating_count = 3;
+  }
+
+  oneof result {
+    Result success = 1;
+    PanelCourseFailure failure = 2;
+  }
+}
