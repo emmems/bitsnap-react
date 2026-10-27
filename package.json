@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -8,11 +8,12 @@
   "scripts": {
     "build": "tsup",
     "test:returns-ssr": "pnpm build && node --test test/returns-widget.ssr.test.cjs",
+    "test:catalog-ssr": "pnpm build && node --test test/catalog.ssr.test.cjs",
     "build:publish": "pnpm build --env.publish",
     "clean": "rimraf ./dist",
     "dev": "tsup --watch",
     "dev:publish": "pnpm dev --env.publish",
-    "test": "tsup src/components/checkout/appearance.test.ts src/components/checkout/texts.test.ts src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts --format esm --out-dir .test-dist --no-config --silent && node --test \".test-dist/**/*.test.mjs\"",
+    "test": "tsup src/components/checkout/appearance.test.ts src/components/checkout/texts.test.ts src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts src/components/products/appearance.test.ts src/components/products/texts.test.ts src/components/products/format.test.ts src/components/products/fetch.test.ts src/components/products/useProducts.test.ts src/components/products/cart-target.test.ts --format esm --out-dir .test-dist --no-config --silent && node --test \".test-dist/**/*.test.mjs\"",
     "test:types": "tsc -p test/consumer/tsconfig.json",
     "test:package": "node test/consumer/verify-package.mjs"
   },
@@ -144,6 +145,16 @@
         "default": "./dist/returns.js"
       }
     },
+    "./catalog": {
+      "import": {
+        "types": "./dist/catalog.d.mts",
+        "default": "./dist/catalog.mjs"
+      },
+      "require": {
+        "types": "./dist/catalog.d.ts",
+        "default": "./dist/catalog.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
@@ -151,7 +162,8 @@
       "models": ["./dist/models.d.ts"],
       "internal": ["./dist/internal.d.ts"],
       "errors": ["./dist/errors.d.ts"],
-      "returns": ["./dist/returns.d.ts"]
+      "returns": ["./dist/returns.d.ts"],
+      "catalog": ["./dist/catalog.d.ts"]
     }
   }
 }

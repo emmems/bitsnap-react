@@ -530,6 +530,141 @@ panel's `theme.colors.brand` (set with `setTheme`) and `buttonForeground` is
 chosen for contrast. Other panel screens and `setTheme` are unchanged. The
 navigation label follows `setLocale` ("Zwroty" / "Returns").
 
+## Product list
+
+`ProductList` renders a shop's product catalog: a responsive grid of cards with
+image, name, price, "add to cart" and pagination. It is the same component the
+Bitsnap custom-domain shop home page uses, and it can be embedded on any site.
+It needs the same stylesheet (`bitsnap-react/dist/index.css`) and is safe to
+render on the server.
+
+```tsx
+import { ProductList } from "bitsnap-react";
+import "bitsnap-react/dist/index.css";
+
+function ShopPage() {
+  return (
+    <ProductList
+      projectID="your-project-id"
+      locale="pl-PL"
+      pageSize={24}
+      productHref={(product) => `https://shop.example.com/p/${product.uniqueSlug}`}
+    />
+  );
+}
+```
+
+Import it from `bitsnap-react/catalog` when you do not use the checkout on that
+page: the entry exposes only the list and its hook, and the cart (the heavy
+part of the package) is loaded on the first "Add to cart" click, or never when
+you pass `onAddToCart`. The CommonJS build of the entry re-exports
+`bitsnap-react`, so it shares state with it but is not lean; use ESM for the
+smaller entry.
+
+```tsx
+import { ProductList, useProducts } from "bitsnap-react/catalog";
+```
+
+### Props
+
+| Prop            | Meaning                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `projectID`     | Project (shop) ID. Required.                                                                         |
+| `host`          | Backend origin. Defaults to `https://bitsnap.pl` (or what `setCustomHost` set at first render). `""` = same origin. |
+| `locale`        | Language of the texts, price format and product translations. Defaults to `pl-PL`.                   |
+| `pageSize`      | Products per page, 1 to 48. Defaults to 24.                                                          |
+| `search`        | Text filter. A change goes back to page 1.                                                           |
+| `initialData`   | First page (`{ items, totalCount }`) fetched on the server. Always used for the first request (so it must be page 1 for the same props). |
+| `productHref`   | `(product) => string`. Defaults to the relative `/p/{uniqueSlug}`, which works on a custom domain.   |
+| `appearance`    | `{ theme, tokens, elements }`, like the checkout. Light theme by default.                            |
+| `texts`         | `Partial<ProductListTexts>`. Polish and English defaults, picked by `locale`.                        |
+| `renderItem`    | `(product, context) => ReactNode` replaces the content of a card (`context` has `href`, `price`).    |
+| `onAddToCart`   | `(product) => void \| Promise<void>`. Replaces the default add to cart.                              |
+| `showCartOnAdd` | Open the cart drawer after the default add to cart. Defaults to `true`.                              |
+| `className`     | Class of the root element.                                                                           |
+
+Prices are in minor units (grosze, cents), as everywhere else in the library.
+Cards show "od {price}" when the variants differ in price, a struck-through
+regular price for discounts and an "unavailable" state for products out of
+stock.
+
+### Add to cart
+
+Products the backend marks `addToCart` (a single price, not a subscription) get
+an "Add to cart" button. By default it calls `Bitsnap.addProductToCart` with
+quantity 1 and then opens the cart (`BitsnapCheckout` must be mounted on the
+page, see [Checkout appearance](#checkout-appearance)). The list aligns the
+cart's project ID and host from the list's `projectID`/`host` props, but only
+when the page has not set them yet (`setProjectID`, `setCustomHost`, or the
+cart script tag). When the page cart already belongs to another project or
+host, the list does not take it over: it logs a warning and shows the error
+message, so pass `onAddToCart` there. The cart item is `cartItemId ?? id`, the
+variant ID for single-variant products.
+Products with variants or a subscription link to the product page ("Wybierz" /
+"Zobacz"). Pass `onAddToCart` to do something else, for example to use your own
+cart.
+
+### Server rendering
+
+```tsx
+const firstPage = await fetch(
+  "https://bitsnap.pl/api/integrations/your-project-id/public-commerce/product-list?limit=24&offset=0",
+).then((response) => response.json());
+
+<ProductList projectID="your-project-id" pageSize={24} initialData={firstPage} />;
+```
+
+Without `initialData` the server renders a loading skeleton and the browser
+fetches the first page. The component never reads `window` while rendering.
+
+### Appearance and texts
+
+```tsx
+<ProductList
+  projectID="your-project-id"
+  appearance={{
+    theme: "dark",
+    tokens: { buttonBackground: "#635bff", radius: "12px", fontFamily: "Inter" },
+    elements: { card: { className: "my-card" }, name: { style: { fontSize: 18 } } },
+  }}
+  texts={{ addToCart: "Do koszyka" }}
+/>
+```
+
+Tokens: `fontFamily`, `fontSize`, `background`, `surface`, `foreground`,
+`mutedForeground`, `border`, `buttonBackground`, `buttonForeground`,
+`buttonHoverBackground`, `hoverSurface`, `focusRing`, `error`, `badgeBackground`,
+`badgeForeground`, `radius`. Slots (`PRODUCT_LIST_SLOT_NAMES`, also exposed as
+`data-bitsnap-products-slot`): `root`, `grid`, `card`, `cardLink`, `image`,
+`imagePlaceholder`, `body`, `name`, `description`, `price`, `comparePrice`,
+`badge`, `actions`, `addToCartButton`, `selectButton`, `message`, `pagination`,
+`paginationButton`, `pageIndicator`, `emptyState`, `error`, `retryButton`,
+`skeleton`. All rules are scoped to `[data-bitsnap-products]`.
+
+### `useProducts`
+
+Build your own layout on the same data:
+
+```tsx
+const { products, totalCount, page, pageCount, setPage, isLoading, error, refetch } =
+  useProducts({ projectID: "your-project-id", pageSize: 12, search });
+```
+
+It uses a plain `fetch` without credentials, does not read the global project ID
+or host, aborts the request when the inputs change, does nothing during server
+rendering and uses `initialData` for the first request instead of fetching
+(so it must be page 1 for the same options). If the catalog shrinks below the
+current page, `page` falls back to the last page. `page` starts at 1; `products` keeps the previous page while the next one
+loads.
+
+### Embedding on your own site (CORS)
+
+The list calls `GET {host}/api/integrations/{projectID}/public-commerce/product-list`
+from the browser. The domain of the embedding site must be known to the project:
+add it to the project's site, success or cancel URLs, or to the allowed domains
+in the Bitsnap dashboard. Otherwise the browser blocks the response. On a Bitsnap
+custom domain nothing has to be configured.
+
 # Examples
 
 1. `BitsnapCheckout` Component:

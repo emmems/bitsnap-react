@@ -106,4 +106,48 @@ export namespace BitsnapModels {
       }),
     }),
   );
+
+  export const PublicListProductImageSchema = z.object({
+    url: z.string(),
+    thumbnailUrl: z.union([z.string(), z.null()]),
+  });
+  export type PublicListProductImage = z.infer<
+    typeof PublicListProductImageSchema
+  >;
+
+  /**
+   * One card of the public product catalog
+   * (`GET /api/integrations/{projectID}/public-commerce/product-list`).
+   * `price` and `compareAtPrice` are in minor units (grosze, cents), like the
+   * prices of the cart.
+   */
+  export const PublicListProductSchema = z.object({
+    id: z.string(),
+    /**
+     * ID the cart should add: the variant ID for single-variant products.
+     * Older backends omit it; use `cartItemId ?? id`.
+     */
+    cartItemId: z.string().optional(),
+    uniqueSlug: z.string(),
+    name: z.string(),
+    shortDescription: z.union([z.string(), z.null()]),
+    image: z.union([PublicListProductImageSchema, z.null()]),
+    price: z.number(),
+    currency: z.string(),
+    compareAtPrice: z.union([z.number(), z.null()]),
+    /** `true` when the variants have different prices: show "from {price}". */
+    priceFrom: z.boolean(),
+    variantCount: z.number(),
+    isRecurring: z.boolean(),
+    available: z.boolean(),
+    /** `true` when the product can be added to the cart straight from the list. */
+    addToCart: z.boolean(),
+  });
+  export type PublicListProduct = z.infer<typeof PublicListProductSchema>;
+
+  export const ProductListResponseSchema = z.object({
+    items: z.array(PublicListProductSchema),
+    totalCount: z.number(),
+  });
+  export type ProductListResponse = z.infer<typeof ProductListResponseSchema>;
 }

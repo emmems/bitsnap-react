@@ -1,0 +1,114 @@
+/*
+ * Product list appearance.
+ *
+ * Selectors in this file are excluded from the `.bitsnap-react` prefixing done
+ * in postcss.config.js (they all start with `[data-bitsnap-products`), because
+ * the theme boundary element has to match its own selectors.
+ *
+ * Every rule is scoped to `[data-bitsnap-products]`, so nothing here can leak
+ * into the host page, checkout, the panel or the returns views. Declarations
+ * fall back to the light palette when a token is not set. Layout (grid, spacing,
+ * sizes) comes from utility classes in `ProductList.tsx`.
+ *
+ * The rules live in the `components` layer, so plain Tailwind utilities and any
+ * stylesheet the application ships keep winning over them.
+ */
+
+@layer components {
+    [data-bitsnap-products] {
+        font-family: var(
+            --bitsnap-products-font-family,
+            var(
+                --default-font-family,
+                ui-sans-serif,
+                system-ui,
+                sans-serif,
+                "Apple Color Emoji",
+                "Segoe UI Emoji",
+                "Segoe UI Symbol",
+                "Noto Color Emoji"
+            )
+        );
+        font-size: var(--bitsnap-products-font-size, inherit);
+        background-color: var(--bitsnap-products-background, #ffffff);
+        color: var(--bitsnap-products-foreground, #18181b);
+    }
+
+    [data-bitsnap-products] a:focus-visible,
+    [data-bitsnap-products] button:focus-visible {
+        outline: 2px solid var(--bitsnap-products-focus-ring, #71717a);
+        outline-offset: 2px;
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="cardLink"] {
+        color: var(--bitsnap-products-foreground, #18181b);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="card"] {
+        background-color: var(--bitsnap-products-surface, #f9fafb);
+        border-color: var(--bitsnap-products-border, #e4e4e7);
+        border-radius: var(--bitsnap-products-radius, 8px);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="card"]:hover {
+        background-color: var(--bitsnap-products-hover-surface, #f4f4f5);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="card"][data-unavailable] [data-bitsnap-products-slot="image"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="card"][data-unavailable] [data-bitsnap-products-slot="imagePlaceholder"] {
+        opacity: 0.55;
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="image"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="imagePlaceholder"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="skeleton"] {
+        background-color: var(--bitsnap-products-border, #e4e4e7);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="description"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="comparePrice"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="pageIndicator"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="emptyState"] {
+        color: var(--bitsnap-products-muted-foreground, #71717a);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="error"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="message"] {
+        color: var(--bitsnap-products-error, #dc2626);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="badge"] {
+        background-color: var(--bitsnap-products-badge-background, #f4f4f5);
+        color: var(--bitsnap-products-badge-foreground, #3f3f46);
+        border-radius: var(--bitsnap-products-radius, 8px);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="badge"][data-kind="unavailable"] {
+        color: var(--bitsnap-products-error, #dc2626);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="addToCartButton"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="retryButton"] {
+        background-color: var(--bitsnap-products-button-background, #18181b);
+        color: var(--bitsnap-products-button-foreground, #fafafa);
+        border-radius: var(--bitsnap-products-radius, 8px);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="addToCartButton"]:hover:not(:disabled):not([aria-disabled="true"]),
+    [data-bitsnap-products] [data-bitsnap-products-slot="retryButton"]:hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--bitsnap-products-button-hover-background, #000000);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="selectButton"],
+    [data-bitsnap-products] [data-bitsnap-products-slot="paginationButton"] {
+        background-color: transparent;
+        color: var(--bitsnap-products-foreground, #18181b);
+        border: 1px solid var(--bitsnap-products-border, #e4e4e7);
+        border-radius: var(--bitsnap-products-radius, 8px);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="selectButton"]:hover:not(:disabled):not([aria-disabled="true"]),
+    [data-bitsnap-products] [data-bitsnap-products-slot="paginationButton"]:hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--bitsnap-products-hover-surface, #f4f4f5);
+    }
+}

@@ -27,6 +27,10 @@ const requiredFiles = [
   "models.d.ts",
   "internal.d.ts",
   "errors.d.ts",
+  "catalog.js",
+  "catalog.mjs",
+  "catalog.d.ts",
+  "catalog.d.mts",
 ];
 
 for (const file of requiredFiles) {
@@ -87,6 +91,63 @@ for (const method of ["addProductToCart", "showCart", "hideCart"]) {
     `missing export: Bitsnap.${method}`,
   );
 }
+
+const catalogNames = [
+  "ProductList",
+  "useProducts",
+  "formatProductPrice",
+];
+
+for (const [file, kind] of [
+  ["index.mjs", "esm"],
+  ["catalog.mjs", "esm"],
+  ["index.js", "cjs"],
+  ["catalog.js", "cjs"],
+]) {
+  const target = join(dist, file);
+  const loaded =
+    kind === "esm" ? await import(target) : createRequire(import.meta.url)(target);
+  for (const name of catalogNames) {
+    assert.equal(
+      typeof loaded[name],
+      "function",
+      `missing catalog export ${name} in dist/${file}`,
+    );
+  }
+}
+
+// The CommonJS catalog entry re-exports index.js, so both share one module
+// instance (cart state, constants, stores) instead of two bundled copies.
+{
+  const require = createRequire(import.meta.url);
+  const cjsIndex = require(join(dist, "index.js"));
+  const cjsCatalog = require(join(dist, "catalog.js"));
+  const esmCatalog = await import(join(dist, "catalog.mjs"));
+  for (const name of Object.keys(cjsCatalog).filter((key) => key !== "__esModule")) {
+    assert.strictEqual(
+      cjsCatalog[name],
+      cjsIndex[name],
+      `dist/catalog.js ${name} is not the same instance as dist/index.js`,
+    );
+  }
+  assert.deepEqual(
+    Object.keys(cjsCatalog).filter((key) => key !== "__esModule").sort(),
+    Object.keys(esmCatalog).sort(),
+    "dist/catalog.js exports differ from dist/catalog.mjs",
+  );
+  assert.ok(
+    readFileSync(join(dist, "catalog.js"), "utf8").length < 2000,
+    "dist/catalog.js must be a thin re-export of index.js",
+  );
+}
+
+// The ESM catalog entry must not load the checkout up front: the cart is a
+// dynamic import that only runs on the first "Add to cart" click.
+const catalogEsm = readFileSync(join(dist, "catalog.mjs"), "utf8");
+assert.ok(
+  !/from"\.\/(CartProvider|methods)-/.test(catalogEsm),
+  "dist/catalog.mjs imports the checkout statically",
+);
 
 const returnsNames = [
   // 1.6.0 names
