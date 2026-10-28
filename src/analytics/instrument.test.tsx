@@ -57,12 +57,14 @@ describe("useInstrument", () => {
     assert.ok(getTracker());
     getTracker()!.flush();
     const sent = await page.events();
-    assert.deepEqual(sent.map((e) => e.event), ["cart_opened"]);
-    assert.equal(sent[0].source, "sdk_react");
-    assert.equal(sent[0].channel, "embed");
-    assert.equal(sent[0].page_type, "cart");
-    assert.equal(sent[0].env, "live");
-    assert.deepEqual(sent[0].props, { item_count: 2, value_minor: 1000, currency: "PLN" });
+    // Without a provider the component starts the tracker, which reports the page itself first.
+    assert.deepEqual(sent.map((e) => e.event), ["page_view", "cart_opened"]);
+    assert.deepEqual(sent[0].props, { landing: true });
+    assert.equal(sent[1].source, "sdk_react");
+    assert.equal(sent[1].channel, "embed");
+    assert.equal(sent[1].page_type, "cart");
+    assert.equal(sent[1].env, "live");
+    assert.deepEqual(sent[1].props, { item_count: 2, value_minor: 1000, currency: "PLN" });
     assert.equal(seen.events.length, 1);
     await view.unmount();
   });

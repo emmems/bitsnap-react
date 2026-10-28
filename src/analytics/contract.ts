@@ -4,8 +4,9 @@
  * SOURCE OF TRUTH: instapay `apps/collector/src/contract.ts` (prose version:
  * `docs/merchant-analytics-contract.md`). This file is a verbatim copy of it
  * (everything below the next comment block). Do not edit it here: change
- * instapay's file and copy it over. `computeVisitorId` is pure but needs the
- * server secret; the browser never calls it, so bundlers drop it.
+ * instapay's file and copy it over. `computeVisitorId` and
+ * `computeConsentedVisitorId` are pure but need the server secret; they are
+ * server-only: the browser never calls them, so bundlers drop them.
  */
 
 export const SCHEMA_VERSION = 1;
@@ -429,6 +430,12 @@ export interface ClientEvent<E extends EventName = EventName> {
    * source (the collector computes `visitor_id` itself).
    */
   visitor_id?: string | null;
+  /**
+   * The value of the first-party `bs_vid_<projectKey>` cookie (`CLIENT_ID_RE`), sent only
+   * while analytics consent is granted. The collector turns it into a stable
+   * `consentedVisitorId` and never stores it.
+   */
+  client_id?: string | null;
 }
 
 /** One row as stored in Basin (all three streams share this shape). */
@@ -565,6 +572,34 @@ export function consentCookieName(scope: "site" | "project", projectKey?: string
     return `${CONSENT_COOKIE_NAME}_${normalizeProjectKey(projectKey)}`;
   }
   return CONSENT_COOKIE_NAME;
+}
+
+/**
+ * Decodes the value of a consent cookie (§11.3). Null when it is not base64url
+ * JSON of the documented shape (`v` 1 and a boolean per category).
+ */
+export function parseConsentCookie(value: string | null | undefined): ConsentCookie | null {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  try {
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
+    const json: unknown = JSON.parse(
+      new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0))),
+    );
+    if (!isRecord(json) || json.v !== 1) return null;
+    const c = json.c;
+    if (!isRecord(c)) return null;
+    if (
+      typeof c.analytics !== "boolean" ||
+      typeof c.marketing !== "boolean" ||
+      typeof c.preferences !== "boolean"
+    ) {
+      return null;
+    }
+    return json as unknown as ConsentCookie;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +871,46 @@ export async function computeVisitorId(
   return base64url(mac).slice(0, 22);
 }
 
+/**
+ * The `bs_vid_<projectKey>` cookie name. `projectKey` is the bare public key
+ * (like `consentCookieName`): consent is per project, so is the client id.
+ */
+export function clientIdCookieName(projectKey: string): string {
+  return `bs_vid_${projectKey}`;
+}
+
+/** Value of the `bs_vid_<projectKey>` cookie: 16 random bytes, base64url without padding. */
+export const CLIENT_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+/**
+ * Stable visitor id of a browser that granted analytics consent (contract §6).
+ *
+ *   consented_visitor_id = "p_" + base64url(HMAC-SHA256(key = utf8(masterSecret),
+ *                                  msg = utf8("client\n" + clientId + "\n" + projectId))).slice(0, 22)
+ *
+ * 24 characters; daily ids are 22, so `isConsentedVisitorId` tells them apart.
+ * `clientId` is the `bs_vid_<projectKey>` cookie value and is never stored.
+ */
+export async function computeConsentedVisitorId(
+  masterSecret: string,
+  clientId: string,
+  projectId: number | string,
+): Promise<string> {
+  if (!CLIENT_ID_RE.test(clientId)) {
+    throw new Error("clientId must be 22 base64url characters");
+  }
+  const mac = await hmacSha256(
+    encoder.encode(masterSecret),
+    `client\n${clientId}\n${projectId}`,
+  );
+  return `p_${base64url(mac).slice(0, 22)}`;
+}
+
+/** Whether `visitorId` came from `computeConsentedVisitorId` (not a daily id). */
+export function isConsentedVisitorId(visitorId: string): boolean {
+  return visitorId.length === 24 && visitorId.startsWith("p_");
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -1048,6 +1123,11 @@ export function validateEnvelope(
   if (e.visitor_id != null) {
     if (typeof e.visitor_id !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(e.visitor_id)) {
       return fail("bad_visitor_id");
+    }
+  }
+  if (e.client_id != null) {
+    if (typeof e.client_id !== "string" || !CLIENT_ID_RE.test(e.client_id)) {
+      return fail("bad_client_id");
     }
   }
 

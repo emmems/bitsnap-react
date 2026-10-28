@@ -1,4 +1,4 @@
-export { createTracker, initTracker, getTracker, resetTracker, DEFAULT_ENDPOINT } from "./core";
+export { createTracker, initTracker, getTracker, resetTracker, startAutoPageViews, DEFAULT_ENDPOINT } from "./core";
 export type { Tracker, TrackerOptions, TrackExtra, BrowserEventName } from "./core";
 export { BitsnapAnalyticsProvider, useAnalytics } from "./react";
 export type { AnalyticsApi, BitsnapAnalyticsProviderProps } from "./react";

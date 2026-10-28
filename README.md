@@ -1102,11 +1102,11 @@ The panel provides the following screens:
 
 ## Merchant analytics (`bitsnap-react/analytics`)
 
-A small, cookieless tracker that sends buyer-behaviour events (page views, product views, cart and checkout steps) to Bitsnap, so your dashboard can show visits, sources and funnels. It never uses cookies, `localStorage`, `sessionStorage` or IndexedDB: events live in memory and the visitor is recognised on the server by a daily-rotating hash that is never stored.
+A small tracker that sends buyer-behaviour events (page views, product views, cart and checkout steps) to Bitsnap, so your dashboard can show visits, sources and funnels. By default it is cookieless: it never uses `localStorage`, `sessionStorage` or IndexedDB, events live in memory and the visitor is recognised on the server by a daily-rotating hash that is never stored. The one exception is the consented `bs_vid_<projectKey>` cookie, described in [Returning visitors](#returning-visitors-the-bs_vid_projectkey-cookie).
 
 What an event holds: the event name, a timestamp, the page host and path (no query string, no fragment), the referrer's host, `utm_*` and `ref` from the landing URL, ids of the product/variant/order involved, and a few numbers (price in minor units, quantity). It never holds names, emails, phone numbers, addresses, IPs, coupon codes, form values or free text.
 
-Tracking stays off when `enabled` is `false`, when the browser sends Global Privacy Control (`navigator.globalPrivacyControl`), or when the browser is automated (`navigator.webdriver`). When [Bitsnap Consent](#cookie-consent-bitsnap-consent) is on the page and the visitor rejected analytics, the tracker stops and drops what it had queued. Without a stored choice it keeps going, because it stores nothing on the device.
+Tracking stays off when `enabled` is `false`, when the browser sends Global Privacy Control (`navigator.globalPrivacyControl`), or when the browser is automated (`navigator.webdriver`). When [Bitsnap Consent](#cookie-consent-bitsnap-consent) is on the page and the visitor rejected analytics, the tracker stops and drops what it had queued. Without a stored choice it keeps going, because it stores nothing on the device (the `bs_vid_<projectKey>` cookie needs a granted choice).
 
 ### Script tag
 
@@ -1114,7 +1114,7 @@ Tracking stays off when `enabled` is `false`, when the browser sends Global Priv
 <script src="https://bitsnap.pl/embed/v1/analytics.js" data-project="pk_…" defer></script>
 ```
 
-The standalone file is `dist/embed/analytics.js` (about 6 KB gzipped, no React). It sends a `page_view` on load and on every `history.pushState`/`replaceState`/back-forward navigation. Attributes: `data-project` (required), `data-env="live|test"`, `data-endpoint` (default `https://collect.bitsnap.pl`), `data-auto="on|off"` (default `on`), `data-page-type="shop|catalog|product|cart|checkout|…"`.
+The standalone file is `dist/embed/analytics.js` (about 7.8 KB gzipped, no React). It sends a `page_view` on load and when the path changes through `history.pushState`/`replaceState`/back-forward (a change of the query string or hash alone is not a new page). Attributes: `data-project` (required), `data-env="live|test"`, `data-endpoint` (default `https://collect.bitsnap.pl`), `data-auto="on|off"` (default `on`), `data-page-type="shop|catalog|product|cart|checkout|…"`.
 
 Bitsnap's own pages set three more: `data-source="script|storefront|dashboard"` (default `script`), `data-channel="embed|hosted|custom_domain"` (default `embed`) and `data-visitor-id`, a 22-character id that is only honoured with `data-source="dashboard"` (on any other source the collector computes the visitor id itself). With `data-source="dashboard"` the script sends `app_page_view` (with the route) instead of `page_view`. Unknown values fall back to the defaults.
 
@@ -1141,9 +1141,11 @@ function Product({ id }: { id: string }) {
 }
 ```
 
+The provider sends a `page_view` on mount and on every path change (`pushState`, `replaceState`, Back/Forward), like the script tag. Pass `autoPageViews={false}` to turn that off and call `page()` yourself; otherwise drop your own `page()` calls, or each page is counted twice. The same goes for instrumented components used without a provider: they start the automatic page views too, so a manual `page()` next to them double-counts unless you pass `analytics={false}` to them. An automatic page view carries no page type of its own (a component without a provider supplies its own), so it does not inherit one set by an earlier manual `page(type)`. The page views are a per-page singleton too: the page gets exactly one `page_view` per path change however many providers, instrumented components or `analytics.js` embeds it has.
+
 `useAnalytics()` returns no-ops outside the provider and on the server. `onEvent` receives every event before it is sent, so you can forward it to your own tools after your own consent step; it is not called while tracking is off. The tracker is a per-page singleton: the first provider's `projectKey`, `env` and `endpoint` win.
 
-Without React, use the core directly: `initTracker({ projectKey })` returns the page's tracker (`track`, `page`, `flush`, `setEnabled`, `onEvent`). Events are batched: sent every 5 seconds, at 20 events, and when the page is hidden (`navigator.sendBeacon`, with a `fetch` `keepalive` fallback). Failed sends are not retried.
+Without React, use the core directly (`startAutoPageViews(() => tracker.page(null))` gives you the same automatic page views): `initTracker({ projectKey })` returns the page's tracker (`track`, `page`, `flush`, `setEnabled`, `onEvent`). Events are batched: sent every 5 seconds, at 20 events, and when the page is hidden (`fetch` with `keepalive`, with `navigator.sendBeacon` as the fallback). Failed sends are not retried.
 
 ### Automatic analytics in components
 
@@ -1155,7 +1157,7 @@ The Bitsnap components report their own events, so a project key is all you need
 <ProductList projectID="…" analytics={{ onEvent: (e) => myTool.track(e.event, e.props), env: "test" }} />
 ```
 
-`onEvent` receives only the events of that component. `env: "test"` events are stored but never reach the merchant's stats. Parts inside a component inherit its setting; a surrounding `<BitsnapAnalyticsProvider>` owns the tracker and its `onEvent` still sees everything. Nothing is written to cookies or Storage, and events carry no personal data (no emails, names, order contents or free text).
+`onEvent` receives only the events of that component. `env: "test"` events are stored but never reach the merchant's stats. Parts inside a component inherit its setting; a surrounding `<BitsnapAnalyticsProvider>` owns the tracker and its `onEvent` still sees everything (and its `autoPageViews` decides on the page views). Nothing is written to Storage, cookies only as described under [Returning visitors](#returning-visitors-the-bs_vid_projectkey-cookie), and events carry no personal data (no emails, names, order contents or free text).
 
 | Component | Events |
 | --- | --- |
@@ -1168,9 +1170,37 @@ The Bitsnap components report their own events, so a project key is all you need
 | Returns | `return_started`, `return_submitted` |
 | Course | `course_opened`, `lesson_started`, `lesson_completed`, `video_progress` (25/50/75/100% of naturally played time), `test_submitted`, `lesson_rated` |
 
-The components do not emit `page_view`, `product_view`, `checkout_step_completed`, `checkout_validation_error`, `coupon_applied` or `coupon_rejected` (the drawer hands over to the hosted checkout). Use `useAnalytics()` or the embed script for page views. Because the tracker is a per-page singleton, the first project key wins: use one project per page. The course sends nothing in creator preview.
+Without a `<BitsnapAnalyticsProvider>`, an instrumented component that starts the tracker also sends the automatic `page_view`s (it does not when `analytics={false}`). The components do not emit `product_view`, `checkout_step_completed`, `checkout_validation_error`, `coupon_applied` or `coupon_rejected` (the drawer hands over to the hosted checkout). Use `useAnalytics()` or the embed script for those. Because the tracker is a per-page singleton, the first project key wins: use one project per page. The course sends nothing in creator preview.
 
 For your own components, `useInstrument(projectKey, analytics)` returns the same `{ track }` helper and `<InstrumentProvider value={instrument}>` shares it with the parts below.
+
+### Returning visitors: the `bs_vid_<projectKey>` cookie
+
+Without a cookie the server can only tell visitors apart for one day. When [Bitsnap Consent](#cookie-consent-bitsnap-consent) is on the page and the visitor grants **analytics**, the tracker sets one first-party cookie:
+
+| | |
+| --- | --- |
+| Name | `bs_vid_<projectKey>`, with your bare public project key (like `bitsnap_consent_<projectKey>`). It is per project because consent is: on bitsnap.pl many merchants share one site, and one merchant's consent or refusal must never grant or delete another's id |
+| Value | 22 random base64url characters (16 bytes from `crypto.getRandomValues`); not derived from anything about the visitor |
+| Lifetime | 390 days (under the 13 months the CNIL allows), set once and not extended on later visits |
+| Domain | The widest registrable domain the browser accepts (like Google Analytics), host-only on `localhost` and IP hosts |
+| Attributes | `Path=/; SameSite=Lax`, plus `Secure` on https |
+| Set when | Bitsnap Consent reports `analytics` granted, on load or on the `bitsnap:consent` event |
+| Deleted when | `analytics` is withdrawn or the choice is reset: on the host and every parent domain |
+
+While analytics is granted and the cookie exists, every event carries it as `client_id`, and the requests that create a checkout or payment link (the cart's `/buy` and `/api/payment/link/auto` calls) send it as the `X-Bitsnap-Visitor` header. The server derives a stable visitor id from it, which lets your stats count returning visitors and credit a purchase to the visit that led to it. Without a granted choice (no banner, a refusal, a choice still loading, Global Privacy Control) there is no cookie, no `client_id` and no header, and tracking stays cookieless as before.
+
+The cookie only follows a banner that speaks for the project: a project-scope banner (`scope: "project"`) with the same project key, or, on your own site, a site-scope banner. A banner for another project never sets, reads or deletes it, and on bitsnap.pl (and its subdomains) the site-wide choice is bitsnap's own, so only a project-scope choice for your key counts.
+
+Declare the cookie in your banner's cookie list (category `analytics`, purpose "shop statistics: recognising returning visitors", lifetime 13 months): add `{ name: "Bitsnap statistics", category: "analytics", cookies: ["bs_vid_<projectKey>"] }` to `services` in the banner config, with your exact bare project key, which also lets the banner delete it on withdrawal from pages that run no tracker. Do not use a `bs_vid_*` prefix: the banner deletes every cookie that matches it, which on a site shared by several merchants (bitsnap.pl) would wipe other projects' ids too.
+
+### Release notes (1.10.0)
+
+- **Requires bitsnap.pl with `X-Bitsnap-Visitor` support.** The cart's `/buy` and `/api/payment/link/auto` requests now send that header while analytics is granted, and a server whose CORS preflight does not allow it makes those checkouts fail in the browser. Deploy bitsnap.pl first, then publish and install this version.
+- **Page views are now automatic by default.** `<BitsnapAnalyticsProvider>` and instrumented components without a provider send a `page_view` on mount and on every path change. If you call `page()` yourself, pass `autoPageViews={false}` to the provider (and `analytics={false}` to components used without one), or each page is counted twice.
+- **Update the consent script too.** The tracker only sets `bs_vid_<projectKey>` for a banner that reports its `scope` and `projectKey` (1.10.0 and later); an older consent script is treated as not speaking for the project, so the tracker stays cookieless.
+- **Update `analytics.js` and the npm package together.** Both share one page-wide registry to send a single `page_view` per path change; an older copy of either does not know about it, and the page is counted twice while both run.
+- New consented first-party cookie `bs_vid_<projectKey>` and `client_id` on events (see above); declare it in your banner's cookie list by its exact name.
 
 ## Cookie consent (Bitsnap Consent)
 
@@ -1222,6 +1252,8 @@ BitsnapConsent.open();                 // settings layer; any [data-bitsnap-cons
 BitsnapConsent.acceptAll(); BitsnapConsent.rejectAll(); BitsnapConsent.accept({ analytics: true });
 BitsnapConsent.reset();                // clears the choice and asks again
 BitsnapConsent.ready;                  // Promise, resolves once config and the stored choice are applied
+BitsnapConsent.scope;                  // "global" (bitsnap_consent) or "project" (bitsnap_consent_<projectKey>)
+BitsnapConsent.projectKey;             // the bare public project key the banner was started with, or null
 ```
 
 `window` also receives `CustomEvent("bitsnap:consent", { detail })` on every choice. Categories missing from `accept()` are denied. When a visitor withdraws a category, the cookies listed in `services[].cookies` are deleted (best effort; a trailing `*` matches a prefix), and the page reloads if `reloadOnWithdraw` is set.

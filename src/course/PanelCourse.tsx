@@ -414,7 +414,8 @@ export function PanelCourse({
   analytics,
 }: PanelCourseProps) {
   const panel = usePanelConfig();
-  const instrument = useInstrument(panel.projectID, analytics, "course");
+  // The creator preview reports nothing, not even the page view of the page it sits on.
+  const instrument = useInstrument(panel.projectID, preview ? false : analytics, "course");
   const texts = useMemo(
     () => getCourseTexts(textOverrides, locale),
     [textOverrides, locale],

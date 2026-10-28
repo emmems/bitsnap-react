@@ -177,7 +177,8 @@ describe("course analytics", () => {
     await open({ analytics: false });
     getTracker()?.flush();
     assert.equal(seen.events.length, 0);
-    assert.equal((await page.events()).length, 0);
+    // The surrounding <PanelProvider> still reports the page itself, but nothing of the course.
+    assert.deepEqual((await page.events()).filter((e) => e.event !== "page_view"), []);
     assert.equal(page.win.document.cookie, "");
   });
 });

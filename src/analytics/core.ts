@@ -18,6 +18,22 @@ import {
   type StorefrontEventName,
 } from "./contract";
 import { SDK_VERSION } from "../version";
+import { resetAutoPageViews } from "./pageviews";
+import { randomBytes } from "./random";
+import {
+  analyticsGranted,
+  consentApi,
+  consentBelongsTo,
+  deleteVisitorCookie,
+  newVisitorId,
+  readVisitorCookie,
+  readVisitorId,
+  VISITOR_HEADER,
+  writeVisitorCookie,
+  type ConsentLike,
+} from "./visitor";
+
+export { startAutoPageViews } from "./pageviews";
 
 /** Events a browser may send. `consent_updated` is written by the consent log only. */
 export type BrowserEventName = Exclude<StorefrontEventName, "consent_updated"> | AppEventName;
@@ -61,8 +77,17 @@ export type TrackExtra = {
 
 export interface Tracker {
   track<E extends BrowserEventName>(event: E, props: EventProps<E>, extra?: TrackExtra): void;
-  /** Sends `page_view` and makes `pageType` the page type of the following events. */
+  /**
+   * Sends `page_view` and makes `pageType` the page type of the following events
+   * (`null` clears it, `undefined` keeps the current one).
+   */
   page(pageType?: PageType | null, extra?: TrackExtra): void;
+  /**
+   * The visitor's `bs_vid_<projectKey>` client id, only while this tracker is on
+   * (enabled, no Global Privacy Control, not automated, analytics not denied) and
+   * Bitsnap Consent grants analytics. `projectKey` must match the tracker's, if given.
+   */
+  clientId(projectKey?: string): string | null;
   /** Sends the queue now. */
   flush(): void;
   setEnabled(enabled: boolean): void;
@@ -73,14 +98,6 @@ export interface Tracker {
   /** Removes the page listeners and drops the queue. */
   destroy(): void;
 }
-
-/** The part of `window.BitsnapConsent` (`bitsnap-react/consent`) the tracker reads. */
-type ConsentLike = {
-  get(): { c: { analytics?: boolean } } | null;
-  /** Also true for a refusal made on an older banner version, which `get()` no longer returns. */
-  denied?(category: "analytics"): boolean;
-  ready?: Promise<unknown>;
-};
 
 export const DEFAULT_ENDPOINT = "https://collect.bitsnap.pl";
 
@@ -100,20 +117,13 @@ function byteLength(text: string): number {
 export const noopTracker: Tracker = {
   track() {},
   page() {},
+  clientId: () => null,
   flush() {},
   setEnabled() {},
   onEvent: () => () => {},
   configure() {},
   destroy() {},
 };
-
-function randomBytes(n: number): Uint8Array {
-  const bytes = new Uint8Array(n);
-  const c = typeof crypto !== "undefined" ? crypto : undefined;
-  if (c && typeof c.getRandomValues === "function") c.getRandomValues(bytes);
-  else for (let i = 0; i < n; i++) bytes[i] = Math.floor(Math.random() * 256);
-  return bytes;
-}
 
 /** UUIDv7: 48-bit unix ms, version 7, variant 10, 74 random bits. */
 export function uuidv7(now = Date.now()): string {
@@ -178,8 +188,9 @@ export function packEvents(projectKey: string, events: ClientEvent[], leaving = 
 }
 
 /**
- * Cookieless, in-memory event tracker. It never throws into the host page and
- * never touches cookies or Web Storage. On the server it returns a no-op.
+ * In-memory event tracker. It never throws into the host page and touches no
+ * cookie or Web Storage, except the `bs_vid_<projectKey>` client id cookie, which it keeps
+ * only while Bitsnap Consent grants analytics. On the server it returns a no-op.
  */
 export function createTracker(options: TrackerOptions): Tracker {
   try {
@@ -233,7 +244,7 @@ function build(options: TrackerOptions, win: Window & typeof globalThis): Tracke
   let consentReady = true;
 
   function attachConsent() {
-    const api = (win as unknown as { BitsnapConsent?: ConsentLike }).BitsnapConsent;
+    const api = consentApi(win);
     if (!api || api === attached) return;
     attached = api;
     consentReady = !api.ready;
@@ -268,7 +279,27 @@ function build(options: TrackerOptions, win: Window & typeof globalThis): Tracke
     });
   }
 
+  /**
+   * Keeps the `bs_vid_<projectKey>` cookie in line with the consent: set while analytics is granted, deleted once
+   * it is not. Before the stored choice has loaded `get()` is empty, so nothing is deleted then.
+   * Without Bitsnap Consent on the page the tracker is cookieless.
+   */
+  function syncVisitorCookie(final: boolean) {
+    try {
+      attachConsent();
+      if (!attached) return;
+      // A banner of another project, or bitsnap's own on bitsnap.pl, neither grants nor withdraws this id.
+      if (!consentBelongsTo(win, key)) return;
+      if (analyticsGranted(win, key)) {
+        if (active() && readVisitorCookie(win.document, key) === null) writeVisitorCookie(win, key, newVisitorId());
+      } else if (final) {
+        deleteVisitorCookie(win, key);
+      }
+    } catch {}
+  }
+
   function afterConsentChange() {
+    syncVisitorCookie(true);
     if (consentDenied()) {
       queue = [];
       held = [];
@@ -342,7 +373,10 @@ function build(options: TrackerOptions, win: Window & typeof globalThis): Tracke
       }
       // Hold events until Bitsnap Consent has loaded the stored choice.
       if (!consentReady) return;
-      const pending = queue;
+      // The client id is added on the way out, so events held for the stored choice carry it too.
+      syncVisitorCookie(consentReady);
+      const clientId = readVisitorId(win, key);
+      const pending = clientId ? queue.map((event) => ({ ...event, client_id: clientId })) : queue;
       queue = [];
       packEvents(key, pending, leaving).forEach((entry) => send(entry.body));
     } catch {}
@@ -412,6 +446,7 @@ function build(options: TrackerOptions, win: Window & typeof globalThis): Tracke
   win.addEventListener("bitsnap:consent", onConsent);
   win.addEventListener("bitsnap:consent:ready", onConsent);
   attachConsent();
+  syncVisitorCookie(consentReady);
 
   return {
     track(event, props, extra) {
@@ -424,6 +459,14 @@ function build(options: TrackerOptions, win: Window & typeof globalThis): Tracke
         if (type !== undefined) pageType = type;
         emit("page_view", { landing: pageViews++ === 0 }, extra);
       } catch {}
+    },
+    clientId(projectKey) {
+      try {
+        if (projectKey !== undefined && normalizeProjectKey(projectKey) !== key) return null;
+        return active() ? readVisitorId(win, key) : null;
+      } catch {
+        return null;
+      }
     },
     flush: () => flush(),
     setEnabled(value) {
@@ -496,7 +539,31 @@ export function getTracker(): Tracker | undefined {
 
 /** Destroys the singleton so that `initTracker` can build a fresh one (tests, hot reload). */
 export function resetTracker() {
+  if (typeof window !== "undefined") resetAutoPageViews(window);
   instance?.destroy();
   instance = undefined;
   instanceKey = null;
+}
+
+/**
+ * `X-Bitsnap-Visitor` for a request that creates a checkout or payment link:
+ * the client id of `projectKey` (default: the running tracker's project), only
+ * while tracking is on and Bitsnap Consent grants analytics. Empty otherwise.
+ */
+export function visitorHeaders(projectKey?: string): Record<string, string> {
+  try {
+    if (typeof window === "undefined") return {};
+    const tracker = instance;
+    let id: string | null = null;
+    if (tracker) {
+      id = tracker.clientId(projectKey);
+    } else {
+      // No tracker of this bundle (e.g. only the analytics.js script runs): read the cookie it set.
+      const key = projectKey ? normalizeProjectKey(projectKey) : null;
+      id = key ? readVisitorId(window, key) : null;
+    }
+    return id ? { [VISITOR_HEADER]: id } : {};
+  } catch {
+    return {};
+  }
 }

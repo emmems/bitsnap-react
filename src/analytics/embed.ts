@@ -1,4 +1,4 @@
-import { createTracker, isPageType, noopTracker, type Tracker } from "./core";
+import { createTracker, isPageType, noopTracker, startAutoPageViews, type Tracker } from "./core";
 import { sanitizePath, type Channel, type PageType, type Source } from "./contract";
 
 /** What the `<script>` tag may claim with `data-source` and `data-channel` (a subset of the contract's enums). */
@@ -77,7 +77,7 @@ export function init(script: HTMLElement | null): BitsnapGlobal | undefined {
     } else {
       api = {
         track: (event, props, extra) => tracker.track(event, props, extra),
-        page: (pageTypeArg, extra) => tracker.page(pageTypeArg ?? type, extra),
+        page: (pageTypeArg, extra) => tracker.page(pageTypeArg !== undefined ? pageTypeArg : type, extra),
         loaded: true,
       };
     }
@@ -98,10 +98,8 @@ export function init(script: HTMLElement | null): BitsnapGlobal | undefined {
       },
     };
 
-    if (get("auto") !== "off") {
-      api.page(type);
-      watchNavigation(() => api.page(type));
-    }
+    // One page_view per path change for the whole page, also when the React provider runs too.
+    if (get("auto") !== "off") startAutoPageViews(() => api.page(type ?? null));
     return api;
   } catch {
     return undefined;
@@ -140,27 +138,6 @@ export function dashboardRoute(pathname: string): string {
       return segment;
     })
     .join("/");
-}
-
-/** Calls `onChange` when the path changes through `history.pushState`/`replaceState` or Back/Forward. */
-function watchNavigation(onChange: () => void) {
-  let last = location.pathname;
-  const check = () => {
-    try {
-      if (location.pathname === last) return;
-      last = location.pathname;
-      onChange();
-    } catch {}
-  };
-  for (const name of ["pushState", "replaceState"] as const) {
-    const original = history[name];
-    history[name] = function (this: History, ...args: Parameters<History[typeof name]>) {
-      const result = original.apply(this, args);
-      check();
-      return result;
-    };
-  }
-  window.addEventListener("popstate", check);
 }
 
 if (typeof document !== "undefined") {

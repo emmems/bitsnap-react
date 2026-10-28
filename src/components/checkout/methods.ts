@@ -1,4 +1,5 @@
 import type { Instrument } from "@/src/analytics/instrument";
+import { visitorHeaders } from "@/src/analytics/core";
 import { clientHeaders } from "@/src/lib/client-header";
 import { getCheckoutMethods, getLocale, getProjectID } from "./CartProvider";
 import { HOST } from "./constants";
@@ -68,6 +69,7 @@ export async function createPaymentURL(request: LinkRequest) {
     method: "POST",
     headers: {
       ...clientHeaders,
+      ...visitorHeaders(projectID),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
@@ -111,6 +113,7 @@ export async function createCheckout(
 
   const headers = {
     ...clientHeaders,
+    ...visitorHeaders(projectID),
     "Content-Type": "application/json",
     ...(request.apiKey != null
       ? { Authorization: `Bearer ${request.apiKey}` }

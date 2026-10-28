@@ -108,6 +108,13 @@ export type ConsentOptions = {
 };
 
 export type BitsnapConsentApi = {
+  /**
+   * Whose choice this banner holds: `project` keeps one cookie per project key
+   * (`bitsnap_consent_<key>`), `global` the site-wide `bitsnap_consent`.
+   */
+  readonly scope: "global" | "project";
+  /** The bare public project key the banner was started with, if any (`pk_` stripped). */
+  readonly projectKey: string | null;
   get(): ConsentState | null;
   /**
    * `true` when the visitor refused `category`, also in a choice made on an older banner

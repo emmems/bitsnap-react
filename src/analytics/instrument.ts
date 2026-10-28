@@ -1,6 +1,6 @@
 import { createContext, createElement, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import type { ClientEvent, Env, EventProps, PageType } from "./contract";
-import { getTracker, initTracker, noopTracker, type BrowserEventName, type TrackExtra } from "./core";
+import { getTracker, initTracker, noopTracker, startAutoPageViews, type BrowserEventName, type TrackExtra } from "./core";
 import { useAnalytics, type AnalyticsApi } from "./react";
 
 /**
@@ -69,19 +69,25 @@ function createInstrument(read: () => Latest) {
     },
   };
 
-  /** Starts the tracker on mount and wires `onEvent`. Returns the cleanup. */
+  /** Starts the tracker on mount, wires `onEvent` and, without a provider, the automatic page views. Returns the cleanup. */
   function attach(): () => void {
     try {
       if (!target()) return () => {};
       const tracker = getTracker();
       if (!tracker) return () => {};
-      return tracker.onEvent((event) => {
+      // A <BitsnapAnalyticsProvider> decides on the page views itself (`autoPageViews`).
+      const stopPageViews = read().provided ? () => {} : startAutoPageViews(() => tracker.page(read().pageType ?? null));
+      const stopListening = tracker.onEvent((event) => {
         if (emitting !== id) return;
         try {
           const { analytics } = read();
           if (typeof analytics === "object") analytics.onEvent?.(event);
         } catch {}
       });
+      return () => {
+        stopPageViews();
+        stopListening();
+      };
     } catch {
       return () => {};
     }

@@ -73,7 +73,7 @@ describe("<BitsnapConsent> and the first events", () => {
         React.createElement(BitsnapConsent, { projectKey: TEST_KEY, categories: { analytics: true } }),
         React.createElement(
           BitsnapAnalyticsProvider,
-          { projectKey: TEST_KEY, onEvent: (event) => events.push(event.event) },
+          { projectKey: TEST_KEY, autoPageViews: false, onEvent: (event) => events.push(event.event) },
           React.createElement(FirstEvent),
         ),
       ),

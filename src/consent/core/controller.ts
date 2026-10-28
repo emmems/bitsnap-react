@@ -236,6 +236,9 @@ export function createConsent(options: ConsentOptions = {}): BitsnapConsentApi {
   }
 
   const api: BitsnapConsentApi = {
+    // Same rule as `cookieName`: a project scope needs a valid key.
+    scope: options.scope === "project" && projectKey ? "project" : "global",
+    projectKey,
     get: () => copy(state),
     // A choice made on an older banner version has no `get()`, but a refusal in it still holds.
     denied: (category) => (state ?? stale)?.c[category] === false,
