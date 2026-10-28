@@ -82,7 +82,7 @@ Rules:
   iframes, forms, inline styles). It returns `""` without a DOM, so lesson HTML
   never appears in server-rendered output.
 - Video: `hls.js`, native HLS on Safari. Position is saved every ~15 s while
-  playing and on pause/end/leaving; a lesson completes at 90 % (`logic.ts`).
+  playing and on pause/end/leaving; a lesson completes at 80 %, as in the LMS (`logic.ts`).
 - Texts: `texts` prop over Polish/English tables (`src/course/texts.ts`).
 - The contract is drafted in `proto-draft/` (see its README); generated code in
   `src/gen/proto/public/v1/user_panel_course_*` comes from
