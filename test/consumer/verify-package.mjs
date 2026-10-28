@@ -193,6 +193,66 @@ assert.ok(
   }
 }
 
+// The CommonJS course entry shares the configuration, transport and session
+// modules with the main entry: what a CommonJS consumer sets through
+// `bitsnap-react` has to reach the default data source of the course view.
+{
+  const require = createRequire(import.meta.url);
+  const main = require(join(dist, "index.js"));
+  const cjsCourse = require(join(dist, "course.js"));
+  const host = "https://lms.example.test";
+  const panelHost = "https://panel.example.test";
+  const token = "panel-session-token-for-test";
+
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) =>
+        key === `bitsnap-panel-session:${encodeURIComponent(panelHost)}:${encodeURIComponent("project-1")}`
+          ? token
+          : null,
+      setItem() {},
+      removeItem() {},
+    },
+  };
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push({
+      url: request.url,
+      body: Buffer.from(await request.arrayBuffer()).toString("latin1"),
+    });
+    throw new Error("stop after the first request");
+  };
+  const log = console.log;
+  console.log = () => {};
+  try {
+    main.setCustomHost(host);
+    main.setPanelProjectID("project-1");
+    main.setHost(panelHost);
+    await cjsCourse
+      .createRpcCourseDataSource({ accessId: "access-1" })
+      .getCourse()
+      .catch(() => {});
+  } finally {
+    console.log = log;
+    globalThis.fetch = previousFetch;
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+
+  assert.equal(requests.length, 1, "the course data source sent no request");
+  assert.ok(
+    requests[0].url.startsWith(`${host}/api/rpc/`),
+    `dist/course.js ignores the host set through dist/index.js: ${requests[0].url}`,
+  );
+  assert.ok(
+    requests[0].body.includes(token),
+    "dist/course.js did not find the panel session set up through dist/index.js",
+  );
+}
+
 const returnsNames = [
   // 1.6.0 names
   "BitsnapReturns",

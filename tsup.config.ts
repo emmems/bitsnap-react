@@ -60,6 +60,10 @@ export default defineConfig((overrideOptions) => {
     onSuccess: shouldPublish ? "pnpm publish" : undefined,
     format: ["cjs", "esm"],
     bundle: true,
+    // CommonJS entries share chunks like ESM ones do. Separate copies of the
+    // configuration, transport and session modules would not see what
+    // `setCustomHost`, `setHost` or `setLocale` set through `index.js`.
+    splitting: true,
     clean: true,
     minify: true,
     sourcemap: true,
