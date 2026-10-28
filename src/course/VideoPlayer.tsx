@@ -57,8 +57,9 @@ export function VideoPlayer({
   callbacks.current = { onReport, onEnded, onExpired, durationHint };
   const lastReported = useRef<number | undefined>(undefined);
 
-  const report = useCallback((reason: PlaybackReport["reason"]) => {
-    const video = videoRef.current;
+  // React clears `videoRef` before the effect cleanup runs, so the cleanup
+  // passes the element it captured.
+  const report = useCallback((reason: PlaybackReport["reason"], video = videoRef.current) => {
     if (video == null || callbacks.current.onReport == null) {
       return;
     }
@@ -162,7 +163,7 @@ export function VideoPlayer({
       video.removeEventListener("error", onVideoError);
       video.removeEventListener("loadedmetadata", start);
       // Leaving the lesson mid-video keeps the position.
-      if (!video.ended && video.currentTime > 0) report("leave");
+      if (!video.ended && video.currentTime > 0) report("leave", video);
       hls?.destroy();
       video.removeAttribute("src");
       video.load();
