@@ -1,3 +1,4 @@
+import { withClientParam } from "@/src/lib/client-header";
 import type { BitsnapModels } from "@/src/models";
 
 export type PublicListProduct = BitsnapModels.PublicListProduct;
@@ -78,7 +79,7 @@ export async function fetchProductList(
   query: ProductListQuery,
   signal?: AbortSignal,
 ): Promise<ProductListData> {
-  const response = await fetch(buildProductListURL(query), {
+  const response = await fetch(withClientParam(buildProductListURL(query)), {
     method: "GET",
     credentials: "omit",
     headers: { Accept: "application/json" },

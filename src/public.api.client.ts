@@ -1,6 +1,7 @@
 import type { Transport } from "@connectrpc/connect";
 import { createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
+import { clientHeaderInterceptor } from "./lib/client-header";
 import { PublicApiService } from "./gen/proto/public/v1/public_api_pb";
 
 export namespace PublicApiClient {
@@ -15,6 +16,7 @@ export namespace PublicApiClient {
       transport = createConnectTransport({
         useBinaryFormat: true,
         baseUrl: host + "/api/rpc",
+        interceptors: [clientHeaderInterceptor],
       });
       transports.set(host, transport);
     }

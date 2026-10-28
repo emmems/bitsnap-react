@@ -30,6 +30,8 @@ import { ManageMyData } from "./ManageMyData";
 import { LoginScreen } from "./LoginScreen";
 import { Button } from "@/src/ui/button";
 import { getProjectID } from "../checkout/CartProvider";
+import { currentProjectID } from "../checkout/project-id";
+import { useInstrument } from "@/src/analytics/instrument";
 import { NotificationGroupHowOften } from "@/src/gen/proto/common/v1/push_notifications_pb";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { Spinner } from "@/src/ui/spinner";
@@ -174,7 +176,9 @@ function reducer(state: State, action: Action): State {
 function NotificationsComponentPublic({
   slug: slugProp,
   userID,
-  productID: _productID,
+  productID,
+  projectID,
+  analytics,
   projectName,
   projectLogo,
   projectLogoDark,
@@ -187,6 +191,10 @@ function NotificationsComponentPublic({
   className,
 }: NotificationsComponentPublicProps) {
   const [parent] = useAutoAnimate();
+  const instrument = useInstrument(
+    projectID ?? currentProjectID(),
+    analytics,
+  );
   let slug =
     slugProp ??
     getProjectID() ??
@@ -477,6 +485,11 @@ function NotificationsComponentPublic({
                 dispatch({ type: "CHECK_ALL_GROUPS" });
               }}
               onSuccess={(userAlreadyExists, userID, accessToken) => {
+                instrument.track(
+                  "availability_signup",
+                  {},
+                  { product_id: productID ?? null },
+                );
                 if (accessToken != null) {
                   handleLoginSuccess(userID, accessToken);
                 }
@@ -510,6 +523,8 @@ function Wrapper({
   slug,
   userID,
   productID,
+  projectID,
+  analytics,
   projectName,
   projectLogo,
   projectLogoDark,
@@ -527,6 +542,8 @@ function Wrapper({
         slug={slug}
         userID={userID}
         productID={productID}
+        projectID={projectID}
+        analytics={analytics}
         projectName={projectName}
         projectLogo={projectLogo}
         projectLogoDark={projectLogoDark}

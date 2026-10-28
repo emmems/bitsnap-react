@@ -9,8 +9,16 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/src/lib/utils";
+import {
+  InstrumentProvider,
+  useInstrument,
+  useInstrumentContext,
+  withCartAnalyticsMuted,
+  type AnalyticsOption,
+  type Instrument,
+} from "@/src/analytics/instrument";
 import { DEFAULT_LOCALE } from "../checkout/locale";
-import { addProductToCart } from "./add-to-cart";
+import { addProductToCart, trackProductAdded } from "./add-to-cart";
 import {
   getProductListSlotAppearance,
   resolveProductListAppearance,
@@ -20,6 +28,7 @@ import {
 } from "./appearance";
 import { clampPageSize, type PublicListProduct } from "./fetch";
 import { formatProductPrice } from "./format";
+import { createImpressionTracker } from "./impressions";
 import {
   fillProductListText,
   resolveProductListTexts,
@@ -39,6 +48,11 @@ export type ProductListItemContext = {
   locale: string;
   /** Adds the product to the cart the way the built-in button does. */
   addToCart: () => Promise<void>;
+  /**
+   * Reports a click on the product (`product_clicked`). Call it from the link
+   * a custom card renders; the built-in card does it itself.
+   */
+  trackClick: () => void;
 };
 
 export type ProductListProps = UseProductsOptions & {
@@ -64,6 +78,13 @@ export type ProductListProps = UseProductsOptions & {
   /** Open the cart drawer after the default add to cart. Defaults to `true`. */
   showCartOnAdd?: boolean;
   className?: string;
+  /**
+   * Usage statistics for your Bitsnap dashboard (list views, impressions,
+   * clicks, add to cart). On by default; `false` turns it off. An object
+   * lets you forward every event: `{ onEvent }`. Nothing is stored on the
+   * visitor's device.
+   */
+  analytics?: AnalyticsOption;
 };
 
 type ListContext = {
@@ -73,6 +94,18 @@ type ListContext = {
 };
 
 const ProductListContext = createContext<ListContext | undefined>(undefined);
+
+type CardAnalytics = {
+  observe: (element: Element, id: string, position: number) => () => void;
+  clicked: (product: PublicListProduct, position: number) => void;
+};
+
+const noCardAnalytics: CardAnalytics = {
+  observe: () => () => {},
+  clicked: () => {},
+};
+
+const CardAnalyticsContext = createContext<CardAnalytics>(noCardAnalytics);
 
 function useListContext(): ListContext {
   const value = useContext(ProductListContext);
@@ -161,16 +194,31 @@ function AddToCartButton({
 
 function ProductCard({
   product,
+  position,
   href,
   onAdd,
   renderItem,
 }: {
   product: PublicListProduct;
+  /** Index in the whole catalog (not in the current page). */
+  position: number;
   href: string;
   onAdd: () => Promise<void>;
   renderItem?: ProductListProps["renderItem"];
 }) {
   const { texts, locale } = useListContext();
+  const analytics = useContext(CardAnalyticsContext);
+  const element = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (element.current == null) {
+      return;
+    }
+    return analytics.observe(element.current, product.id, position);
+  }, [analytics, product.id, position]);
+  const trackClick = useCallback(
+    () => analytics.clicked(product, position),
+    [analytics, product, position],
+  );
   const card = useSlot(
     "card",
     "relative flex flex-col overflow-hidden border transition-colors",
@@ -202,7 +250,11 @@ function ProductCard({
 
   if (renderItem != null) {
     return (
-      <li {...card} data-unavailable={product.available ? undefined : ""}>
+      <li
+        ref={element}
+        {...card}
+        data-unavailable={product.available ? undefined : ""}
+      >
         {renderItem(product, {
           href,
           price: formattedPrice,
@@ -210,6 +262,7 @@ function ProductCard({
           texts,
           locale,
           addToCart: onAdd,
+          trackClick,
         })}
       </li>
     );
@@ -223,8 +276,8 @@ function ProductCard({
       : null;
 
   return (
-    <li {...card} data-unavailable={product.available ? undefined : ""}>
-      <a {...cardLink} href={href}>
+    <li ref={element} {...card} data-unavailable={product.available ? undefined : ""}>
+      <a {...cardLink} href={href} onClick={trackClick}>
         {imageSource != null ? (
           <div {...imageFrame}>
             <img
@@ -272,7 +325,7 @@ function ProductCard({
         ) : product.addToCart ? (
           <AddToCartButton product={product} onAdd={onAdd} />
         ) : (
-          <a {...selectButton} href={href}>
+          <a {...selectButton} href={href} onClick={trackClick}>
             {product.variantCount > 1 ? texts.chooseOptions : texts.viewProduct}
           </a>
         )}
@@ -365,6 +418,47 @@ function ProductListContent({
   const { texts } = useListContext();
   const { products, page, pageCount, setPage, isLoading, error, refetch } =
     useProducts(options);
+  const instrument = useInstrumentContext();
+  // The search text is never reported, only that the list was searched.
+  const listId = options.search?.trim() ? "search" : "catalog";
+  const pageSize = clampPageSize(options.pageSize);
+
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current || isLoading || error != null) {
+      return;
+    }
+    viewed.current = true;
+    instrument.track("product_list_viewed", {
+      list_id: listId,
+      item_count: products.length,
+    });
+  }, [instrument, isLoading, error, listId, products.length]);
+
+  const impressions = useMemo(
+    () =>
+      createImpressionTracker(({ productIds, positions }) =>
+        instrument.track("product_impression", {
+          list_id: listId,
+          product_ids: productIds,
+          positions,
+        }),
+      ),
+    [instrument, listId],
+  );
+  useEffect(() => () => impressions.destroy(), [impressions]);
+  const cardAnalytics = useMemo<CardAnalytics>(
+    () => ({
+      observe: impressions.observe,
+      clicked: (product, position) =>
+        instrument.track(
+          "product_clicked",
+          { list_id: listId, position },
+          { product_id: product.id },
+        ),
+    }),
+    [impressions, instrument, listId],
+  );
 
   // After a page change by the user, move focus to the products (the button
   // that was pressed stays where it is, but the content above it changes) and
@@ -394,15 +488,21 @@ function ProductListContent({
 
   const { projectID, host } = options;
   const addFor = useCallback(
-    (product: PublicListProduct) => () =>
-      onAddToCart != null
-        ? Promise.resolve(onAddToCart(product))
-        : addProductToCart(product, {
-            projectID,
-            host,
-            showCart: showCartOnAdd,
-          }),
-    [onAddToCart, projectID, host, showCartOnAdd],
+    (product: PublicListProduct) => async () => {
+      if (onAddToCart != null) {
+        // The list reports the add itself; a cart helper called inside must not report it again.
+        await withCartAnalyticsMuted(() => onAddToCart(product));
+        trackProductAdded(instrument, product);
+        return;
+      }
+      await addProductToCart(product, {
+        projectID,
+        host,
+        showCart: showCartOnAdd,
+        analytics: instrument,
+      });
+    },
+    [onAddToCart, projectID, host, showCartOnAdd, instrument],
   );
 
   let body: ReactNode;
@@ -431,10 +531,11 @@ function ProductListContent({
         aria-busy={isLoading || undefined}
         className={cn(grid.className, isLoading && "opacity-60")}
       >
-        {products.map((product) => (
+        {products.map((product, index) => (
           <ProductCard
             key={product.id}
             product={product}
+            position={(page - 1) * pageSize + index}
             href={productHref(product)}
             onAdd={addFor(product)}
             renderItem={renderItem}
@@ -445,21 +546,23 @@ function ProductListContent({
   }
 
   return (
-    <div
-      ref={content}
-      tabIndex={-1}
-      className="p-1 outline-none scroll-mt-4"
-    >
-      {body}
-      {pageCount > 1 && error == null ? (
-        <Pagination
-          page={page}
-          pageCount={pageCount}
-          isLoading={isLoading}
-          onPage={changePage}
-        />
-      ) : null}
-    </div>
+    <CardAnalyticsContext.Provider value={cardAnalytics}>
+      <div
+        ref={content}
+        tabIndex={-1}
+        className="p-1 outline-none scroll-mt-4"
+      >
+        {body}
+        {pageCount > 1 && error == null ? (
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            isLoading={isLoading}
+            onPage={changePage}
+          />
+        ) : null}
+      </div>
+    </CardAnalyticsContext.Provider>
   );
 }
 
@@ -486,8 +589,14 @@ export function ProductList({
   onAddToCart,
   showCartOnAdd = true,
   className,
+  analytics,
   ...options
 }: ProductListProps) {
+  const instrument: Instrument = useInstrument(
+    options.projectID,
+    analytics,
+    "catalog",
+  );
   const locale = options.locale ?? DEFAULT_LOCALE;
   const resolvedAppearance = useMemo(
     () => resolveProductListAppearance(appearance),
@@ -504,6 +613,7 @@ export function ProductList({
   const root = getProductListSlotAppearance(resolvedAppearance, "root");
 
   return (
+    <InstrumentProvider value={instrument}>
     <ProductListContext.Provider value={context}>
       <div
         data-bitsnap-products="root"
@@ -527,5 +637,6 @@ export function ProductList({
         />
       </div>
     </ProductListContext.Provider>
+    </InstrumentProvider>
   );
 }

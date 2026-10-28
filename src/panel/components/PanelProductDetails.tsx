@@ -6,6 +6,7 @@ import {
   type UserPanelGetAudiobookDetailsDownloadURLsResponse_AudiobookDownloadDetails,
   type UserProduct,
 } from "../../gen/proto/public/v1/public_api_pb";
+import { useInstrumentContext } from "../../analytics/instrument";
 import { cn } from "../../lib/utils";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { Button } from "../../ui/button";
@@ -42,6 +43,13 @@ const PanelProductDetails = ({
   onOpenCourse,
 }: PanelProductDetailsProps) => {
   const productType: UserProductType = product.productType;
+  const instrument = useInstrumentContext();
+  const trackDownload = () =>
+    instrument.track(
+      "panel_download",
+      {},
+      { product_id: product.productId.length <= 64 ? product.productId : null },
+    );
 
   const audioPlayerRef = useRef<AudioPlayerMethods>(null!);
   const [filesRefAnimation] = useAutoAnimate();
@@ -241,6 +249,7 @@ const PanelProductDetails = ({
                       className="flex w-fit items-center gap-2 rounded-md bg-neutral-800 px-3 py-2 text-neutral-200 dark:bg-neutral-200 dark:text-neutral-800"
                       href={el}
                       download
+                      onClick={trackDownload}
                     >
                       {`Plik numer ${index + 1}`}
                       <Download width={14} height={14} />
@@ -399,7 +408,10 @@ const PanelProductDetails = ({
                               (audioResponse as { isDownloadable?: boolean })
                                 .isDownloadable &&
                               chapter.downloadableUrl && (
-                                <a href={chapter.downloadableUrl}>
+                                <a
+                                  href={chapter.downloadableUrl}
+                                  onClick={trackDownload}
+                                >
                                   <Download width={14} height={14} />
                                 </a>
                               )}

@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { useState } from "react";
 
 import { Transport } from "@connectrpc/connect";
+import { clientHeaderInterceptor } from "./lib/client-header";
 import { HOST, setCustomHost } from "./components/checkout/constants";
 import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
 import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
@@ -45,6 +46,7 @@ function createRpcTransport(host: string): Transport {
   return createConnectTransport({
     baseUrl: host + "/api/rpc",
     useBinaryFormat: true,
+    interceptors: [clientHeaderInterceptor],
     // @ts-ignore
     fetch: async (input, init?) => {
       return fetch(input, {

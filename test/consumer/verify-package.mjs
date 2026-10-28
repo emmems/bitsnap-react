@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 /**
  * Packaging check for the built output.
@@ -17,6 +18,28 @@ const dist = join(packageRoot, "dist");
 const packageJSON = JSON.parse(
   readFileSync(join(packageRoot, "package.json"), "utf8"),
 );
+
+/**
+ * Source of a dist file plus every `chunk-*` file it imports or requires,
+ * followed transitively. Returns the concatenated text and the files read.
+ */
+function readWithChunks(file) {
+  const seen = new Set();
+  const queue = [file];
+  const texts = [];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const text = readFileSync(join(dist, current), "utf8");
+    texts.push(text);
+    const base = dirname(current);
+    for (const match of text.matchAll(/(?:from\s*|import\s*\(\s*|require\(\s*|import\s*)["'](\.{1,2}\/[^"']*chunk-[^"']+)["']/g)) {
+      queue.push(join(base, match[1]));
+    }
+  }
+  return { text: texts.join("\n"), files: [...seen] };
+}
 
 const requiredFiles = [
   "index.js",
@@ -35,6 +58,16 @@ const requiredFiles = [
   "course.mjs",
   "course.d.ts",
   "course.d.mts",
+  "consent.js",
+  "consent.mjs",
+  "consent.d.ts",
+  "consent.d.mts",
+  "embed/consent.js",
+  "analytics.js",
+  "analytics.mjs",
+  "analytics.d.ts",
+  "analytics.d.mts",
+  "embed/analytics.js",
 ];
 
 for (const file of requiredFiles) {
@@ -251,6 +284,88 @@ assert.ok(
     requests[0].body.includes(token),
     "dist/course.js did not find the panel session set up through dist/index.js",
   );
+}
+
+// Bitsnap Consent: the subpath renders nothing on the server and does not touch
+// the DOM on import; the standalone script is self-contained and small.
+{
+  const require = createRequire(import.meta.url);
+  const { renderToString } = require("react-dom/server");
+  const { createElement } = require("react");
+  const consentNames = ["BitsnapConsent", "useConsent", "createConsent", "mergeConfig", "mergeTexts"];
+  const esmConsent = await import(join(dist, "consent.mjs"));
+  const cjsConsent = require(join(dist, "consent.js"));
+  for (const name of consentNames) {
+    assert.equal(typeof esmConsent[name], "function", `missing consent export ${name} in dist/consent.mjs`);
+    assert.equal(typeof cjsConsent[name], "function", `missing consent export ${name} in dist/consent.js`);
+  }
+  assert.equal(renderToString(createElement(cjsConsent.BitsnapConsent, { projectKey: "pk" })), "");
+
+  const embed = readFileSync(join(dist, "embed/consent.js"));
+  const embedText = embed.toString("utf8");
+  assert.ok(!/require\(|from"react/.test(embedText), "dist/embed/consent.js must not import anything");
+  assert.ok(!embedText.includes("react-dom"), "dist/embed/consent.js must not bundle React");
+  const gzipped = gzipSync(embed, { level: 9 }).length;
+  assert.ok(gzipped < 12 * 1024, `dist/embed/consent.js is ${gzipped} bytes gzipped (limit 12288)`);
+}
+
+// Merchant analytics: the subpath is inert on the server, nothing in it or in
+// the standalone script touches cookies or Web Storage, and the script stays small.
+{
+  const require = createRequire(import.meta.url);
+  const { renderToString } = require("react-dom/server");
+  const { createElement } = require("react");
+  const analyticsNames = [
+    "createTracker",
+    "initTracker",
+    "getTracker",
+    "resetTracker",
+    "BitsnapAnalyticsProvider",
+    "useAnalytics",
+    "InstrumentProvider",
+    "useInstrument",
+    "useInstrumentContext",
+    "scoreBucket",
+  ];
+  const esmAnalytics = await import(join(dist, "analytics.mjs"));
+  const cjsAnalytics = require(join(dist, "analytics.js"));
+  for (const name of analyticsNames) {
+    assert.equal(typeof esmAnalytics[name], "function", `missing analytics export ${name} in dist/analytics.mjs`);
+    assert.equal(typeof cjsAnalytics[name], "function", `missing analytics export ${name} in dist/analytics.js`);
+  }
+  const tree = (analytics) =>
+    createElement(
+      analytics.BitsnapAnalyticsProvider,
+      { projectKey: "Ab12Cd" },
+      createElement("p", null, "child"),
+    );
+  assert.equal(renderToString(tree(cjsAnalytics)), "<p>child</p>");
+  assert.equal(renderToString(tree(esmAnalytics)), "<p>child</p>");
+  const outside = cjsAnalytics.useAnalytics;
+  assert.equal(typeof outside, "function");
+
+  const declaration = readFileSync(join(dist, "analytics.d.ts"), "utf8");
+  for (const name of ["BitsnapAnalyticsProviderProps", "TrackerOptions", "EventProps"]) {
+    assert.match(declaration, new RegExp(name), `dist/analytics.d.ts lacks ${name}`);
+  }
+
+  const embed = readFileSync(join(dist, "embed/analytics.js"));
+  const embedText = embed.toString("utf8");
+  assert.ok(!/require\(|from"react/.test(embedText), "dist/embed/analytics.js must not import anything");
+  assert.ok(!embedText.includes("react-dom"), "dist/embed/analytics.js must not bundle React");
+  for (const file of ["embed/analytics.js", "analytics.mjs", "analytics.js"]) {
+    // The entries can be thin stubs that import `chunk-*` files: scan those too.
+    const { text, files } = readWithChunks(file);
+    assert.ok(
+      !/localStorage|sessionStorage|indexedDB|document\.cookie/.test(text),
+      `dist/${file} (with ${files.join(", ")}) refers to cookies or Web Storage`,
+    );
+    if (file !== "embed/analytics.js") {
+      assert.ok(files.length > 1, `dist/${file} imports no chunk: the scan would miss the tracker code`);
+    }
+  }
+  const gzipped = gzipSync(embed, { level: 9 }).length;
+  assert.ok(gzipped < 8 * 1024, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8192)`);
 }
 
 const returnsNames = [

@@ -13,6 +13,7 @@ import type {
   ReturnHistoryEntry,
   ReturnRequestView,
 } from "@/src/gen/proto/public/v1/returns_pb";
+import { useInstrumentContext } from "@/src/analytics/instrument";
 import { rpcProvider } from "@/src/rpc-provider";
 import { isSessionExpiredError, mapReturnsError } from "./errors";
 import { createIdempotencyKey } from "./idempotency";
@@ -412,6 +413,7 @@ export function useCreateReturn(): UseCreateReturnResult {
   const ctx = useReturnsContext("useCreateReturn");
   const queryClient = useQueryClient();
   const mutation = useMutation(rpcProvider.returns.createReturnRequest);
+  const instrument = useInstrumentContext();
   const idempotencyKey = useRef<string | undefined>(undefined);
   const { clearSession } = ctx;
 
@@ -428,6 +430,13 @@ export function useCreateReturn(): UseCreateReturnResult {
         });
         // Quantities and the list of returns changed.
         void queryClient.invalidateQueries({ queryKey: returnsQueryKey() });
+        // The flow has no reason picker yet; the note is free text and never leaves the page.
+        instrument.track(
+          "return_submitted",
+          { reason_code: "unspecified", item_count: input.items.length },
+          // The order id may be an access token: report no order reference.
+          { order_ref: null },
+        );
         return response;
       } catch (error) {
         if (isSessionExpiredError(error)) {
@@ -436,7 +445,7 @@ export function useCreateReturn(): UseCreateReturnResult {
         throw error;
       }
     },
-    [ctx.projectID, ctx.token, mutation, queryClient, clearSession],
+    [ctx.projectID, ctx.token, mutation, queryClient, clearSession, instrument],
   );
 
   const submit = useCallback(

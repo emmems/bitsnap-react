@@ -7,7 +7,8 @@ import {
   Package,
   Truck,
 } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { useInstrument, type AnalyticsOption } from "../../analytics/instrument";
 import { rpcProvider, useMutation, useQuery } from "../../rpc-provider";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
@@ -22,6 +23,11 @@ interface Props {
   initialEmail?: string;
   accessToken?: string;
   onBack?: () => void;
+  /**
+   * Usage statistics for your Bitsnap dashboard (order viewed). Inside
+   * `<Panel>` or `<PanelProvider>` their setting applies unless this is given.
+   */
+  analytics?: AnalyticsOption;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -140,8 +146,10 @@ function PublicOrderPageContent({
   initialEmail,
   onBack,
   accessToken,
+  analytics,
 }: Props) {
   const { theme, projectID } = usePanelConfig();
+  const instrument = useInstrument(projectID, analytics, "order");
 
   const [verifyEmail, setVerifyEmail] = useState(initialEmail || "");
   const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
@@ -165,6 +173,14 @@ function PublicOrderPageContent({
   const order =
     orderData?.result.case === "order" ? orderData.result.value : null;
   const isVerified = order?.isVerified ?? false;
+
+  const viewedOrder = order != null;
+  useEffect(() => {
+    if (viewedOrder) {
+      // The id in the URL may be an access token: report no order reference.
+      instrument.track("panel_order_viewed", {}, { order_ref: null });
+    }
+  }, [instrument, viewedOrder]);
 
   const handleVerifyEmail = () => {
     refetch();

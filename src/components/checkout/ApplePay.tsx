@@ -1,11 +1,24 @@
-import ApplePayButton from "apple-pay-button";
+import ApplePayButtonModule from "apple-pay-button";
 import { PublicApiClient } from "src/public.api.client";
 import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
 import { HOST } from "./constants";
 import { isErr } from "./lib/err";
+import { currentProjectID } from "./project-id";
 import { round } from "./lib/round.number";
 import { useQuery } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import {
+  InstrumentProvider,
+  useInstrument,
+  useInstrumentContext,
+  type AnalyticsOption,
+} from "@/src/analytics/instrument";
+
+// A CommonJS package with a `default` export: bundlers unwrap it, Node's own
+// ESM loader (server rendering of the unbundled library) does not.
+const ApplePayButton: typeof ApplePayButtonModule =
+  (ApplePayButtonModule as unknown as { default?: typeof ApplePayButtonModule })
+    .default ?? ApplePayButtonModule;
 
 type AppleButtonType =
   | "plain"
@@ -46,6 +59,12 @@ export type Props = {
     metadata?: { [key: string]: string | undefined };
   }[];
   onClick?: () => Promise<void>;
+  /**
+   * Usage statistics for your Bitsnap dashboard (Apple Pay clicks and
+   * results). On by default; `false` turns it off. Inside `<BitsnapCheckout>`
+   * the checkout's setting applies unless this is given.
+   */
+  analytics?: AnalyticsOption;
 };
 
 function ApplePayButtonComponent({
@@ -66,6 +85,7 @@ function ApplePayButtonComponent({
     setPostalCode,
     clearCart,
   } = useCartProvider();
+  const instrument = useInstrumentContext();
   const { data: isApplePayAvailable } = useQuery({
     queryKey: ["is-apple-pay-available"],
     queryFn: checkIfApplePayIsAvailable,
@@ -81,6 +101,19 @@ function ApplePayButtonComponent({
   }));
 
   async function beginSession() {
+    let reported = false;
+    const report = (outcome: "success" | "fail" | "cancel") => {
+      if (reported) {
+        return;
+      }
+      reported = true;
+      instrument.track("apple_pay_result", { outcome });
+    };
+    instrument.track("apple_pay_clicked", {});
+    instrument.track("payment_method_selected", {
+      gateway: "apple_pay",
+      method: "apple_pay",
+    });
     sendAnalyticEvent({
       event: "initiateCheckout",
       items: items.map((el) => ({
@@ -147,11 +180,13 @@ function ApplePayButtonComponent({
     const apRequest = await getApplePayPaymentRequest({ expectedItems });
     if (isErr(apRequest)) {
       console.error("Error creating ApplePaySession:", apRequest.error);
+      report("fail");
       return;
     }
 
     session.oncancel = (event) => {
       console.log("ApplePaySession cancelled", event);
+      report("cancel");
     };
 
     session.onvalidatemerchant = async (event) => {
@@ -178,6 +213,9 @@ function ApplePayButtonComponent({
 
     session.onshippingmethodselected = async (event) => {
       console.log("shipping method selected", event);
+      instrument.track("delivery_method_selected", {
+        method: event.shippingMethod.identifier,
+      });
       await setDeliveryMethod(event.shippingMethod.identifier);
       const apRequest = await getApplePayPaymentRequest({ expectedItems });
       console.log("apRequest", apRequest);
@@ -247,6 +285,10 @@ function ApplePayButtonComponent({
     };
 
     session.onpaymentauthorized = async (event) => {
+      instrument.track("payment_submitted", {
+        gateway: "apple_pay",
+        method: "apple_pay",
+      });
       try {
         const result = await completeApplePayPayment({
           token: event.payment.token,
@@ -255,6 +297,7 @@ function ApplePayButtonComponent({
         });
         if (isErr(result)) {
           console.log("apple pay error", result);
+          report("fail");
           session.completePayment({
             status: ApplePaySession.STATUS_FAILURE,
           });
@@ -266,6 +309,7 @@ function ApplePayButtonComponent({
             open(result.redirectURL, "_self");
           }, 2000);
         }
+        report(result.isSuccess ? "success" : "fail");
         session.completePayment({
           status: result.isSuccess
             ? ApplePaySession.STATUS_SUCCESS
@@ -274,6 +318,7 @@ function ApplePayButtonComponent({
 
         result.isSuccess && clearCart();
       } catch (e) {
+        report("fail");
         session.completePayment({
           status: ApplePaySession.STATUS_FAILURE,
         });
@@ -295,12 +340,17 @@ function ApplePayButtonComponent({
 }
 
 function Wrapper(props: Props) {
+  const instrument = useInstrument(
+    currentProjectID(),
+    props.analytics,
+    "cart",
+  );
   return (
-    <>
+    <InstrumentProvider value={instrument}>
       <CartProvider>
         <ApplePayButtonComponent {...props} />
       </CartProvider>
-    </>
+    </InstrumentProvider>
   );
 }
 export default Wrapper;

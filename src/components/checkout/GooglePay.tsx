@@ -1,9 +1,16 @@
 import GooglePayButton from "@google-pay/button-react";
-import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
+import CartProvider, { useCartProvider } from "./CartProvider";
 import { isErr } from "./lib/err";
+import { currentProjectID } from "./project-id";
 import { Spinner } from "@/src/ui/spinner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import {
+  InstrumentProvider,
+  useInstrument,
+  useInstrumentContext,
+  type AnalyticsOption,
+} from "@/src/analytics/instrument";
 
 export type Props = {
   test?: boolean;
@@ -20,6 +27,12 @@ export type Props = {
     isDeliverable?: boolean;
     metadata?: { [key: string]: string | undefined };
   }[];
+  /**
+   * Usage statistics for your Bitsnap dashboard. On by default; `false` turns
+   * it off. Inside `<BitsnapCheckout>` the checkout's setting applies unless
+   * this is given.
+   */
+  analytics?: AnalyticsOption;
 };
 
 function GooglePayButtonComponent({
@@ -40,6 +53,7 @@ function GooglePayButtonComponent({
     clearCart,
   } = useCartProvider();
 
+  const instrument = useInstrumentContext();
   const { data: googlePayConfiguration } = useQuery({
     queryKey: [
       "get-google-pay-configuration",
@@ -78,6 +92,12 @@ function GooglePayButtonComponent({
         buttonColor={buttonColor}
         style={style}
         existingPaymentMethodRequired={true}
+        onClick={() =>
+          instrument.track("payment_method_selected", {
+            gateway: "google_pay",
+            method: "google_pay",
+          })
+        }
         environment={test === true ? "TEST" : "PRODUCTION"}
         onPaymentDataChanged={async (paymentData) => {
           sendAnalyticEvent({
@@ -118,6 +138,10 @@ function GooglePayButtonComponent({
         }}
         paymentRequest={googlePayConfiguration.config}
         onLoadPaymentData={async (paymentRequest) => {
+          instrument.track("payment_submitted", {
+            gateway: "google_pay",
+            method: "google_pay",
+          });
           try {
             const result = await completeGooglePayPaymentAsync({
               paymentData: paymentRequest,
@@ -142,12 +166,18 @@ function GooglePayButtonComponent({
 }
 
 function Wrapper(props: Props) {
+  const instrument = useInstrument(
+    currentProjectID(),
+    props.analytics,
+    "cart",
+  );
   return (
-    <>
+    <InstrumentProvider value={instrument}>
       <CartProvider>
         <GooglePayButtonComponent {...props} />
       </CartProvider>
-    </>
+    </InstrumentProvider>
   );
 }
+
 export default Wrapper;

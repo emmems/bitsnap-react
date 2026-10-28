@@ -2,6 +2,8 @@ import Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
+import { newMilestones } from "@/src/analytics/instrument";
+import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
 import { PROGRESS_SAVE_INTERVAL_MS } from "./logic";
 
@@ -20,6 +22,8 @@ type VideoPlayerProps = {
   /** Length known from the lesson, used until the player knows it. */
   durationHint?: number;
   autoPlay?: boolean;
+  /** Lesson the video belongs to; enables the `video_progress` statistics. */
+  lessonId?: string;
   /** Reports the position every ~15 s while playing, on pause and at the end. */
   onReport?: (report: PlaybackReport) => void;
   onEnded?: () => void;
@@ -42,12 +46,16 @@ export function VideoPlayer({
   startAt = 0,
   durationHint = 0,
   autoPlay = false,
+  lessonId,
   onReport,
   onEnded,
   onExpired,
   className,
 }: VideoPlayerProps) {
   const { texts } = useCourseView();
+  const track = useCourseTrack();
+  const trackRef = useRef(track);
+  trackRef.current = track;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -139,8 +147,37 @@ export function VideoPlayer({
       // `ended` has its own report.
       if (!video.ended) report("pause");
     };
+    // Milestones count only what was played through: a jump forward does not
+    // report the parts that were skipped, and each one is sent once per view.
+    const milestones = new Set<number>();
+    let lastTime = video.currentTime;
+    let watchedTo = 0;
+    const sendMilestones = (percent: number) => {
+      if (lessonId == null) {
+        return;
+      }
+      for (const milestone of newMilestones(percent, milestones)) {
+        trackRef.current("video_progress", { lesson_id: lessonId, milestone });
+      }
+    };
+    const onTimeUpdate = () => {
+      const now = video.currentTime;
+      const duration = Number.isFinite(video.duration)
+        ? video.duration
+        : callbacks.current.durationHint;
+      if (duration > 0 && !video.seeking && now >= lastTime && now - lastTime <= 2) {
+        watchedTo = Math.max(watchedTo, now);
+        sendMilestones((watchedTo / duration) * 100);
+      }
+      lastTime = now;
+    };
     const onVideoEnded = () => {
       clearInterval(timer);
+      // Reaching the end counts even after a jump, but only as 100.
+      if (lessonId != null && !milestones.has(100)) {
+        milestones.add(100);
+        trackRef.current("video_progress", { lesson_id: lessonId, milestone: 100 });
+      }
       report("ended");
       callbacks.current.onEnded?.();
     };
@@ -154,6 +191,7 @@ export function VideoPlayer({
     video.addEventListener("pause", onPause);
     video.addEventListener("ended", onVideoEnded);
     video.addEventListener("error", onVideoError);
+    video.addEventListener("timeupdate", onTimeUpdate);
 
     return () => {
       clearInterval(timer);
@@ -161,6 +199,7 @@ export function VideoPlayer({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onVideoEnded);
       video.removeEventListener("error", onVideoError);
+      video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("loadedmetadata", start);
       // Leaving the lesson mid-video keeps the position.
       if (!video.ended && video.currentTime > 0) report("leave", video);

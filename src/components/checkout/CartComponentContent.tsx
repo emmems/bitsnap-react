@@ -1,5 +1,6 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import React from "react";
+import { useInstrumentContext } from "@/src/analytics/instrument";
 import { useCartProvider } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
 import { isErr } from "./lib/err";
@@ -24,6 +25,7 @@ const CartComponentContent = ({
   locale?: string;
 }) => {
   const provider = useCartProvider();
+  const instrument = useInstrumentContext();
   const currentLocale = locale ?? getLocale();
 
   const productList = useCheckoutSlot("productList");
@@ -111,8 +113,58 @@ const CartComponentContent = ({
       ? countryData
       : undefined;
 
+  // One `cart_opened` per opening of the drawer, once the cart is loaded.
+  const opened = React.useRef(false);
+  React.useEffect(() => {
+    if (opened.current || isLoading) {
+      return;
+    }
+    opened.current = true;
+    instrument.track("cart_opened", {
+      item_count: products?.reduce((sum, el) => sum + el.quantity, 0) ?? 0,
+      value_minor: sumOfProducts,
+      currency,
+    });
+  }, [isLoading, instrument, products, sumOfProducts, currency]);
+
+  const reportedQuantity = React.useRef(new Map<string, number>());
+  React.useEffect(() => {
+    reportedQuantity.current.clear();
+  }, [products]);
+
+  /** `add_to_cart` / `remove_from_cart` for a quantity change in the drawer. */
+  function trackQuantityChange(id: string, newQuantity: number) {
+    const line = products?.find((el) => el.id === id);
+    if (line?.details == null) {
+      return;
+    }
+    // Quick clicks arrive before the cart is reloaded: count from the last reported quantity.
+    const delta = newQuantity - (reportedQuantity.current.get(id) ?? line.quantity);
+    reportedQuantity.current.set(id, newQuantity);
+    if (delta === 0) {
+      return;
+    }
+    const price = line.details.pricing?.effectivePrice ?? line.details.price;
+    const productID = line.catalogProductID ?? line.productID;
+    instrument.track(
+      delta > 0 ? "add_to_cart" : "remove_from_cart",
+      {
+        qty: Math.abs(delta),
+        value_minor: Math.round(price * Math.abs(delta)),
+        currency: line.details.currency,
+      },
+      {
+        product_id: productID,
+        variant_id: productID !== line.productID ? line.productID : null,
+      },
+    );
+  }
+
+  const startedCheckout = React.useRef(false);
+
   async function shouldUpdate(id: string, newQuantity?: number) {
     if (newQuantity != null) {
+      trackQuantityChange(id, Math.max(0, newQuantity));
       if (newQuantity <= 0) {
         await removeProduct({ id: id });
         await refetch();
@@ -133,6 +185,15 @@ const CartComponentContent = ({
       setErrMsg("");
 
       if (products != null) {
+        if (!startedCheckout.current && products.length > 0) {
+          startedCheckout.current = true;
+          instrument.track("checkout_started", {
+            item_count: products.reduce((sum, el) => sum + el.quantity, 0),
+            checkout_type: "cart",
+            value_minor: sumOfProducts,
+            currency,
+          });
+        }
         try {
           sendAnalyticEvent({
             event: "initiateCheckout",

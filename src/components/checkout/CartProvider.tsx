@@ -13,6 +13,8 @@ import {
 } from "src/gen/proto/public/v1/public_api_pb";
 import { PublicApiClient } from "src/public.api.client";
 import zod from "zod";
+import { getCartInstrument, type Instrument } from "@/src/analytics/instrument";
+import { withClientParam } from "@/src/lib/client-header";
 import { HOST, setCustomHost } from "./constants";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
@@ -42,6 +44,9 @@ type CartProduct = {
   price?: number;
   currency?: string;
   priceVersion?: string;
+
+  /** Where `add_to_cart` is reported; defaults to the mounted `<BitsnapCheckout>`. */
+  analytics?: Instrument;
 };
 
 export interface CartMethods {
@@ -66,6 +71,8 @@ export interface CartMethods {
         quantity: number;
         metadata?: { [key: string]: string | undefined };
         details?: SingleProduct;
+        /** The catalog product, when `productID` is one of its variants. */
+        catalogProductID?: string;
       }[]
   >;
 
@@ -201,6 +208,8 @@ const getProducts: (
       quantity: number;
       metadata?: { [key: string]: string | undefined };
       details?: SingleProduct;
+      /** The catalog product, when `productID` is one of its variants. */
+      catalogProductID?: string;
     }[]
 > = async (
   projectID: string,
@@ -223,7 +232,7 @@ const getProducts: (
   params.set("locale", args?.locale ?? getLocale());
 
   const result = await fetch(
-    buildURL(projectID, `/products?${params.toString()}`),
+    withClientParam(buildURL(projectID, `/products?${params.toString()}`)),
     {
       method: "GET",
     },
@@ -252,6 +261,7 @@ const getProducts: (
           product.productID,
           details,
         ),
+        catalogProductID: details.id,
       },
     ];
   });
@@ -345,6 +355,7 @@ async function addProducts(projectID: string, products: CartProduct[]) {
       metadata: el.metadata,
     })),
   );
+  trackCartAdd(products, latestProducts);
   sendAnalyticEvent({
     event: "addToCart",
     currency: "PLN",
@@ -359,6 +370,27 @@ async function addProducts(projectID: string, products: CartProduct[]) {
   saveCheckout(checkout);
   updateNumberOfProductsInCart();
   return undefined;
+}
+
+/** `add_to_cart` per added line, priced by the backend's answer. */
+function trackCartAdd(
+  added: CartProduct[],
+  latest: { productID: string; details?: SingleProduct; catalogProductID?: string }[],
+) {
+  for (const item of added) {
+    try {
+      const found = latest.find((el) => el.productID === item.productID);
+      const price = found?.details?.pricing?.effectivePrice ?? found?.details?.price ?? item.price;
+      const currency = found?.details?.currency ?? item.currency;
+      if (price == null || currency == null) continue;
+      const productID = found?.catalogProductID ?? item.productID;
+      (item.analytics ?? getCartInstrument()).track(
+        "add_to_cart",
+        { qty: item.quantity, value_minor: Math.round(price * item.quantity), currency },
+        { product_id: productID, variant_id: productID !== item.productID ? item.productID : null },
+      );
+    } catch {}
+  }
 }
 
 function removeProductFromCheckout(ids: string[]) {
@@ -522,9 +554,12 @@ export const getCheckoutMethods: (
     async getAvailableCountries(): Promise<
       Err | { name: string; code: string }[]
     > {
-      const result = await fetch(buildURL(projectID, "/countries"), {
-        method: "GET",
-      });
+      const result = await fetch(
+        withClientParam(buildURL(projectID, "/countries")),
+        {
+          method: "GET",
+        },
+      );
 
       if (result.status != 200) {
         return [];
@@ -577,6 +612,7 @@ export const getCheckoutMethods: (
             [p: string]: string | undefined;
           };
           details?: SingleProduct;
+          catalogProductID?: string;
         }[]
     > {
       return await getProducts(projectID, { locale });

@@ -1,5 +1,11 @@
 import { useEffect } from "react";
 import zod from "zod";
+import {
+  InstrumentProvider,
+  useCartInstrument,
+  useInstrument,
+  type AnalyticsOption,
+} from "@/src/analytics/instrument";
 import type { CheckoutAppearance } from "./appearance";
 import type { CheckoutTexts } from "./texts";
 import CartComponent from "./CartComponent";
@@ -42,6 +48,13 @@ export type BitsnapCartProps = {
    * whatever the locale; omitted keys keep the `pl`/`en` defaults.
    */
   texts?: Partial<CheckoutTexts>;
+  /**
+   * Usage statistics for your Bitsnap dashboard (cart opened, checkout
+   * started, add to cart). On by default; `false` turns it off. An object
+   * lets you forward every event: `{ onEvent }`. Nothing is stored on the
+   * visitor's device.
+   */
+  analytics?: AnalyticsOption;
 };
 
 function BitsnapCart({
@@ -53,7 +66,11 @@ function BitsnapCart({
   numberOfProductsInCartOptions,
   appearance,
   texts,
+  analytics,
 }: BitsnapCartProps) {
+  const instrument = useInstrument(projectID, analytics, "cart");
+  // Cart changes made outside of components (`Bitsnap.addProductToCart`) are reported here.
+  useCartInstrument(instrument);
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
 
@@ -282,15 +299,17 @@ function BitsnapCart({
             </div>
           )}
       </button>
-      <CartComponent
-        isVisible={isCartVisible}
-        locale={locale}
-        appearance={appearance}
-        texts={texts}
-        shouldHide={() => {
-          hideCart();
-        }}
-      />
+      <InstrumentProvider value={instrument}>
+        <CartComponent
+          isVisible={isCartVisible}
+          locale={locale}
+          appearance={appearance}
+          texts={texts}
+          shouldHide={() => {
+            hideCart();
+          }}
+        />
+      </InstrumentProvider>
     </>
   );
 }

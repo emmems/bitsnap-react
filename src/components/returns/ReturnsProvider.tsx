@@ -21,6 +21,11 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { Environment } from "@/src/gen/proto/common/v1/environment_pb";
 import { ReturnsService } from "@/src/gen/proto/public/v1/returns_pb";
+import {
+  InstrumentProvider,
+  useInstrument,
+  type AnalyticsOption,
+} from "@/src/analytics/instrument";
 import { cn } from "@/src/lib/utils";
 import { getRpcTransport, getTransportHost } from "@/src/rpc-provider";
 import type { Transport } from "@connectrpc/connect";
@@ -137,6 +142,13 @@ export type ReturnsProviderProps = {
   panelAccessToken?: string;
   /** Class of the themed root element. */
   className?: string;
+  /**
+   * Usage statistics for your Bitsnap dashboard (return started, return
+   * submitted). On by default; `false` turns it off. An object lets you
+   * forward every event: `{ onEvent }`. Inside `<Panel>` the panel's setting
+   * applies unless this is given. Nothing is stored on the visitor's device.
+   */
+  analytics?: AnalyticsOption;
   children?: ReactNode;
 };
 
@@ -348,8 +360,10 @@ export function ReturnsProvider({
   locale,
   panelAccessToken,
   className,
+  analytics,
   children,
 }: ReturnsProviderProps) {
+  const instrument = useInstrument(projectID, analytics, "returns");
   const existingQueryClient = useContext(QueryClientContext);
   const [ownQueryClient] = useState(() =>
     existingQueryClient == null
@@ -371,6 +385,7 @@ export function ReturnsProvider({
   const resolvedTexts = useMemo(() => mapLegacyTexts(texts), [texts]);
 
   const content = (
+    <InstrumentProvider value={instrument}>
     <TransportProvider transport={transport}>
       <ReturnsAppearanceProvider appearance={resolvedAppearance}>
         <ReturnsTextsProvider texts={resolvedTexts} locale={locale}>
@@ -386,6 +401,7 @@ export function ReturnsProvider({
         </ReturnsTextsProvider>
       </ReturnsAppearanceProvider>
     </TransportProvider>
+    </InstrumentProvider>
   );
 
   return existingQueryClient == null && ownQueryClient != null ? (

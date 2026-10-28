@@ -1,10 +1,16 @@
 import { ChevronLeft, List, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  InstrumentProvider,
+  useInstrument,
+  type AnalyticsOption,
+} from "../analytics/instrument";
 import { usePanelConfig } from "../panel/PanelProvider";
 import type { GetThemeOutput } from "../panel/types";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { accentVars } from "./accent";
+import { useCourseTrack } from "./analytics";
 import { CourseViewProvider, useCourseView } from "./context";
 import { CourseOutline } from "./CourseOutline";
 import { createRpcCourseDataSource } from "./rpc";
@@ -12,6 +18,7 @@ import { LessonPane } from "./LessonPane";
 import {
   fillTemplate,
   findItem,
+  flattenItems,
   getAdjacentItems,
   getAutoplayTarget,
   markLessonCompleted,
@@ -57,6 +64,15 @@ export type PanelCourseProps = {
   /** Brand colors; the panel theme (`setTheme`) by default. */
   theme?: GetThemeOutput;
   className?: string;
+  /**
+   * Usage statistics for your Bitsnap dashboard (course opened, lessons
+   * started and completed, video progress, tests, ratings). On by default;
+   * `false` turns it off, and the creator `preview` never reports. Inside
+   * `<Panel>` the panel's setting applies unless this is given. An object
+   * lets you forward every event: `{ onEvent }`. Nothing is stored on the
+   * visitor's device.
+   */
+  analytics?: AnalyticsOption;
 };
 
 const AUTOPLAY_KEY = "bitsnap-course-autoplay";
@@ -153,10 +169,15 @@ function LessonContainer({
   }
 
   const adjacent = getAdjacentItems(course, item.id);
+  const position =
+    flattenItems(course)
+      .filter((entry) => entry.kind !== "test")
+      .findIndex((entry) => entry.id === item.id) + 1;
   return (
     <LessonPane
       key={lesson.data.id}
       lesson={lesson.data}
+      position={position}
       courseType={course.type}
       prev={lesson.data.prev ?? toRef(adjacent.prev)}
       next={lesson.data.next ?? toRef(adjacent.next)}
@@ -187,6 +208,7 @@ function CourseView({
   onCourseRefresh: () => void;
 }) {
   const { texts, preview } = useCourseView();
+  const track = useCourseTrack();
   const rootRef = useRef<HTMLDivElement>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [autoplay, setAutoplay] = useAutoplayPreference();
@@ -194,6 +216,12 @@ function CourseView({
 
   const currentId = resolveInitialItemId(course, selectedId);
   const item = findItem(course, currentId);
+
+  // Once per opening of the course.
+  useEffect(() => {
+    track("course_opened", {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id]);
 
   const open = (itemId: string, play = false) => {
     setPlayOnOpen(play ? itemId : undefined);
@@ -383,8 +411,10 @@ export function PanelCourse({
   locale,
   theme,
   className,
+  analytics,
 }: PanelCourseProps) {
   const panel = usePanelConfig();
+  const instrument = useInstrument(panel.projectID, analytics, "course");
   const texts = useMemo(
     () => getCourseTexts(textOverrides, locale),
     [textOverrides, locale],
@@ -417,8 +447,20 @@ export function PanelCourse({
 
   const style = accentVars(theme?.colors ?? panel.theme?.colors);
 
+  const courseId = course.status === "success" ? course.data.id : undefined;
+  const viewValue = useMemo(
+    () => ({
+      dataSource,
+      texts,
+      preview,
+      analytics: { courseId, instrument },
+    }),
+    [dataSource, texts, preview, courseId, instrument],
+  );
+
   return (
-    <CourseViewProvider value={{ dataSource, texts, preview }}>
+    <InstrumentProvider value={instrument}>
+    <CourseViewProvider value={viewValue}>
       <div
         data-bitsnap-course
         data-course-type={course.status === "success" ? course.data.type : undefined}
@@ -462,6 +504,7 @@ export function PanelCourse({
         )}
       </div>
     </CourseViewProvider>
+    </InstrumentProvider>
   );
 }
 

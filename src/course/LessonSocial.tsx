@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
 import { fillTemplate } from "./logic";
 import { RatingStars } from "./RatingStars";
@@ -17,6 +18,7 @@ export function LessonRatingBox({
   initial: LessonRating;
 }) {
   const { dataSource, texts, preview } = useCourseView();
+  const track = useCourseTrack();
   const [rating, setRating] = useState(initial);
   const [score, setScore] = useState(initial.myRating);
   const [comment, setComment] = useState("");
@@ -31,6 +33,7 @@ export function LessonRatingBox({
     try {
       setRating(await dataSource.rate(lessonId, score, comment.trim()));
       setState("saved");
+      track("lesson_rated", { lesson_id: lessonId, rating: score });
     } catch (e) {
       setError(e);
       setState("error");

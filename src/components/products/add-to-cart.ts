@@ -1,3 +1,4 @@
+import { noopInstrument, type Instrument } from "@/src/analytics/instrument";
 import { DEFAULT_HOST, HOST, setCustomHost } from "../checkout/constants";
 import { planCartTarget } from "./cart-target";
 import type { PublicListProduct } from "./fetch";
@@ -8,7 +9,25 @@ export type AddToCartTarget = {
   host?: string;
   /** Open the cart drawer afterwards. */
   showCart: boolean;
+  /** Where `add_to_cart` is reported. Omitted: nothing is reported. */
+  analytics?: Instrument;
 };
+
+/** `add_to_cart` for a product of the list (quantity 1, price in minor units). */
+export function trackProductAdded(
+  instrument: Instrument,
+  product: PublicListProduct,
+) {
+  const variant =
+    product.cartItemId != null && product.cartItemId !== product.id
+      ? product.cartItemId
+      : null;
+  instrument.track(
+    "add_to_cart",
+    { qty: 1, value_minor: product.price, currency: product.currency },
+    { product_id: product.id, variant_id: variant },
+  );
+}
 
 /**
  * Default "add to cart" action of `ProductList`: `Bitsnap.addProductToCart`
@@ -55,10 +74,15 @@ export async function addProductToCart(
       name: product.name,
       price: product.price,
       currency: product.currency,
+      // Reported below from the list's own data.
+      analytics: noopInstrument,
     },
   );
   if (error != null) {
     throw new Error("Could not add the product to the cart");
+  }
+  if (target.analytics != null) {
+    trackProductAdded(target.analytics, product);
   }
 
   if (target.showCart) {

@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Download, Paperclip } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
+import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
 import { formatBytes, isPlaybackComplete, resumePosition } from "./logic";
 import { LessonQuestions, LessonRatingBox } from "./LessonSocial";
@@ -12,6 +13,8 @@ import { VideoPlayer, type PlaybackReport } from "./VideoPlayer";
 
 type LessonPaneProps = {
   lesson: Lesson;
+  /** 1-based place of the lesson among the lessons of the course. */
+  position?: number;
   courseType: Course["type"];
   /** Previous / next item taken from the course structure. */
   prev?: ItemRef;
@@ -34,6 +37,7 @@ type LessonPaneProps = {
  */
 export function LessonPane({
   lesson,
+  position = 0,
   courseType,
   prev,
   next,
@@ -46,11 +50,18 @@ export function LessonPane({
   onUrlsExpired,
 }: LessonPaneProps) {
   const { dataSource, texts, preview } = useCourseView();
+  const track = useCourseTrack();
   const [completed, setCompleted] = useState(lesson.completed);
   const completedRef = useRef(lesson.completed);
   const lastSavedPosition = useRef<number | undefined>(undefined);
   const lastKnownPosition = useRef(lesson.positionSeconds);
   const [saving, setSaving] = useState(false);
+
+  // The pane lives as long as one view of the lesson.
+  useEffect(() => {
+    track("lesson_started", { lesson_id: lesson.id, position });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson.id]);
 
   // The signed URLs of a long-open lesson expire; refresh them before then.
   const expiresAt = lesson.urlsExpireAt?.getTime();
@@ -85,6 +96,7 @@ export function LessonPane({
     if (saved.completed && !completedRef.current) {
       completedRef.current = true;
       setCompleted(true);
+      track("lesson_completed", { lesson_id: lesson.id, position });
     }
     onProgressSaved(lesson.id, saved);
   }
@@ -139,6 +151,7 @@ export function LessonPane({
         <VideoPlayer
           src={lesson.video.hlsUrl}
           poster={lesson.video.posterUrl}
+          lessonId={lesson.id}
           startAt={resumePosition(
             lastKnownPosition.current,
             lesson.video.durationSeconds,

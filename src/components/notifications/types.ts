@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { AnalyticsOption } from "@/src/analytics/instrument";
 
 export type PublicNotificationGroup = {
   id: string;
@@ -146,4 +147,17 @@ export interface NotificationsComponentPublicProps {
    * Custom CSS class names for various component sections (for easier styling).
    */
   className?: ComponentClassNames;
+
+  /**
+   * Public project ID used for usage statistics. Defaults to the one set by
+   * `<BitsnapCheckout projectID>`.
+   */
+  projectID?: string;
+
+  /**
+   * Usage statistics for your Bitsnap dashboard (sign-ups). On by default;
+   * `false` turns it off. An object lets you forward every event:
+   * `{ onEvent }`. Nothing is stored on the visitor's device.
+   */
+  analytics?: AnalyticsOption;
 }

@@ -137,3 +137,5 @@ export type {
   PanelScreen,
   PanelSearchParamsType,
 } from "../panel";
+
+export type { AnalyticsOption } from "../analytics/instrument";

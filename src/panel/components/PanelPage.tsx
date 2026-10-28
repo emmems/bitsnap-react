@@ -2,6 +2,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useEffect, useState, type CSSProperties } from "react";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
+import { InstrumentProvider, useInstrument } from "../../analytics/instrument";
 import { usePanelConfig } from "../PanelProvider";
 import { resolvePanelReturnsAppearance } from "../returns-appearance";
 import type { PanelProps } from "../types";
@@ -48,8 +49,10 @@ export type PanelSearchParamsType = {
 const PanelPage = ({
   returnsAppearance,
   returnsTexts,
-}: Pick<PanelProps, "returnsAppearance" | "returnsTexts"> = {}) => {
+  analytics,
+}: Pick<PanelProps, "returnsAppearance" | "returnsTexts" | "analytics"> = {}) => {
   const { projectID, theme, loginURL, host } = usePanelConfig();
+  const instrument = useInstrument(projectID, analytics, "panel");
 
   const accessToken = getPanelSession(projectID, host);
   const email = getPanelEmail(projectID, host);
@@ -193,6 +196,7 @@ useEffect(() => {
   }, [accessToken]);
 
   return (
+    <InstrumentProvider value={instrument}>
     <div
       ref={panelParentRef}
       className="font-inter relative min-h-screen w-screen bg-beige-100 text-black dark:bg-black dark:text-white md:flex"
@@ -276,6 +280,7 @@ useEffect(() => {
         )}
       </main>
     </div>
+    </InstrumentProvider>
   );
 };
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withClientParam } from "../../lib/client-header.ts";
 import { afterEach, describe, it } from "node:test";
 import {
   buildProductListURL,
@@ -80,6 +81,14 @@ describe("page helpers", () => {
   });
 });
 
+describe("withClientParam", () => {
+  it("appends bs_client with ? or &, before any fragment", () => {
+    assert.match(withClientParam("https://x.test/a"), /^https:\/\/x\.test\/a\?bs_client=bitsnap-react%40\d+\.\d+\.\d+/);
+    assert.match(withClientParam("https://x.test/a?ids=1,2"), /^https:\/\/x\.test\/a\?ids=1,2&bs_client=bitsnap-react%40/);
+    assert.match(withClientParam("https://x.test/a?b=1#top"), /\?b=1&bs_client=[^#]+#top$/);
+  });
+});
+
 describe("fetchProductList", () => {
   it("requests without credentials and returns the payload", async () => {
     const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -94,6 +103,22 @@ describe("fetchProductList", () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].init?.credentials, "omit");
     assert.equal(calls[0].init?.signal, signal);
+  });
+
+  it("tags the request with a query param, not a custom header (no preflight)", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ items: [], totalCount: 0 }), { status: 200 });
+    }) as typeof fetch;
+
+    await fetchProductList(base);
+    assert.match(calls[0].url, /[?&]bs_client=bitsnap-react%40\d/);
+    const headers = Object.keys((calls[0].init?.headers ?? {}) as Record<string, string>);
+    assert.deepEqual(
+      headers.filter((name) => name.toLowerCase().startsWith("x-bitsnap")),
+      [],
+    );
   });
 
   it("rejects non-2xx responses with the status", async () => {

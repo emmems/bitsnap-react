@@ -1099,3 +1099,133 @@ The panel provides the following screens:
 
 - Toggle all notifications
 - Notification preferences
+
+## Merchant analytics (`bitsnap-react/analytics`)
+
+A small, cookieless tracker that sends buyer-behaviour events (page views, product views, cart and checkout steps) to Bitsnap, so your dashboard can show visits, sources and funnels. It never uses cookies, `localStorage`, `sessionStorage` or IndexedDB: events live in memory and the visitor is recognised on the server by a daily-rotating hash that is never stored.
+
+What an event holds: the event name, a timestamp, the page host and path (no query string, no fragment), the referrer's host, `utm_*` and `ref` from the landing URL, ids of the product/variant/order involved, and a few numbers (price in minor units, quantity). It never holds names, emails, phone numbers, addresses, IPs, coupon codes, form values or free text.
+
+Tracking stays off when `enabled` is `false`, when the browser sends Global Privacy Control (`navigator.globalPrivacyControl`), or when the browser is automated (`navigator.webdriver`). When [Bitsnap Consent](#cookie-consent-bitsnap-consent) is on the page and the visitor rejected analytics, the tracker stops and drops what it had queued. Without a stored choice it keeps going, because it stores nothing on the device.
+
+### Script tag
+
+```html
+<script src="https://bitsnap.pl/embed/v1/analytics.js" data-project="pk_…" defer></script>
+```
+
+The standalone file is `dist/embed/analytics.js` (about 6 KB gzipped, no React). It sends a `page_view` on load and on every `history.pushState`/`replaceState`/back-forward navigation. Attributes: `data-project` (required), `data-env="live|test"`, `data-endpoint` (default `https://collect.bitsnap.pl`), `data-auto="on|off"` (default `on`), `data-page-type="shop|catalog|product|cart|checkout|…"`.
+
+Bitsnap's own pages set three more: `data-source="script|storefront|dashboard"` (default `script`), `data-channel="embed|hosted|custom_domain"` (default `embed`) and `data-visitor-id`, a 22-character id that is only honoured with `data-source="dashboard"` (on any other source the collector computes the visitor id itself). With `data-source="dashboard"` the script sends `app_page_view` (with the route) instead of `page_view`. Unknown values fall back to the defaults.
+
+```js
+window.bitsnap.track("product_view", { price_minor: 4900, currency: "PLN", availability: "in_stock" }, { product_id: "…" });
+window.bitsnap.page("product");
+
+// Before the script has loaded, queue calls instead:
+(window.bitsnap = window.bitsnap || { q: [] }).q.push(["track", "variant_selected", {}, { product_id: "…" }]);
+```
+
+### React
+
+```tsx
+import { BitsnapAnalyticsProvider, useAnalytics } from "bitsnap-react/analytics";
+
+<BitsnapAnalyticsProvider projectKey="pk_…" onEvent={(event) => myTool.track(event.event, event.props)}>
+  <App />
+</BitsnapAnalyticsProvider>;
+
+function Product({ id }: { id: string }) {
+  const { track } = useAnalytics();
+  // track("product_view", { price_minor, currency, availability }, { product_id: id })
+}
+```
+
+`useAnalytics()` returns no-ops outside the provider and on the server. `onEvent` receives every event before it is sent, so you can forward it to your own tools after your own consent step; it is not called while tracking is off. The tracker is a per-page singleton: the first provider's `projectKey`, `env` and `endpoint` win.
+
+Without React, use the core directly: `initTracker({ projectKey })` returns the page's tracker (`track`, `page`, `flush`, `setEnabled`, `onEvent`). Events are batched: sent every 5 seconds, at 20 events, and when the page is hidden (`navigator.sendBeacon`, with a `fetch` `keepalive` fallback). Failed sends are not retried.
+
+### Automatic analytics in components
+
+The Bitsnap components report their own events, so a project key is all you need. Each component takes an `analytics` prop:
+
+```tsx
+<ProductList projectID="…" />                                  // tracks (default)
+<ProductList projectID="…" analytics={false} />                // opt out
+<ProductList projectID="…" analytics={{ onEvent: (e) => myTool.track(e.event, e.props), env: "test" }} />
+```
+
+`onEvent` receives only the events of that component. `env: "test"` events are stored but never reach the merchant's stats. Parts inside a component inherit its setting; a surrounding `<BitsnapAnalyticsProvider>` owns the tracker and its `onEvent` still sees everything. Nothing is written to cookies or Storage, and events carry no personal data (no emails, names, order contents or free text).
+
+| Component | Events |
+| --- | --- |
+| `ProductList` | `product_list_viewed`, `product_impression` (card ≥50% visible), `product_clicked`, `add_to_cart` |
+| `BitsnapCheckout` / `Bitsnap.addProductToCart` | `cart_opened`, `checkout_started`, `add_to_cart`, `remove_from_cart` |
+| `ApplePay` | `apple_pay_clicked`, `payment_method_selected`, `delivery_method_selected`, `payment_submitted`, `apple_pay_result` |
+| `GooglePay` | `payment_method_selected`, `payment_submitted` |
+| Notifications | `availability_signup` |
+| Panel | `panel_login`, `panel_order_viewed`, `panel_download` |
+| Returns | `return_started`, `return_submitted` |
+| Course | `course_opened`, `lesson_started`, `lesson_completed`, `video_progress` (25/50/75/100% of naturally played time), `test_submitted`, `lesson_rated` |
+
+The components do not emit `page_view`, `product_view`, `checkout_step_completed`, `checkout_validation_error`, `coupon_applied` or `coupon_rejected` (the drawer hands over to the hosted checkout). Use `useAnalytics()` or the embed script for page views. Because the tracker is a per-page singleton, the first project key wins: use one project per page. The course sends nothing in creator preview.
+
+For your own components, `useInstrument(projectKey, analytics)` returns the same `{ track }` helper and `<InstrumentProvider value={instrument}>` shares it with the parts below.
+
+## Cookie consent (Bitsnap Consent)
+
+An embeddable cookie banner with equal "Accept all" / "Reject all" buttons, per-category settings, light and dark themes, Polish and English texts, and Google Consent Mode v2. It renders in a Shadow DOM, stores only one first-party cookie (`bitsnap_consent`) and never uses `localStorage`.
+
+### Script tag
+
+```html
+<script src="https://bitsnap.pl/embed/v1/consent.js" data-project="pk_…" defer></script>
+```
+
+The standalone file is `dist/embed/consent.js` (about 9 KB gzipped, no React). Attributes: `data-project`, `data-theme="auto|light|dark"`, `data-locale="auto|pl|en"`, `data-position="bottom|bottom-left|bottom-right"`, `data-privacy-url`, `data-scope="project"`, `data-api-host`, `data-collect-host`, `data-gcm="on|off"`, `data-categories="analytics,marketing"` (used when there is no remote config), `data-reload-on-withdraw="true"`.
+
+For a live preview in a settings page, add `data-preview="on"`: the banner is shown on every load, nothing is read from or written to the cookie, and nothing is sent to the collect host. `data-title` and `data-description` replace the banner heading and text (the same options exist as `preview`, `title` and `description` in the core `ConsentOptions`).
+
+With `data-project` the banner loads its config from `/api/consent/config` (3 s timeout, then defaults) and sends each choice to `<collect host>/consent`. Without it nothing leaves the page.
+
+### React
+
+```tsx
+import { BitsnapConsent, useConsent } from "bitsnap-react/consent";
+
+<BitsnapConsent projectKey="pk_…" locale="pl" privacyPolicyUrl="/polityka-prywatnosci" />;
+
+function CookieSettings() {
+  const { consent, open } = useConsent();
+  return <button onClick={open}>Cookie settings ({consent?.c.marketing ? "marketing on" : "marketing off"})</button>;
+}
+```
+
+`<BitsnapConsent />` renders nothing on the server. A `config` prop (`ConsentConfig`, partial) overrides the project config.
+
+### Loading scripts after consent
+
+```html
+<script type="text/plain" data-bitsnap-consent="marketing" data-src="https://example.com/pixel.js"></script>
+<script type="text/plain" data-bitsnap-consent="analytics">/* inline code */</script>
+<iframe data-bitsnap-consent="marketing" data-src="https://www.youtube.com/embed/…"></iframe>
+```
+
+After consent for the category the placeholder is replaced by a real script (attributes copied, `type` dropped, `data-src` becomes `src`), and an iframe gets its `src`. Categories are `analytics`, `marketing` and `preferences`.
+
+### JavaScript API
+
+```js
+BitsnapConsent.get();                  // null or { id, ts, bv, c: { analytics, marketing, preferences } }
+BitsnapConsent.on("change", (d) => {}); // returns an unsubscribe function; d.action is accept_all | reject_all | custom | withdraw | reset
+BitsnapConsent.open();                 // settings layer; any [data-bitsnap-consent-open] element does the same
+BitsnapConsent.acceptAll(); BitsnapConsent.rejectAll(); BitsnapConsent.accept({ analytics: true });
+BitsnapConsent.reset();                // clears the choice and asks again
+BitsnapConsent.ready;                  // Promise, resolves once config and the stored choice are applied
+```
+
+`window` also receives `CustomEvent("bitsnap:consent", { detail })` on every choice. Categories missing from `accept()` are denied. When a visitor withdraws a category, the cookies listed in `services[].cookies` are deleted (best effort; a trailing `*` matches a prefix), and the page reloads if `reloadOnWithdraw` is set.
+
+### Google Consent Mode v2
+
+If `gtag` or `dataLayer` exists (or `data-gcm="on"`), the script sets `consent default` (everything denied except `security_storage`, `wait_for_update: 500`) before anything else, and `consent update` after each choice: analytics → `analytics_storage`, marketing → `ad_storage`, `ad_user_data`, `ad_personalization`, preferences → `functionality_storage`, `personalization_storage`.

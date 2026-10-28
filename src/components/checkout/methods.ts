@@ -1,3 +1,5 @@
+import type { Instrument } from "@/src/analytics/instrument";
+import { clientHeaders } from "@/src/lib/client-header";
 import { getCheckoutMethods, getLocale, getProjectID } from "./CartProvider";
 import { HOST } from "./constants";
 import { buildURL } from "./helper.methods";
@@ -20,6 +22,8 @@ export namespace Bitsnap {
       name?: string;
       price?: number;
       currency?: string;
+      /** Where `add_to_cart` is reported. Defaults to the mounted `<BitsnapCheckout>`. */
+      analytics?: Instrument;
     },
   ) {
     const projectID = getProjectID();
@@ -63,6 +67,7 @@ export async function createPaymentURL(request: LinkRequest) {
   const result = await fetch(buildURL(projectID, "/buy"), {
     method: "POST",
     headers: {
+      ...clientHeaders,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
@@ -105,6 +110,7 @@ export async function createCheckout(
   }
 
   const headers = {
+    ...clientHeaders,
     "Content-Type": "application/json",
     ...(request.apiKey != null
       ? { Authorization: `Bearer ${request.apiKey}` }

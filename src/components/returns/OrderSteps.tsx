@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useInstrumentContext } from "@/src/analytics/instrument";
 import type { FormEvent } from "react";
 import type {
   ReturnOrderLine,
@@ -202,6 +203,11 @@ export function ReturnsOrderDetail({
   className,
 }: ReturnsOrderDetailProps) {
   useReturnsContext("ReturnsOrderDetail");
+  const instrument = useInstrumentContext();
+  useEffect(() => {
+    // The order id may be an access token: report no order reference.
+    instrument.track("return_started", {}, { order_ref: null });
+  }, [instrument]);
   const text = useReturnsText();
   const locale = useReturnsLocale();
   const { order, returnHistory, isLoading, errorKey, refetch } =

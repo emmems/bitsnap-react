@@ -1,4 +1,4 @@
-import { defineConfig } from "tsup";
+import { defineConfig, type Options } from "tsup";
 import type { Plugin } from "esbuild";
 
 import { name, version } from "./package.json";
@@ -42,11 +42,43 @@ const catalogCjsShim: Plugin = {
   },
 };
 
+/**
+ * Standalone Bitsnap Consent script for a plain `<script>` tag: no React, no
+ * externals, one file in `dist/embed/`. The library config keeps `dist/embed`
+ * out of its clean step, because both builds run side by side.
+ */
+const consentEmbed: Options = {
+  entry: { consent: "src/consent/embed.ts" },
+  outDir: "dist/embed",
+  format: ["iife"],
+  globalName: "BitsnapConsentEmbed",
+  platform: "browser",
+  target: "es2019",
+  bundle: true,
+  splitting: false,
+  dts: false,
+  clean: false,
+  minify: true,
+  sourcemap: false,
+  noExternal: [/.*/],
+  outExtension: () => ({ js: ".js" }),
+};
+
+/**
+ * Standalone analytics tracker for a plain `<script>` tag (`data-project`),
+ * built like the consent embed: no React, one file in `dist/embed/`.
+ */
+const analyticsEmbed: Options = {
+  ...consentEmbed,
+  entry: { analytics: "src/analytics/embed.ts" },
+  globalName: "BitsnapAnalyticsEmbed",
+};
+
 export default defineConfig((overrideOptions) => {
   const isWatch = !!overrideOptions.watch;
   const shouldPublish = !!overrideOptions.env?.publish;
 
-  return {
+  const library: Options = {
     entry: {
       index: "src/index.ts",
       internal: "src/internal.ts",
@@ -55,6 +87,8 @@ export default defineConfig((overrideOptions) => {
       returns: "src/returns/index.ts",
       catalog: "src/catalog/index.ts",
       course: "src/course/index.ts",
+      consent: "src/consent/index.ts",
+      analytics: "src/analytics/index.ts",
     },
     dts: true,
     onSuccess: shouldPublish ? "pnpm publish" : undefined,
@@ -64,7 +98,7 @@ export default defineConfig((overrideOptions) => {
     // configuration, transport and session modules would not see what
     // `setCustomHost`, `setHost` or `setLocale` set through `index.js`.
     splitting: true,
-    clean: true,
+    clean: ["!embed", "!embed/**"],
     minify: true,
     sourcemap: true,
     platform: "browser",
@@ -77,4 +111,6 @@ export default defineConfig((overrideOptions) => {
       __DEV__: `${isWatch}`,
     },
   };
+
+  return [library, consentEmbed, analyticsEmbed];
 });

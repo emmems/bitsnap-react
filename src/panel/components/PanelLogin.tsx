@@ -6,6 +6,12 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
+import {
+  InstrumentProvider,
+  useInstrument,
+  useInstrumentContext,
+  type AnalyticsOption,
+} from "../../analytics/instrument";
 import { cn } from "../../lib/utils";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { Button } from "../../ui/button";
@@ -222,6 +228,7 @@ const VerifyCodePanel = ({
   setResponseStatus,
   errMsg,
 }: VerifyCodePanelProps) => {
+  const instrument = useInstrumentContext();
   const { mutateAsync: verifyCodeAsync, isPending: isVerifyLoading } =
     useMutation(rpcProvider.publicApi.userPanelLoginWithCode);
 
@@ -278,6 +285,7 @@ const VerifyCodePanel = ({
     }
 
     if (status === "ok") {
+      instrument.track("panel_login", {});
       if (accessToken) {
         savePanelSession(projectID, accessToken, email, host);
       }
@@ -418,8 +426,13 @@ const VerifyCodePanel = ({
   );
 };
 
-const PanelLoginComponentWrapper = () => {
+const PanelLoginComponentWrapper = ({
+  analytics,
+}: {
+  analytics?: AnalyticsOption;
+}) => {
   const { theme, allowedReturnOrigins, projectID, host } = usePanelConfig();
+  const instrument = useInstrument(projectID, analytics, "panel");
 
   const styles = {
     "--button-background-color": theme?.colors?.brand ?? "#FFFFFF",
@@ -509,6 +522,7 @@ const PanelLoginComponentWrapper = () => {
   }
 
   return (
+    <InstrumentProvider value={instrument}>
     <div className="bg-white text-black dark:bg-black dark:text-white">
       <div
         className="font-inter flex h-screen w-screen flex-col p-4"
@@ -563,9 +577,12 @@ const PanelLoginComponentWrapper = () => {
         )}
       </div>
     </div>
+    </InstrumentProvider>
   );
 };
 
-export const PanelLogin = () => {
-  return <PanelLoginComponentWrapper />;
+export const PanelLogin = ({
+  analytics,
+}: { analytics?: AnalyticsOption } = {}) => {
+  return <PanelLoginComponentWrapper analytics={analytics} />;
 };

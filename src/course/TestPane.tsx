@@ -3,6 +3,8 @@ import { useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { scoreBucket } from "@/src/analytics/instrument";
+import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
 import {
   countUnanswered,
@@ -449,6 +451,7 @@ export function TestPane({
   onSubmitted: (result: TestResult) => void;
 }) {
   const { dataSource, texts } = useCourseView();
+  const track = useCourseTrack();
   const test = useAsyncResource<Test>(
     () => dataSource.getTest(testId),
     [dataSource, testId],
@@ -508,6 +511,10 @@ export function TestPane({
             key={formKey}
             test={test.data}
             onSubmitted={(result) => {
+              track("test_submitted", {
+                lesson_id: testId,
+                score_bucket: scoreBucket(result.submission.scorePercent),
+              });
               onSubmitted(result);
               history.refresh();
               test.refresh();

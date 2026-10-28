@@ -1,3 +1,4 @@
+import type { AnalyticsOption } from "../analytics/instrument";
 import type { ReturnsAppearance } from "../components/returns/appearance";
 import type { ReturnsTexts } from "../components/returns/texts";
 
@@ -44,9 +45,21 @@ export interface PanelProps {
   returnsAppearance?: ReturnsAppearance;
   /** Text overrides of the Returns screen. */
   returnsTexts?: Partial<ReturnsTexts>;
+  /**
+   * Usage statistics for your Bitsnap dashboard (panel logins, orders viewed, downloads). On by default;
+   * `false` turns it off. An object lets you forward every event:
+   * `{ onEvent }`. Nothing is stored on the visitor's device.
+   */
+  analytics?: AnalyticsOption;
 }
 
 export interface PanelLoginProps {
   projectID: string;
   theme?: GetThemeOutput;
+  /**
+   * Usage statistics for your Bitsnap dashboard (panel logins). On by default;
+   * `false` turns it off. An object lets you forward every event:
+   * `{ onEvent }`. Nothing is stored on the visitor's device.
+   */
+  analytics?: AnalyticsOption;
 }
