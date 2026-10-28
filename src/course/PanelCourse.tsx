@@ -404,7 +404,9 @@ export function PanelCourse({
   );
 
   const [internalItemId, setInternalItemId] = useState<string>();
-  const selectedId = itemId ?? internalItemId;
+  // With `onItemChange` the owner navigates, so no `itemId` means the default
+  // item, not the one picked last.
+  const selectedId = onItemChange ? itemId : (itemId ?? internalItemId);
   const select = useCallback(
     (next: string) => {
       setInternalItemId(next);
