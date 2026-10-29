@@ -35,10 +35,15 @@ export const STYLES = `
 .root[data-theme=dark]{${vars(PALETTE.dark)};color-scheme:dark}
 button,input{font:inherit;color:inherit}
 .banner,.overlay{pointer-events:auto}
-.banner{position:absolute;background:var(--bg);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.22);max-height:92vh;overflow:auto;outline:none;animation:in .22s ease-out}
-.bottom{left:0;right:0;bottom:0;border-top:1px solid var(--border);padding:16px 24px calc(16px + env(safe-area-inset-bottom,0px))}
-.bottom .inner{display:grid;grid-template-columns:1fr auto;grid-template-areas:"text actions" "foot actions";gap:4px 32px;align-items:center;max-width:1200px;margin:0 auto}
-.card{bottom:16px;width:min(400px,calc(100vw - 32px));border:1px solid var(--border);border-radius:14px;padding:20px}
+::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+.banner{position:absolute;background:var(--bg);color:var(--fg);max-height:92vh;overflow:auto;outline:none;animation:in .22s ease-out}
+.bottom{left:0;right:0;bottom:0;border-top:1px solid var(--border);box-shadow:0 -8px 28px rgba(15,23,42,.08);padding:20px 24px calc(20px + env(safe-area-inset-bottom,0px))}
+.root[data-theme=dark] .bottom{box-shadow:0 -8px 28px rgba(0,0,0,.4)}
+.bottom .inner{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"text actions" "foot actions";gap:4px 40px;align-items:center;max-width:1120px;margin:0 auto}
+.bottom .text{max-width:68ch}
+.bottom .btn,.bottom .link-btn{flex:0 0 auto}
+.card{bottom:16px;width:min(400px,calc(100vw - 32px));border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 12px 32px rgba(15,23,42,.14)}
+.root[data-theme=dark] .card{box-shadow:0 12px 32px rgba(0,0,0,.45)}
 .bottom-left{left:16px}
 .bottom-right{right:16px}
 .card .inner{display:flex;flex-direction:column;gap:16px}
@@ -46,15 +51,19 @@ button,input{font:inherit;color:inherit}
 .actions{grid-area:actions;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
 .card .actions{justify-content:stretch}
 .foot{grid-area:foot}
-.title{font-size:16px;font-weight:650;line-height:1.35;margin:0 0 4px}
-.desc{margin:0;color:var(--muted)}
-.desc a,.link-btn{color:var(--link)}
-.btn{min-height:44px;padding:0 20px;border:2px solid var(--accent);border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer;flex:1 1 150px;white-space:nowrap}
-.btn:hover{filter:brightness(.94)}
-.link-btn{min-height:44px;padding:0 12px;border:0;background:none;font-weight:500;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.title{font-size:17px;font-weight:650;line-height:1.35;letter-spacing:-.01em;text-wrap:balance;margin:0 0 6px}
+.desc{margin:0;color:var(--muted);line-height:1.55;text-wrap:pretty}
+.desc a{color:var(--link);text-decoration:underline;text-underline-offset:3px}
+.btn,.link-btn{min-height:44px;padding:0 20px;border-radius:10px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color .12s ease-out,filter .12s ease-out,border-color .12s ease-out}
+.btn{border:2px solid var(--accent);background:var(--accent);color:var(--on-accent);flex:1 1 150px}
+.btn:hover{filter:brightness(.93)}
+.btn:active{filter:brightness(.87)}
+.link-btn{border:1px solid var(--border);background:transparent;color:var(--fg);text-decoration:none}
+.link-btn:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.link-btn:active{background:color-mix(in srgb,var(--fg) 10%,transparent)}
 .card .link-btn{flex:1 1 100%}
 button:focus-visible,a:focus-visible,.dialog:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.foot{font-size:12px;color:var(--muted);padding-top:4px}
+.foot{font-size:12px;color:var(--muted);padding-top:8px}
 .foot a{color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px;vertical-align:middle}
 .foot a:hover{text-decoration:underline}
 .foot b{color:var(--fg);font-weight:700;letter-spacing:-.01em}
@@ -86,10 +95,15 @@ input:focus-visible+.track{outline:2px solid var(--focus);outline-offset:2px}
 .d-foot .actions{justify-content:stretch}
 @keyframes in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+@media(max-width:960px){
+.bottom .inner{grid-template-columns:minmax(0,1fr);grid-template-areas:"text" "actions" "foot";gap:14px}
+.bottom .actions{justify-content:flex-start}
+}
 @media(max-width:640px){
 .bottom{padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
 .bottom .inner{grid-template-columns:1fr;grid-template-areas:"text" "actions" "foot";gap:12px}
 .bottom .actions{justify-content:stretch}
+.bottom .btn{flex:1 1 130px}
 .bottom .link-btn{flex:1 1 100%}
 .card{left:8px;right:8px;bottom:8px;width:auto}
 .overlay{align-items:flex-end;padding:0}

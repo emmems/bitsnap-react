@@ -1243,6 +1243,13 @@ The cookie only follows a banner that speaks for the project: a project-scope ba
 
 Declare the cookie in your banner's cookie list (category `analytics`, purpose "shop statistics: recognising returning visitors", lifetime 13 months): add `{ name: "Bitsnap statistics", category: "analytics", cookies: ["bs_vid_<projectKey>"] }` to `services` in the banner config, with your exact bare project key, which also lets the banner delete it on withdrawal from pages that run no tracker. Do not use a `bs_vid_*` prefix: the banner deletes every cookie that matches it, which on a site shared by several merchants (bitsnap.pl) would wipe other projects' ids too.
 
+### Release notes (1.11.0)
+
+- **The cart shows why it cannot continue to payment.** When `/buy` fails, the cart shows a localized text for the backend code (no payment gateway, delivery not configured, changed price, mixed subscription cart, unsupported currency), else the server's reason, else `checkoutFailed`. It never shows a bare code such as `internal-error`. Older bitsnap.pl responses are read too.
+- **`createCheckout` returns an error instead of a broken success.** A failed response returns an `Err` with `status: "error"` (typed `CreateCheckoutResult`) instead of `{ status: "ok", redirectURL: undefined }` or a thrown error. Check `result.status === "ok"` before reading `redirectURL`.
+- **`createPaymentURL` errors carry the backend code** in `error` (`badInput` for 4xx, `internal` for 5xx) and `data: { message }`, instead of always `internal-error`.
+- **New checkout text keys** (`checkoutFailed`, `noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`, `mixedRecurring`, `currencyUnsupported`, `priceChanged`). Type your language objects as `Partial<CheckoutTexts>`.
+
 ### Release notes (1.10.0)
 
 - **Requires bitsnap.pl with `X-Bitsnap-Visitor` support.** The cart's `/buy` and `/api/payment/link/auto` requests now send that header while analytics is granted, and a server whose CORS preflight does not allow it makes those checkouts fail in the browser. Deploy bitsnap.pl first, then publish and install this version.
