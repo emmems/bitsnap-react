@@ -45,3 +45,17 @@ export function useCheckoutText(key: CheckoutTextKey): string {
 
   return getCheckoutText(key, locale ?? getLocale(), texts);
 }
+
+/**
+ * Like `useCheckoutText`, for a key picked at runtime (for example from a
+ * backend error code).
+ */
+export function useCheckoutTextResolver(): (key: CheckoutTextKey) => string {
+  const { texts, locale } = useContext(CheckoutTextsContext);
+  const activeLocale = locale ?? getLocale();
+
+  return useMemo(
+    () => (key: CheckoutTextKey) => getCheckoutText(key, activeLocale, texts),
+    [activeLocale, texts],
+  );
+}

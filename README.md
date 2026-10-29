@@ -353,7 +353,22 @@ copy per language, pass a different object.
 ```
 
 Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
-`chooseCountry`, `nextStep`, `unavailableProducts`.
+`chooseCountry`, `nextStep`, `unavailableProducts`, `checkoutFailed`,
+`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
+`mixedRecurring`, `currencyUnsupported`, `priceChanged`.
+
+When "Next step" fails, the cart shows the text of the backend error code
+(`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
+`mixedRecurring`, `currencyUnsupported`, `priceChanged`; `unavailableProducts`
+for `product-not-found`). Server errors (5xx, `internal`) and `invalid-request`
+show `checkoutFailed`. For any other 4xx code the cart shows the message sent
+by the server, else `checkoutFailed`. It never shows the bare code, and never
+a message that is HTML, multi-line, longer than 200 characters or a stack
+trace.
+
+These keys were added in 1.11.0. If you type your own language
+objects, use `Partial<CheckoutTexts>` (the `texts` prop already accepts it) so
+that they keep compiling when new keys appear.
 
 Returns keys (`ReturnsTexts`) cover each step (`emailStepTitle`,
 `codeStepDescription`, `ordersEmpty`, `confirmationSubmit`, `successTitle`,
@@ -762,6 +777,40 @@ async function handleCheckout() {
   }
 }
 ```
+
+On success `createCheckout` returns `{ status: "ok", redirectURL }`. A failed
+response no longer throws and no longer yields an undefined `redirectURL`: it
+returns an `Err` with `status: "error"` instead (`result.ERR === true`), typed
+as `CreateCheckoutResult`. Check `result.status === "ok"` before reading
+`redirectURL`. `result.error` is the backend code (`invalid-request`,
+`product-not-available`, `product-not-found`, `no-payment-gateway`,
+`gateway-not-configured`, `shipping-not-configured`, `mixed-recurring`,
+`currency-unsupported`, `price-changed`, `internal`). New backends send
+`internal` for their own failures; `internal-error` is what the library uses
+when an older backend sent no code. `result.data` is a `BuyErrorData`
+(`{ message?, itemIds? }`), except for `item-ids-not-found`
+(`ITEM_IDS_NOT_FOUND`), where it is the array of ids; both are exported.
+`message` is the reason sent by the server, when it was usable. `result.type`
+is `internal` for 5xx and `badInput` for 4xx.
+
+```tsx
+import { ITEM_IDS_NOT_FOUND, type BuyErrorData } from "bitsnap-react";
+
+if (result.status === "error") {
+  if (result.error === ITEM_IDS_NOT_FOUND) {
+    const ids = result.data as string[];
+  } else {
+    const { message } = (result.data ?? {}) as BuyErrorData;
+  }
+}
+```
+
+`createPaymentURL` returns the same errors: the backend code in `error`,
+`type: "badInput"` for 4xx (`"internal"` for 5xx) and `data: { message }`.
+When the backend lists unavailable products (`itemIds`) under
+`product-not-available` or `product-not-found` (or sends no code), the error is
+`item-ids-not-found` and `data` is the array of ids. With any other code the
+code is kept and the ids are in `data.itemIds`.
 
 6. Webhook Handler:
 
@@ -1193,6 +1242,13 @@ While analytics is granted and the cookie exists, every event carries it as `cli
 The cookie only follows a banner that speaks for the project: a project-scope banner (`scope: "project"`) with the same project key, or, on your own site, a site-scope banner. A banner for another project never sets, reads or deletes it, and on bitsnap.pl (and its subdomains) the site-wide choice is bitsnap's own, so only a project-scope choice for your key counts.
 
 Declare the cookie in your banner's cookie list (category `analytics`, purpose "shop statistics: recognising returning visitors", lifetime 13 months): add `{ name: "Bitsnap statistics", category: "analytics", cookies: ["bs_vid_<projectKey>"] }` to `services` in the banner config, with your exact bare project key, which also lets the banner delete it on withdrawal from pages that run no tracker. Do not use a `bs_vid_*` prefix: the banner deletes every cookie that matches it, which on a site shared by several merchants (bitsnap.pl) would wipe other projects' ids too.
+
+### Release notes (1.11.0)
+
+- **The cart shows why it cannot continue to payment.** When `/buy` fails, the cart shows a localized text for the backend code (no payment gateway, delivery not configured, changed price, mixed subscription cart, unsupported currency), else the server's reason, else `checkoutFailed`. It never shows a bare code such as `internal-error`. Older bitsnap.pl responses are read too.
+- **`createCheckout` returns an error instead of a broken success.** A failed response returns an `Err` with `status: "error"` (typed `CreateCheckoutResult`) instead of `{ status: "ok", redirectURL: undefined }` or a thrown error. Check `result.status === "ok"` before reading `redirectURL`.
+- **`createPaymentURL` errors carry the backend code** in `error` (`badInput` for 4xx, `internal` for 5xx) and `data: { message }`, instead of always `internal-error`.
+- **New checkout text keys** (`checkoutFailed`, `noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`, `mixedRecurring`, `currencyUnsupported`, `priceChanged`). Type your language objects as `Partial<CheckoutTexts>`.
 
 ### Release notes (1.10.0)
 

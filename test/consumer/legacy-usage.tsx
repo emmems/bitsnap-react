@@ -99,6 +99,8 @@ export async function legacyCheckoutFlow() {
 
   if (result.status === "ok") {
     window.location.href = result.redirectURL;
+  } else {
+    console.log(result.error, result.data);
   }
 }
 
