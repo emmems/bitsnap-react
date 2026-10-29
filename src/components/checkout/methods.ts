@@ -7,6 +7,10 @@ import { buyErrorFromResponse } from "./buy-error";
 import { buildURL } from "./helper.methods";
 import { Err } from "./lib/err";
 import { LinkRequest } from "./link.request.schema";
+import {
+  fetchPaymentMethodChoice,
+  type PaymentMethodChoice,
+} from "./payment-method";
 import { useCheckoutStore } from "./state";
 
 export namespace Bitsnap {
@@ -71,23 +75,47 @@ async function readBody(response: Response): Promise<string> {
   }
 }
 
-export async function createPaymentURL(request: LinkRequest) {
-  const projectID = getProjectID();
-  if (projectID == null) {
-    throw new Error("No project ID found");
-  }
-
+/** Headers and body of a cart request, as `/buy` and `/payment-methods` send them. */
+function cartRequestInit(projectID: string, request: LinkRequest) {
   request = injectReferenceToRequestIfNeeded(request);
   request.locale ??= getLocale();
-
-  const result = await fetch(buildURL(projectID, "/buy"), {
-    method: "POST",
+  return {
     headers: {
       ...clientHeaders,
       ...visitorHeaders(projectID),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
+  };
+}
+
+/**
+ * Whether the buyer may choose between paying online and paying the seller by
+ * transfer / BLIK to a phone number, for the cart `/buy` would get. `null`
+ * means nothing to choose, also when the request fails.
+ */
+export async function getPaymentMethodChoice(
+  request: LinkRequest,
+): Promise<PaymentMethodChoice | null> {
+  const projectID = getProjectID();
+  if (projectID == null) {
+    return null;
+  }
+  return fetchPaymentMethodChoice(
+    buildURL(projectID, "/payment-methods"),
+    cartRequestInit(projectID, request),
+  );
+}
+
+export async function createPaymentURL(request: LinkRequest) {
+  const projectID = getProjectID();
+  if (projectID == null) {
+    throw new Error("No project ID found");
+  }
+
+  const result = await fetch(buildURL(projectID, "/buy"), {
+    method: "POST",
+    ...cartRequestInit(projectID, request),
   });
 
   if (result.status != 200) {

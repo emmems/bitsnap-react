@@ -58,6 +58,25 @@ Rules:
 - Do not use React Query, `setProjectID` or `setCustomHost` for the list
   itself; `useProducts` takes everything as arguments.
 
+## Cart checkout (`BitsnapCheckout`)
+
+"Next step" posts the cart to `{host}/api/integrations/{projectID}/public-commerce/buy`
+(`createPaymentURL` in `src/components/checkout/methods.ts`, body built by
+`cartLinkRequest` in `CartProvider.tsx`) and redirects to the returned `url`.
+
+- Payment method choice: while the drawer shows a cart, `payment-methods` gets
+  the same body (react-query, keyed by the cart lines and locale). A non-null
+  `choice` renders `PaymentMethodChoice` (online vs transfer / BLIK to the
+  seller's phone, first of `methods` selected) and `/buy` gets
+  `paymentMethod`. Anything else (null, error, 404 of an old backend, 5 s
+  timeout) is "no choice": plain `/buy`, no `paymentMethod`. A click before the
+  answer waits for it and, if a choice arrives, shows it instead of buying.
+- Pending order (`pending-order.ts`): the cart is kept until a
+  `/payment/common/...` order is paid. A `/payment/manualPayment/<project>/<order>`
+  page is a placed order paid outside Bitsnap, so the cart is cleared at once.
+- Express buttons (Apple Pay, Google Pay) are separate online flows.
+- Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
+
 ## Course view (`PanelCourse`)
 
 The customer panel opens a purchased course inside the panel (no redirect to

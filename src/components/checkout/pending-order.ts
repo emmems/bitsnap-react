@@ -113,15 +113,37 @@ export function parseOrderFromPaymentUrl(
 }
 
 /**
+ * `/payment/manualPayment/<projectId>/<orderId>`: the page with the transfer /
+ * BLIK details of an order the buyer chose to pay by hand. The order is placed
+ * there and paid outside of Bitsnap, often days later.
+ */
+export function isManualPaymentUrl(url: string | undefined): boolean {
+  if (url == null || url.length === 0) {
+    return false;
+  }
+  try {
+    const path = new URL(url, "https://bitsnap.invalid").pathname;
+    return /\/payment\/manualPayment\/[^/]+\/[^/]+\/?$/.test(path);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The order to wait for after redirecting to `response.url`: the ids of the
  * /buy response, else the ones in the payment page URL. `undefined` when
- * neither tells which order it is.
+ * neither tells which order it is, and for a manual payment page: that order
+ * is already placed (the buyer only transfers the money), so the cart is
+ * cleared right away instead of being kept for a day and offered again.
  */
 export function resolvePendingOrder(
   response: { url: string; orderId?: string; projectId?: string },
   now: number = Date.now(),
   cart: { cartProjectId?: string; lines?: PendingOrderLine[] } = {},
 ): PendingOrder | undefined {
+  if (isManualPaymentUrl(response.url)) {
+    return undefined;
+  }
   const fromUrl = parseOrderFromPaymentUrl(response.url);
   const orderId = nonEmpty(response.orderId) ?? fromUrl?.orderId;
   const projectId = nonEmpty(response.projectId) ?? fromUrl?.projectId;

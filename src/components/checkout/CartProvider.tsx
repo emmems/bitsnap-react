@@ -29,6 +29,7 @@ import { round } from "./lib/round.number";
 import { LinkRequest } from "./link.request.schema";
 import {
   createPaymentURL,
+  getPaymentMethodChoice,
   getReferenceIfPossible,
   injectReferenceToRequestIfNeeded,
 } from "./methods";
@@ -45,6 +46,7 @@ import {
   type PendingOrderLine,
   type PendingOrderOutcome,
 } from "./pending-order";
+import type { PaymentMethod, PaymentMethodChoice } from "./payment-method";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -110,7 +112,18 @@ export interface CartMethods {
   getCountry: () => Promise<Err | string>;
   getAvailableCountries: () => Promise<Err | { name: string; code: string }[]>;
 
-  redirectToNextStep: () => Promise<
+  /**
+   * Whether the buyer may choose between paying online and paying the seller
+   * by hand for the current cart. `null` (also on any failure) means nothing
+   * to choose.
+   */
+  getPaymentMethodChoice: () => Promise<PaymentMethodChoice | null>;
+
+  /**
+   * Creates the order of the cart (`/buy`). `paymentMethod` is sent only when
+   * given, that is when the buyer was offered the choice.
+   */
+  redirectToNextStep: (args?: { paymentMethod?: PaymentMethod }) => Promise<
     Err | { url: string; orderId?: string; projectId?: string }
   >;
 
@@ -558,6 +571,44 @@ function saveCheckout(model: Checkout) {
   localStorage.setItem(checkoutKey, JSON.stringify(model));
 }
 
+/** The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when it is empty. */
+function cartLinkRequest(
+  checkout: Checkout,
+  locale: string,
+): LinkRequest | undefined {
+  if (checkout.products == null || checkout.products.length == 0) {
+    return undefined;
+  }
+  const mergedMetadata = checkout.products.reduce(
+    (acc, product) => {
+      if (product.metadata != null) {
+        Object.keys(product.metadata).forEach((key) => {
+          const value = product.metadata?.[key];
+          if (value != null) {
+            acc[key] = value;
+          }
+        });
+      }
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+
+  return {
+    items: checkout.products.map((el) => {
+      return {
+        id: el.productID,
+        quantity: el.quantity,
+        priceVersion: el.priceVersion,
+      };
+    }),
+    askForNote: true,
+    countries: checkout.country ? [checkout.country] : undefined,
+    metadata: mergedMetadata,
+    locale,
+  };
+}
+
 export const getCheckoutMethods: (
   projectID: string,
   locale?: string,
@@ -812,42 +863,21 @@ export const getCheckoutMethods: (
       updateNumberOfProductsInCart();
     },
 
-    async redirectToNextStep(): Promise<
-      Err | { url: string; orderId?: string; projectId?: string }
-    > {
-      const checkout = getCheckout();
+    async getPaymentMethodChoice(): Promise<PaymentMethodChoice | null> {
+      const payload = cartLinkRequest(getCheckout(), locale);
+      return payload == null ? null : getPaymentMethodChoice(payload);
+    },
 
-      if (checkout.products == null || checkout.products.length == 0) {
+    async redirectToNextStep(args?: {
+      paymentMethod?: PaymentMethod;
+    }): Promise<Err | { url: string; orderId?: string; projectId?: string }> {
+      const payload = cartLinkRequest(getCheckout(), locale);
+      if (payload == null) {
         return Err("cart-is-empty", "badInput");
       }
-      const mergedMetadata = checkout.products.reduce(
-        (acc, product) => {
-          if (product.metadata != null) {
-            Object.keys(product.metadata).forEach((key) => {
-              const value = product.metadata?.[key];
-              if (value != null) {
-                acc[key] = value;
-              }
-            });
-          }
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
-
-      const payload: LinkRequest = {
-        items: checkout.products.map((el) => {
-          return {
-            id: el.productID,
-            quantity: el.quantity,
-            priceVersion: el.priceVersion,
-          };
-        }),
-        askForNote: true,
-        countries: checkout.country ? [checkout.country] : undefined,
-        metadata: mergedMetadata,
-        locale,
-      };
+      if (args?.paymentMethod != null) {
+        payload.paymentMethod = args.paymentMethod;
+      }
 
       const paymentResponse = await createPaymentURL(payload);
 

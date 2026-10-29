@@ -154,6 +154,8 @@ built-in styles):
 | `countrySearch`      | Country search field                        |
 | `countryOption`      | Single country option                       |
 | `paymentButtons`     | Apple Pay / Google Pay wrappers              |
+| `paymentMethods`     | "How would you like to pay?" group (online or transfer / BLIK to a phone) |
+| `paymentMethodOption`| Single payment method card                   |
 | `checkoutButton`     | "Next step" button                          |
 | `emptyState`         | Empty cart message                          |
 | `error`              | Checkout error message                      |
@@ -183,10 +185,10 @@ conflicting Tailwind utilities from the library are resolved in your favor.
 | `fontFamily`              | The whole checkout                                      |
 | `fontSize`                | The whole checkout                                      |
 | `background`              | Panel, country trigger                                  |
-| `surface`                 | Country dropdown, search bar, loading skeletons         |
+| `surface`                 | Country dropdown, search bar, loading skeletons, selected payment method |
 | `foreground`              | Titles, prices, total                                   |
 | `mutedForeground`         | Empty cart, delivery note, country label, search field  |
-| `border`                  | Country trigger, dropdown, product separators            |
+| `border`                  | Country trigger, dropdown, product separators, payment method cards |
 | `buttonBackground`        | "Next step" button                                      |
 | `buttonForeground`        | "Next step" button                                      |
 | `buttonHoverBackground`   | "Next step" button on hover                             |
@@ -355,7 +357,29 @@ copy per language, pass a different object.
 Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
 `chooseCountry`, `nextStep`, `unavailableProducts`, `checkoutFailed`,
 `noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
-`mixedRecurring`, `currencyUnsupported`, `priceChanged`.
+`mixedRecurring`, `currencyUnsupported`, `priceChanged`, `paymentMethodLegend`,
+`paymentMethodOnline`, `paymentMethodOnlineDescription`,
+`paymentMethodManualTransfer`, `paymentMethodManualBlik`,
+`paymentMethodManualBoth`, `paymentMethodManualDescription`,
+`paymentMethodManualBlikNote`.
+
+### Paying online or by transfer / BLIK to a phone
+
+When the shop turned on manual payments with "show at checkout", the cart asks
+the buyer how they want to pay before "Next step": online (card, BLIK code,
+instant transfer through the shop's gateway) or by hand (bank transfer and/or
+BLIK to the seller's phone number; the label follows the accounts the seller
+has). The first option is the seller's preferred one and is selected. The
+seller's account and phone number are shown only after the order is placed, on
+the Bitsnap payment page the cart redirects to; the order waits for the payment
+there and the cart is cleared.
+
+The cart asks `POST /public-commerce/payment-methods` (same body as `/buy`) once
+per cart content. `choice: null`, an error, a timeout (5 s) or an older
+bitsnap.pl that does not have the endpoint leave the cart as before: no choice
+and a plain `/buy`. `/buy` gets `paymentMethod: "online" | "manual"` only when
+the choice was shown. Apple Pay and Google Pay are online payments and do not
+change.
 
 When "Next step" fails, the cart shows the text of the backend error code
 (`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,

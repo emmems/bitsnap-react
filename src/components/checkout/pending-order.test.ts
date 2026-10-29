@@ -5,6 +5,7 @@ import { GetOrderResponseSchema } from "src/gen/proto/public/v1/public_api_pb";
 import {
   PENDING_ORDER_KEY,
   PENDING_ORDER_MAX_AGE_MS,
+  isManualPaymentUrl,
   orderStatusFromResponse,
   parseOrderFromPaymentUrl,
   readPendingOrder,
@@ -257,6 +258,29 @@ describe("subtractOrderLines", () => {
   it("leaves the cart alone for an order without lines", () => {
     const cart = [{ id: "l1", quantity: 1 }];
     assert.deepEqual(subtractOrderLines(cart, []), cart);
+  });
+});
+
+describe("manual payment page", () => {
+  const url = "https://bitsnap.pl/payment/manualPayment/hashedP/ord_9";
+
+  it("recognises the manual payment page", () => {
+    assert.equal(isManualPaymentUrl(url), true);
+    assert.equal(isManualPaymentUrl("/payment/manualPayment/p/o/"), true);
+    assert.equal(isManualPaymentUrl("https://bitsnap.pl/payment/common/p/o"), false);
+    assert.equal(isManualPaymentUrl("https://bitsnap.pl/payment/manualPayment/p"), false);
+    assert.equal(isManualPaymentUrl(undefined), false);
+  });
+
+  it("is not a pending order, even with ids in the response: the order is placed", () => {
+    assert.equal(resolvePendingOrder({ url }, NOW), undefined);
+    assert.equal(resolvePendingOrder({ url, orderId: "ord_9", projectId: "hashedP" }, NOW), undefined);
+    const storage = memoryStorage();
+    assert.equal(
+      rememberPendingOrder({ url, orderId: "ord_9", projectId: "hashedP" }, { storage, lines: LINES, now: NOW }),
+      false,
+    );
+    assert.equal(storage.values.size, 0);
   });
 });
 

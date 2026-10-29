@@ -10,7 +10,7 @@ import SingleProduct from "./SingleProduct";
 import { Skeleton } from "./Skeleton";
 import { ApplePayButton, GooglePayButton } from "..";
 import { Spinner } from "@/src/ui/spinner";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/src/lib/utils";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { getLocale } from "./locale";
@@ -19,6 +19,12 @@ import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
 import { useCheckoutSlot } from "./appearance.context";
 import { rememberPendingOrder } from "./pending-order";
 import { useCheckoutStore } from "./state";
+import { PaymentMethodChoice } from "./PaymentMethodChoice";
+import {
+  effectivePaymentMethod,
+  type PaymentMethod,
+  type PaymentMethodChoice as Choice,
+} from "./payment-method";
 
 const CartComponentContent = ({
   className,
@@ -110,6 +116,35 @@ const CartComponentContent = ({
   const [productsParent] = useAutoAnimate(/* optional config */);
 
   const products = isErr(data) ? undefined : data;
+
+  // Whether the shop lets the buyer pay by hand (transfer / BLIK to a phone)
+  // for this cart. Asked once per cart content; any failure means "no choice".
+  const queryClient = useQueryClient();
+  const cartSignature =
+    products == null || products.length === 0
+      ? undefined
+      : products
+          .map((el) => `${el.productID}:${el.quantity}`)
+          .sort()
+          .join(",");
+  const paymentMethodsQuery = {
+    queryKey: ["cart-payment-methods", getProjectID(), currentLocale, cartSignature],
+    queryFn: async (): Promise<Choice | null> =>
+      provider.getPaymentMethodChoice().catch(() => null),
+    staleTime: 60_000,
+    retry: false,
+  } as const;
+  const { data: paymentMethodChoiceData } = useQuery({
+    ...paymentMethodsQuery,
+    enabled: cartSignature != null,
+  });
+  const paymentMethodChoice =
+    cartSignature != null ? (paymentMethodChoiceData ?? null) : null;
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = React.useState<
+    PaymentMethod | undefined
+  >(undefined);
+  const [isWaitingForChoice, setIsWaitingForChoice] = React.useState(false);
+  const paymentMethodsRef = React.useRef<HTMLDivElement>(null);
   const hasLoadFailed = !isLoading && (isError || isErr(data));
 
   const countries = isErr(availableCountries) ? [] : availableCountries;
@@ -227,6 +262,29 @@ const CartComponentContent = ({
       setMissingItemIds([]);
       useCheckoutStore.getState().setNotice(undefined);
 
+      // A click before the choice arrived waits for it (at most the request
+      // timeout); a choice the buyer has not seen yet is shown, not used.
+      let choice = paymentMethodChoice;
+      if (cartSignature != null && paymentMethodChoiceData === undefined) {
+        setIsWaitingForChoice(true);
+        try {
+          choice = await queryClient
+            .fetchQuery(paymentMethodsQuery)
+            .catch(() => null);
+        } finally {
+          setIsWaitingForChoice(false);
+        }
+        if (choice != null) {
+          // Let the buyer see the options first; focus moves to the selected one.
+          window.setTimeout(() => {
+            paymentMethodsRef.current
+              ?.querySelector<HTMLInputElement>("input:checked")
+              ?.focus();
+          }, 0);
+          return;
+        }
+      }
+
       if (products != null) {
         if (!startedCheckout.current && products.length > 0) {
           startedCheckout.current = true;
@@ -253,9 +311,15 @@ const CartComponentContent = ({
 
       // What this order is made of; only these lines go once it is paid.
       const cartLinesBeforeBuy = getCartLines();
-      const response = await continueToCheckoutAsync();
+      const response = await continueToCheckoutAsync(
+        choice != null
+          ? { paymentMethod: effectivePaymentMethod(choice, selectedPaymentMethod) }
+          : undefined,
+      );
 
       if (isErr(response)) {
+        // The seller may have changed the payment methods in the meantime.
+        void queryClient.invalidateQueries({ queryKey: ["cart-payment-methods"] });
         if (response.error == "item-ids-not-found") {
           setErrMsg(unavailableProductsText);
           if ("data" in response && Array.isArray(response.data)) {
@@ -510,12 +574,26 @@ const CartComponentContent = ({
                 />
               </div>
             )}
+            {paymentMethodChoice != null && (
+              <div ref={paymentMethodsRef} className="contents">
+                <PaymentMethodChoice
+                  choice={paymentMethodChoice}
+                  selected={effectivePaymentMethod(
+                    paymentMethodChoice,
+                    selectedPaymentMethod,
+                  )}
+                  onChange={setSelectedPaymentMethod}
+                  disabled={isContinueToCheckoutLoading}
+                />
+              </div>
+            )}
             <button
               data-bitsnap-checkout-slot="checkoutButton"
               onClick={continueToCheckout}
               disabled={
                 isLoading ||
                 isContinueToCheckoutLoading ||
+                isWaitingForChoice ||
                 selectedCountry == null
               }
               aria-describedby={isCountryMissing ? countryHintId : undefined}
@@ -525,7 +603,7 @@ const CartComponentContent = ({
               )}
               style={checkoutButton.style}
             >
-              {isContinueToCheckoutLoading ? (
+              {isContinueToCheckoutLoading || isWaitingForChoice ? (
                 <Spinner />
               ) : (
                 nextStepText
