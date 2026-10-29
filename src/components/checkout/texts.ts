@@ -38,6 +38,44 @@ export type CheckoutTexts = {
   currencyUnsupported: string;
   /** Error shown when a price changed after the product was added. */
   priceChanged: string;
+  /** Accessible name of the close button of the drawer. */
+  close: string;
+  /** Remove button of a cart line (also read together with the product name). */
+  remove: string;
+  /** Accessible name of the quantity control and its input. */
+  quantity: string;
+  /** Accessible name of the "+" quantity button. */
+  increaseQuantity: string;
+  /** Accessible name of the "-" quantity button. */
+  decreaseQuantity: string;
+  /** Accessible name of the cart button when it only shows an icon. */
+  openCart: string;
+  /** Hidden label of the number of products badge; the number is appended after a colon. */
+  cartItemsCount: string;
+  /** Label before the lowest price of the last 30 days; the price is appended. */
+  lowestPrice30Days: string;
+  /** Shown instead of the lowest price when the price has no history. */
+  noPriceHistory: string;
+  /** Error shown when redirecting to the payment failed. */
+  redirectFailed: string;
+  /** Error shown when a subscription is added to the cart. */
+  subscriptionUnsupported: string;
+  /** Country search placeholder. */
+  searchCountry: string;
+  /** Shown when the country search has no match. */
+  noCountriesFound: string;
+  /** Hint under the checkout button when no country is chosen. */
+  countryRequired: string;
+  /** Title of the Apple Pay and Google Pay sheet total. */
+  paymentForCart: string;
+  /** Coupon label in the Google Pay sheet; the code is appended. */
+  coupon: string;
+  /** Note under the cart total. */
+  extrasCalculatedNext: string;
+  /** Error shown when the products of the cart could not be loaded. */
+  loadFailed: string;
+  /** Button that loads the cart again. */
+  retry: string;
 };
 
 export type CheckoutTextKey = keyof CheckoutTexts;
@@ -63,6 +101,26 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "The shop doesn't accept payments in this currency. Contact the seller.",
     priceChanged: "The product price has changed. Refresh the page to see the current price.",
+    close: "Close cart",
+    remove: "Remove",
+    quantity: "Quantity",
+    increaseQuantity: "Increase quantity",
+    decreaseQuantity: "Decrease quantity",
+    openCart: "Open cart",
+    cartItemsCount: "Items in cart",
+    lowestPrice30Days: "Lowest price in the last 30 days:",
+    noPriceHistory: "No price data for the last 30 days",
+    redirectFailed: "Could not redirect to the payment. Please try again later.",
+    subscriptionUnsupported: "Subscriptions cannot be added to the cart yet.",
+    searchCountry: "Find a country",
+    noCountriesFound: "No countries found",
+    countryRequired: "Choose a country to continue.",
+    paymentForCart: "Cart payment",
+    coupon: "Coupon",
+    extrasCalculatedNext:
+      "Discounts, shipping and taxes are calculated at the next step",
+    loadFailed: "Could not load your cart.",
+    retry: "Try again",
   },
   pl: {
     cart: "Koszyk",
@@ -84,6 +142,26 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
     priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
+    close: "Zamknij koszyk",
+    remove: "Usuń",
+    quantity: "Ilość",
+    increaseQuantity: "Zwiększ ilość",
+    decreaseQuantity: "Zmniejsz ilość",
+    openCart: "Otwórz koszyk",
+    cartItemsCount: "Produktów w koszyku",
+    lowestPrice30Days: "Najniższa cena z 30 dni:",
+    noPriceHistory: "Brak danych o cenie z ostatnich 30 dni",
+    redirectFailed:
+      "Nie udało się przekierować do płatności. Spróbuj ponownie później.",
+    subscriptionUnsupported: "Subskrypcji nie można jeszcze dodać do koszyka.",
+    searchCountry: "Znajdź kraj",
+    noCountriesFound: "Nie znaleziono krajów",
+    countryRequired: "Wybierz kraj, aby przejść dalej.",
+    paymentForCart: "Płatność za koszyk",
+    coupon: "Kupon",
+    extrasCalculatedNext: "Rabaty, dostawa i podatki w następnym kroku",
+    loadFailed: "Nie udało się wczytać koszyka.",
+    retry: "Spróbuj ponownie",
   },
 };
 

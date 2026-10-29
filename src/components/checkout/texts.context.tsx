@@ -36,6 +36,11 @@ export function CheckoutTextsProvider({
   );
 }
 
+/** The `texts` overrides and `locale` of the surrounding checkout, if any. */
+export function useCheckoutTextsConfig(): CheckoutTextsContextValue {
+  return useContext(CheckoutTextsContext);
+}
+
 /**
  * Returns the checkout string for `key`: the caller override when provided,
  * otherwise the default for the `locale` prop (or the active locale).

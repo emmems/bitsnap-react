@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SingleProduct } from "./product.details.model";
 import { Button } from "@/src/ui/button";
 import { MinusIcon, PlusIcon } from "lucide-react";
@@ -6,6 +6,8 @@ import { ButtonGroup } from "@/src/ui/button-group";
 import { cn } from "@/src/lib/utils";
 import { useCheckoutSlot } from "./appearance.context";
 import { ProductPrice } from "./ProductPrice";
+import { useCheckoutText } from "./texts.context";
+import { clampQuantity, quantityFromInput } from "./quantity";
 
 const SingleProduct = ({
   isNotAvailable,
@@ -17,13 +19,21 @@ const SingleProduct = ({
   quantity: number;
   metadata?: { [key: string]: string | undefined };
   details: SingleProduct;
-  shouldUpdate: (newQuantity?: number) => void;
+  /** Rejects when the cart could not be changed. */
+  shouldUpdate: (newQuantity?: number) => Promise<unknown> | void;
 }) => {
   const product = useCheckoutSlot("product");
   const productImage = useCheckoutSlot("productImage");
   const productName = useCheckoutSlot("productName");
   const productPrice = useCheckoutSlot("productPrice");
   const removeButton = useCheckoutSlot("removeButton");
+  const removeText = useCheckoutText("remove");
+
+  const imageUrl = details.image_url ?? details.images?.[0];
+  const [brokenImageUrl, setBrokenImageUrl] = useState<string | undefined>();
+  const showImage =
+    imageUrl != null && imageUrl.length > 0 && imageUrl !== brokenImageUrl;
+  const name = details.baseName ?? details.name;
 
   return (
     <div
@@ -36,16 +46,19 @@ const SingleProduct = ({
       )}
       style={product.style}
     >
-      <img
-        data-bitsnap-checkout-slot="productImage"
-        className={cn(
-          "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden",
-          productImage.className,
-        )}
-        style={productImage.style}
-        src={details.image_url ?? ""}
-        alt={details.name}
-      />
+      {showImage && (
+        <img
+          data-bitsnap-checkout-slot="productImage"
+          className={cn(
+            "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden",
+            productImage.className,
+          )}
+          style={productImage.style}
+          src={imageUrl}
+          alt=""
+          onError={() => setBrokenImageUrl(imageUrl)}
+        />
+      )}
 
       <div className={"flex flex-col w-full"}>
         <p
@@ -53,8 +66,11 @@ const SingleProduct = ({
           className={cn("font-medium", productName.className)}
           style={productName.style}
         >
-          {details.name}
+          {name}
         </p>
+        {details.variantName != null && details.variantName.length > 0 && (
+          <p className="text-sm opacity-70">{details.variantName}</p>
+        )}
         <p
           data-bitsnap-checkout-slot="productPrice"
           className={cn("text-sm", productPrice.className)}
@@ -76,13 +92,17 @@ const SingleProduct = ({
           />
           <Button
             data-bitsnap-checkout-slot="removeButton"
+            type="button"
             variant="ghost"
             size="sm"
             className={removeButton.className}
             style={removeButton.style}
-            onClick={() => shouldUpdate(0)}
+            aria-label={`${removeText}: ${details.name}`}
+            onClick={() => {
+              Promise.resolve(shouldUpdate(0)).catch(() => undefined);
+            }}
           >
-            Usuń
+            {removeText}
           </Button>
         </div>
       </div>
@@ -98,53 +118,41 @@ const QuantityComponent = ({
   className,
 }: {
   quantity: number;
-  shouldUpdate: (newQuantity: number) => void;
+  shouldUpdate: (newQuantity: number) => Promise<unknown> | void;
   className: string;
 }) => {
   const [quantityString, setQuantityString] = useState(quantity.toString());
-  const [quantityValue, setQuantityValue] = useState(quantity);
+  // The last quantity sent, so quick clicks count from it before the cart reloads.
+  const sent = useRef(quantity);
 
   const quantityControl = useCheckoutSlot("quantityControl");
   const quantityInput = useCheckoutSlot("quantityInput");
   const quantityButton = useCheckoutSlot("quantityButton");
+  const quantityText = useCheckoutText("quantity");
+  const increaseText = useCheckoutText("increaseQuantity");
+  const decreaseText = useCheckoutText("decreaseQuantity");
 
+  const shownQuantity = useRef(quantity);
+  shownQuantity.current = quantity;
+
+  // The cart is the source of truth once it has reloaded.
   useEffect(() => {
-    shouldUpdate(quantityValue);
-  }, [quantityValue]);
-
-  function setNewQuantity(newQuantity: string) {
-    setQuantityString(newQuantity);
-    if (newQuantity.length == 0) {
-      return;
-    }
-    const parsedInt = parseInt(newQuantity);
-    if (isNaN(parsedInt)) {
-      setQuantityValue(1);
-      setQuantityString("");
-      return;
-    }
-    if (parsedInt == 0 || parsedInt < 0) {
-      setQuantityValue(1);
-      setQuantityString("1");
-      return;
-    }
-    setQuantityValue(parsedInt);
-    setQuantityString(parsedInt.toString());
-  }
-
-  function increaseQuantity() {
-    setQuantityValue(quantity + 1);
-    setQuantityString((quantity + 1).toString());
-  }
-
-  function decreaseQuantity() {
-    if (quantity > 1) {
-      setQuantityString((quantity - 1).toString());
-      setQuantityValue(quantity - 1);
-      return;
-    }
+    sent.current = quantity;
     setQuantityString(quantity.toString());
-    setQuantityValue(quantity);
+  }, [quantity]);
+
+  function commit(newQuantity: number) {
+    setQuantityString(newQuantity.toString());
+    if (newQuantity !== sent.current) {
+      sent.current = newQuantity;
+      Promise.resolve(shouldUpdate(newQuantity)).catch(() => {
+        // The cart rejected it: show what the cart has.
+        if (sent.current === newQuantity) {
+          sent.current = shownQuantity.current;
+          setQuantityString(shownQuantity.current.toString());
+        }
+      });
+    }
   }
 
   return (
@@ -153,32 +161,43 @@ const QuantityComponent = ({
       className={cn("flex", className, quantityControl.className)}
       style={quantityControl.style}
     >
-      <ButtonGroup aria-label="Ilość">
+      <ButtonGroup aria-label={quantityText}>
         <Button
           data-bitsnap-checkout-slot="quantityButton"
+          type="button"
           className={quantityButton.className}
           style={quantityButton.style}
-          onClick={decreaseQuantity}
+          aria-label={decreaseText}
+          onClick={() => commit(clampQuantity(sent.current - 1))}
         >
-          <MinusIcon />
+          <MinusIcon aria-hidden="true" />
         </Button>
         <input
           data-bitsnap-checkout-slot="quantityInput"
           className={cn("w-8 bg-transparent text-center", quantityInput.className)}
           style={quantityInput.style}
           value={quantityString}
-          onInput={(e) => {
-            setNewQuantity(e.currentTarget.value);
+          aria-label={quantityText}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          onChange={(e) => setQuantityString(e.currentTarget.value)}
+          onBlur={(e) => commit(quantityFromInput(e.currentTarget.value, sent.current))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commit(quantityFromInput(e.currentTarget.value, sent.current));
+            }
           }}
           type="text"
         />
         <Button
           data-bitsnap-checkout-slot="quantityButton"
+          type="button"
           className={quantityButton.className}
           style={quantityButton.style}
-          onClick={increaseQuantity}
+          aria-label={increaseText}
+          onClick={() => commit(clampQuantity(sent.current + 1))}
         >
-          <PlusIcon />
+          <PlusIcon aria-hidden="true" />
         </Button>
       </ButtonGroup>
     </div>

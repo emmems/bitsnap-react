@@ -8,6 +8,7 @@ import {
 } from "@/src/ui/select";
 import { cn } from "@/src/lib/utils";
 import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
+import { useCheckoutText } from "./texts.context";
 
 export interface CountrySelectorProps {
   id: string;
@@ -40,6 +41,8 @@ function CountrySelector({
   const countryDropdown = useCheckoutSlot("countryDropdown");
   const countrySearch = useCheckoutSlot("countrySearch");
   const countryOption = useCheckoutSlot("countryOption");
+  const searchCountryText = useCheckoutText("searchCountry");
+  const noCountriesFoundText = useCheckoutText("noCountriesFound");
 
   useEffect(() => {
     if (selectedValue == null && countries.length > 0) {
@@ -124,7 +127,8 @@ function CountrySelector({
             name="search"
             autoComplete="off"
             className="block w-full outline-none sm:text-body-regular bg-transparent rounded-md px-2 py-1.5"
-            placeholder="Znajdź kraj"
+            placeholder={searchCountryText}
+            aria-label={searchCountryText}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onClick={(e) => e.stopPropagation()}
@@ -134,7 +138,7 @@ function CountrySelector({
         <div className="max-h-64 overflow-y-auto">
           {filteredCountries.length === 0 ? (
             <div className="cursor-default select-none relative py-2 pl-3 pr-9 text-sm">
-              No countries found
+              {noCountriesFoundText}
             </div>
           ) : (
             filteredCountries.map((country) => (

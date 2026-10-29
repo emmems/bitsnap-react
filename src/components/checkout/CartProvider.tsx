@@ -1,7 +1,7 @@
 import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel";
 import { create } from "@bufbuild/protobuf";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import {
   AddressSchema,
   BillingAddressSchema,
@@ -31,6 +31,16 @@ import {
 import { SingleProduct } from "./product.details.model";
 import { useCheckoutStore } from "./state";
 import { getLocale } from "./locale";
+import { useCheckoutTextsConfig } from "./texts.context";
+import { getCheckoutText, type CheckoutTexts } from "./texts";
+import {
+  orderStatusFromResponse,
+  reconcilePendingOrder,
+  subtractOrderLines,
+  throttleOrderStatus,
+  type PendingOrderLine,
+  type PendingOrderOutcome,
+} from "./pending-order";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -92,11 +102,26 @@ export interface CartMethods {
   getCountry: () => Promise<Err | string>;
   getAvailableCountries: () => Promise<Err | { name: string; code: string }[]>;
 
-  redirectToNextStep: () => Promise<Err | { url: string }>;
+  redirectToNextStep: () => Promise<
+    Err | { url: string; orderId?: string; projectId?: string }
+  >;
 
   getApplePayPaymentRequest: (args?: {
     expectedItems?: CartProduct[];
   }) => Promise<Err | ApplePayJS.ApplePayPaymentRequest>;
+  /**
+   * Country, currency and total of the cart as the backend calculates them,
+   * for an Apple Pay session that has to be created before any request.
+   */
+  getApplePayPreview: (args: { items: CartProduct[] }) => Promise<
+    | Err
+    | {
+        countryCode: string;
+        currencyCode: string;
+        /** Major units, as Apple Pay wants them. */
+        totalAmount: string;
+      }
+  >;
   completeApplePayPayment: (args: {
     token: ApplePayJS.ApplePayPaymentToken;
     shippingContact?: ApplePayJS.ApplePayPaymentContact;
@@ -174,18 +199,51 @@ const CartProvider = ({
   children: React.ReactNode;
   locale?: string;
 }) => {
-  const queryClient = new QueryClient();
+  const [queryClient] = useState(() => new QueryClient());
+  const textsConfig = useCheckoutTextsConfig();
 
   useEffect(() => {
     updateNumberOfProductsInCart();
   }, []);
 
   const projectID = getProjectID();
+
+  // An order that was left for the payment page clears the cart once it is paid.
+  useEffect(() => {
+    if (projectID == null) {
+      return;
+    }
+    const reconcile = () => {
+      void reconcileOrderOfLastPayment(projectID).then((outcome) => {
+        // An open drawer refetches on focus before the order answers.
+        if (outcome === "paid") {
+          void queryClient.invalidateQueries({ queryKey: ["cart"] });
+        }
+      });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        reconcile();
+      }
+    };
+    reconcile();
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [projectID, queryClient]);
+
   if (projectID == null) {
     return <></>;
   }
 
-  const checkoutMethods = getCheckoutMethods(projectID, locale);
+  const checkoutMethods = getCheckoutMethods(
+    projectID,
+    locale ?? textsConfig.locale,
+    textsConfig.texts,
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -195,6 +253,61 @@ const CartProvider = ({
     </QueryClientProvider>
   );
 };
+
+let reconciling: Promise<PendingOrderOutcome | undefined> | undefined;
+
+const askAboutOrder = throttleOrderStatus(async (order) =>
+  orderStatusFromResponse(
+    await PublicApiClient.get(HOST).getOrder({
+      id: order.orderId,
+      projectId: order.projectId,
+    }),
+  ),
+);
+
+/** What the buyer picked that changes the totals (for cache keys of wallet previews). */
+export function getCheckoutSelection() {
+  const { country, couponCode, selectedDeliveryMethod, postalCode } =
+    getCheckout() ?? emptyCheckout;
+  return { country, couponCode, selectedDeliveryMethod, postalCode };
+}
+
+/** The lines of the cart right now, for the order that is about to be paid. */
+export function getCartLines(): PendingOrderLine[] {
+  return (getCheckout()?.products ?? []).map((el) => ({
+    id: el.id,
+    quantity: el.quantity,
+  }));
+}
+
+/** Removes the lines of a paid order from the cart; what was added since stays. */
+function removeOrderLinesFromCart(lines: PendingOrderLine[]) {
+  const checkout = getCheckout();
+  saveCheckout({
+    ...checkout,
+    products: subtractOrderLines(checkout?.products ?? [], lines),
+  });
+  updateNumberOfProductsInCart();
+}
+
+/** Asks the backend about the order the buyer left for, once at a time. */
+export function reconcileOrderOfLastPayment(
+  projectID: string,
+): Promise<PendingOrderOutcome | undefined> {
+  reconciling ??= reconcilePendingOrder({
+    projectId: projectID,
+    fetchStatus: askAboutOrder,
+    removeLines: removeOrderLinesFromCart,
+  })
+    .catch((e) => {
+      console.warn("cannot check the pending order", e);
+      return undefined;
+    })
+    .finally(() => {
+      reconciling = undefined;
+    });
+  return reconciling;
+}
 
 // @ts-ignore
 const getProducts: (
@@ -227,26 +340,37 @@ const getProducts: (
     new Set(products.map((product) => product.productID)),
   );
 
+  if (productIds.length === 0) {
+    return [];
+  }
+
   const params = new URLSearchParams();
   params.set("ids", productIds.join(","));
   params.set("locale", args?.locale ?? getLocale());
 
-  const result = await fetch(
-    withClientParam(buildURL(projectID, `/products?${params.toString()}`)),
-    {
-      method: "GET",
-    },
-  );
-
-  if (result.status != 200) {
-    return [];
-  }
-
-  const payload: {
+  let payload: {
     success: boolean;
     message?: string | undefined;
     result?: SingleProduct[] | undefined;
-  } = await result.json();
+  };
+  try {
+    const result = await fetch(
+      withClientParam(buildURL(projectID, `/products?${params.toString()}`)),
+      {
+        method: "GET",
+      },
+    );
+
+    // A backend failure is not an empty cart.
+    if (result.status != 200) {
+      return Err("products-load-failed", "internal");
+    }
+
+    payload = await result.json();
+  } catch (e) {
+    console.warn("cannot load the products of the cart", e);
+    return Err("products-load-failed", "internal");
+  }
 
   // Items the backend does not know (removed product, wrong id) are dropped.
   return products.flatMap((product) => {
@@ -423,7 +547,8 @@ function saveCheckout(model: Checkout) {
 export const getCheckoutMethods: (
   projectID: string,
   locale?: string,
-) => CartMethods = (projectID, locale = getLocale()) => {
+  texts?: Partial<CheckoutTexts>,
+) => CartMethods = (projectID, locale = getLocale(), texts) => {
   const newHost = getNewHostIfExist();
   if (newHost != null) {
     setCustomHost(newHost);
@@ -526,6 +651,8 @@ export const getCheckoutMethods: (
           checkout: checkout,
           cartRequiresShipping: cartRequiresShipping,
           result: result,
+          locale,
+          texts,
         });
         if (mappedPaymentRequest == null) {
           return {
@@ -671,7 +798,9 @@ export const getCheckoutMethods: (
       updateNumberOfProductsInCart();
     },
 
-    async redirectToNextStep(): Promise<Err | { url: string }> {
+    async redirectToNextStep(): Promise<
+      Err | { url: string; orderId?: string; projectId?: string }
+    > {
       const checkout = getCheckout();
 
       if (checkout.products == null || checkout.products.length == 0) {
@@ -715,6 +844,12 @@ export const getCheckoutMethods: (
 
       return {
         url: paymentResponse.url,
+        ...(paymentResponse.orderId != null
+          ? { orderId: paymentResponse.orderId }
+          : {}),
+        ...(paymentResponse.projectId != null
+          ? { projectId: paymentResponse.projectId }
+          : {}),
       };
     },
 
@@ -777,6 +912,41 @@ export const getCheckoutMethods: (
         return {
           url: result.url,
         };
+      }
+    },
+
+    async getApplePayPreview(args: {
+      items: CartProduct[];
+    }): Promise<
+      | Err
+      | { countryCode: string; currencyCode: string; totalAmount: string }
+    > {
+      const checkout = getCheckout();
+      try {
+        const result = await PublicApiClient.get(HOST).getPreOrderDetails({
+          items: args.items.map((el) =>
+            create(PreOrderItemSchema, {
+              id: el.productID,
+              quantity: el.quantity,
+            }),
+          ),
+          projectId: projectID,
+          postCode: checkout.postalCode,
+          couponCode: checkout.couponCode,
+          countryCode: checkout.country,
+          selectedDeliveryMethod: checkout.selectedDeliveryMethod,
+        });
+        if (result.totalAmount == null || result.currency.length === 0) {
+          return Err("pre-order-unavailable", "internal");
+        }
+        return {
+          countryCode: result.country || checkout.country || "PL",
+          currencyCode: result.currency,
+          totalAmount: `${round(result.totalAmount / 100, 2)}`,
+        };
+      } catch (e) {
+        console.warn("cannot load the Apple Pay preview", e);
+        return Err("pre-order-unavailable", "internal");
       }
     },
 
@@ -1009,7 +1179,12 @@ export const getCheckoutMethods: (
 
       const items = products.map((el) => {
         return {
-          amount: `${round((el.quantity * (el.details?.price ?? 0)) / 100, 2)}`,
+          amount: `${round(
+            (el.quantity *
+              (el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0)) /
+              100,
+            2,
+          )}`,
           label: el.details?.name + " - " + el.quantity,
           type: "final" as ApplePayJS.ApplePayLineItemType,
         };
@@ -1037,7 +1212,7 @@ export const getCheckoutMethods: (
       }
 
       return {
-        countryCode: checkout.country ?? "PL",
+        countryCode: result.country || checkout.country || "PL",
         merchantCapabilities: [
           "supports3DS",
           "supportsCredit",
@@ -1046,7 +1221,7 @@ export const getCheckoutMethods: (
         supportedNetworks: ["visa", "masterCard"],
         total: {
           amount: `${round((result.totalAmount ?? 0) / 100, 2)}`,
-          label: "Płatność za koszyk",
+          label: getCheckoutText("paymentForCart", locale, texts),
           type: "final",
         },
         shippingMethods: result.methods.map((el) => ({
@@ -1070,7 +1245,8 @@ export const getCheckoutMethods: (
           },
         })),
         lineItems: items,
-        currencyCode: "PLN",
+        currencyCode:
+          result.currency || products[0]?.details?.currency || "PLN",
       };
     },
   };
@@ -1118,6 +1294,8 @@ function resolveProductDetailsFromSingleProduct(
         isDeliverable: variant.isDeliverable,
         images: variant.images ?? product.images,
         name: product.name + " " + variant.name,
+        baseName: product.name,
+        variantName: variant.name,
         price: variant.price,
         currency: variant.currency,
         pricing: variant.pricing,
@@ -1135,6 +1313,8 @@ function resolveProductDetailsFromSingleProduct(
     ...product,
     id: variant.id,
     name: product.name + " " + variant.name,
+    baseName: product.name,
+    variantName: variant.name,
     price: variant.price,
     currency: variant.currency,
     pricing: variant.pricing,

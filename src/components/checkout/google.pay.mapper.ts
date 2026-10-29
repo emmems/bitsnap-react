@@ -2,6 +2,8 @@ import { GetPreOrderDetailsResponse } from "src/gen/proto/public/v1/public_api_p
 import { Checkout, GooglePayConfig } from "./CartProvider";
 import { formatCurrency, round } from "./lib/round.number";
 import { SingleProduct } from "./product.details.model";
+import { getLocale } from "./locale";
+import { getCheckoutText, type CheckoutTexts } from "./texts";
 
 export function mapGooglePayConfiguration(args: {
   items: {
@@ -17,9 +19,12 @@ export function mapGooglePayConfiguration(args: {
   checkout: Checkout;
   result: GetPreOrderDetailsResponse;
   cartRequiresShipping: boolean;
+  locale?: string;
+  texts?: Partial<CheckoutTexts>;
 }): google.payments.api.PaymentDataRequest | undefined {
   const { items, googlePayConfig, checkout, result, cartRequiresShipping } =
     args;
+  const locale = args.locale ?? getLocale();
   if (result.totalAmount == null) {
     return undefined;
   }
@@ -74,7 +79,7 @@ export function mapGooglePayConfiguration(args: {
     },
     transactionInfo: {
       totalPriceStatus: "FINAL",
-      totalPriceLabel: "Płatność za koszyk",
+      totalPriceLabel: getCheckoutText("paymentForCart", locale, args.texts),
       totalPrice: `${round(result.totalAmount / 100, 2)}`,
       currencyCode: result.currency,
       countryCode: result.country,
@@ -85,7 +90,8 @@ export function mapGooglePayConfiguration(args: {
         result.selectedDeliveryMethod ??
           (result.methods.length > 0 ? result.methods[0].id : undefined),
         checkout.couponCode,
-        result.couponValue
+        result.couponValue,
+        getCheckoutText("coupon", locale, args.texts)
       ),
     },
   };
@@ -105,7 +111,8 @@ function mapGooglePayDisplayItems(
   methods: GetPreOrderDetailsResponse["methods"],
   deliveryMethod?: string,
   couponCode?: string,
-  couponValue?: number
+  couponValue?: number,
+  couponLabel: string = "Coupon"
 ): google.payments.api.DisplayItem[] {
   const displayItems: google.payments.api.DisplayItem[] = [];
 
@@ -114,10 +121,11 @@ function mapGooglePayDisplayItems(
     if (item.details == null) {
       continue;
     }
-    subtotalAmount += item.details.price * item.quantity;
+    const unitPrice = item.details.pricing?.effectivePrice ?? item.details.price;
+    subtotalAmount += unitPrice * item.quantity;
     displayItems.push({
       label: item.details.name + " x " + item.quantity,
-      price: `${round(item.details.price / 100, 2)}`,
+      price: `${round(unitPrice / 100, 2)}`,
       type: "LINE_ITEM",
       status: "FINAL",
     });
@@ -137,7 +145,7 @@ function mapGooglePayDisplayItems(
 
   if (couponCode != null && couponValue != null) {
     displayItems.push({
-      label: `Kupon ${couponCode}`,
+      label: `${couponLabel} ${couponCode}`,
       price: `${round(couponValue / 100, 2)}`,
       type: "DISCOUNT",
       status: "FINAL",

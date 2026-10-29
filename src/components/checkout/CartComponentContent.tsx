@@ -1,7 +1,7 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import React from "react";
 import { useInstrumentContext } from "@/src/analytics/instrument";
-import { useCartProvider } from "./CartProvider";
+import { getCartLines, getProjectID, useCartProvider } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
 import { isErr } from "./lib/err";
 import { formatCurrency } from "./lib/round.number";
@@ -17,6 +17,8 @@ import { getLocale } from "./locale";
 import { buyErrorText } from "./buy-error";
 import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
 import { useCheckoutSlot } from "./appearance.context";
+import { rememberPendingOrder } from "./pending-order";
+import { useCheckoutStore } from "./state";
 
 const CartComponentContent = ({
   className,
@@ -34,6 +36,7 @@ const CartComponentContent = ({
   const totalLabel = useCheckoutSlot("totalLabel");
   const totalValue = useCheckoutSlot("totalValue");
   const deliveryText = useCheckoutSlot("deliveryText");
+  const summaryNote = useCheckoutSlot("summaryNote");
   const countryLabel = useCheckoutSlot("countryLabel");
   const paymentButtons = useCheckoutSlot("paymentButtons");
   const checkoutButton = useCheckoutSlot("checkoutButton");
@@ -48,6 +51,12 @@ const CartComponentContent = ({
   const deliveryCopy = useCheckoutText("delivery");
   const chooseCountryText = useCheckoutText("chooseCountry");
   const nextStepText = useCheckoutText("nextStep");
+  const loadFailedText = useCheckoutText("loadFailed");
+  const retryText = useCheckoutText("retry");
+  const countryRequiredText = useCheckoutText("countryRequired");
+  const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
+  const countrySelectorId = React.useId();
+  const countryHintId = React.useId();
 
   const { mutateAsync: removeProduct } = useMutation({
     mutationFn: provider.removeProductFromCart,
@@ -63,6 +72,13 @@ const CartComponentContent = ({
   });
 
   const [errMsg, setErrMsg] = React.useState("");
+  // Raised outside of the drawer (for example a failed redirect of `window.cart.buyProduct`).
+  const notice = useCheckoutStore((state) => state.notice);
+  React.useEffect(
+    () => () => useCheckoutStore.getState().setNotice(undefined),
+    [],
+  );
+  const shownError = errMsg.length > 0 ? errMsg : (notice ?? "");
   const [missingItemIds, setMissingItemIds] = React.useState<string[]>([]);
 
   const [isCountryOpen, setIsCountryOpen] = React.useState(false);
@@ -82,7 +98,7 @@ const CartComponentContent = ({
     queryKey: ["cart-one-click-payment"],
     queryFn: provider.checkIfApplePayIsAvailable,
   });
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["cart", currentLocale],
     queryFn: provider.getProducts,
   });
@@ -94,6 +110,7 @@ const CartComponentContent = ({
   const [productsParent] = useAutoAnimate(/* optional config */);
 
   const products = isErr(data) ? undefined : data;
+  const hasLoadFailed = !isLoading && (isError || isErr(data));
 
   const countries = isErr(availableCountries) ? [] : availableCountries;
 
@@ -114,6 +131,27 @@ const CartComponentContent = ({
     countryData != null && !isErr(countryData) && countryData != ""
       ? countryData
       : undefined;
+  // The hint waits for the answer: the country is read asynchronously.
+  const isCountryMissing = countryData !== undefined && selectedCountry == null;
+
+  // A stored country the shop does not ship to (or none at all) would leave the checkout button disabled.
+  const autoSelectedCountry = React.useRef(false);
+  React.useEffect(() => {
+    if (
+      autoSelectedCountry.current ||
+      countries == null ||
+      countries.length === 0 ||
+      countryData == null ||
+      (selectedCountry != null &&
+        countries.some((el) => el.code === selectedCountry))
+    ) {
+      return;
+    }
+    autoSelectedCountry.current = true;
+    setCountryAsync(countries[0].code)
+      .then(() => refetchCountry())
+      .catch(() => {});
+  }, [countries, countryData, selectedCountry]);
 
   // One `cart_opened` per opening of the drawer, once the cart is loaded.
   const opened = React.useRef(false);
@@ -164,21 +202,22 @@ const CartComponentContent = ({
 
   const startedCheckout = React.useRef(false);
 
+  /** Rejects when the cart could not be changed; the cart is reloaded either way. */
   async function shouldUpdate(id: string, newQuantity?: number) {
-    if (newQuantity != null) {
-      trackQuantityChange(id, Math.max(0, newQuantity));
-      if (newQuantity <= 0) {
-        await removeProduct({ id: id });
-        await refetch();
-        return;
-      }
-
-      await updateQuantity({
-        id: id,
-        quantity: newQuantity,
-      });
-      await refetch();
+    if (newQuantity == null) {
       return;
+    }
+    trackQuantityChange(id, Math.max(0, newQuantity));
+    try {
+      const result =
+        newQuantity <= 0
+          ? await removeProduct({ id: id })
+          : await updateQuantity({ id: id, quantity: newQuantity });
+      if (isErr(result)) {
+        throw new Error(`cannot change the cart: ${result.error}`);
+      }
+    } finally {
+      await refetch().catch(() => undefined);
     }
   }
 
@@ -186,6 +225,7 @@ const CartComponentContent = ({
     try {
       setErrMsg("");
       setMissingItemIds([]);
+      useCheckoutStore.getState().setNotice(undefined);
 
       if (products != null) {
         if (!startedCheckout.current && products.length > 0) {
@@ -211,6 +251,8 @@ const CartComponentContent = ({
         } catch (e) {}
       }
 
+      // What this order is made of; only these lines go once it is paid.
+      const cartLinesBeforeBuy = getCartLines();
       const response = await continueToCheckoutAsync();
 
       if (isErr(response)) {
@@ -225,7 +267,15 @@ const CartComponentContent = ({
         return;
       }
 
-      await clearCart();
+      // The cart stays until the order is paid; without an order to ask about it is cleared now.
+      if (
+        !rememberPendingOrder(response, {
+          cartProjectId: getProjectID(),
+          lines: cartLinesBeforeBuy,
+        })
+      ) {
+        await clearCart();
+      }
       window.location.href = response.url;
     } catch (e: unknown) {
       console.warn("checkout failed", e);
@@ -250,7 +300,44 @@ const CartComponentContent = ({
         </div>
       )}
 
-      {!isLoading && (products == null || products.length == 0) && (
+      {hasLoadFailed && (
+        <div className={"flex flex-col items-start gap-3 p-4"}>
+          <p
+            role="alert"
+            data-bitsnap-checkout-slot="error"
+            className={cn(error.className)}
+            style={error.style}
+          >
+            {loadFailedText}
+          </p>
+          {notice != null && notice.length > 0 && (
+            <p
+              role="alert"
+              data-bitsnap-checkout-slot="error"
+              className={cn("text-sm", error.className)}
+              style={error.style}
+            >
+              {notice}
+            </p>
+          )}
+          <button
+            type="button"
+            data-bitsnap-checkout-slot="checkoutButton"
+            onClick={() => {
+              refetch().then().catch();
+            }}
+            className={cn(
+              "px-3 py-2 rounded-md transition font-bold",
+              checkoutButton.className,
+            )}
+            style={checkoutButton.style}
+          >
+            {retryText}
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !hasLoadFailed && (products == null || products.length == 0) && (
         <div className={"flex flex-col gap-4 p-4"}>
           <p
             data-bitsnap-checkout-slot="emptyState"
@@ -259,6 +346,16 @@ const CartComponentContent = ({
           >
             {emptyCartText}
           </p>
+          {notice != null && notice.length > 0 && (
+            <p
+              role="alert"
+              data-bitsnap-checkout-slot="error"
+              className={cn("text-sm", error.className)}
+              style={error.style}
+            >
+              {notice}
+            </p>
+          )}
         </div>
       )}
 
@@ -282,9 +379,9 @@ const CartComponentContent = ({
                       )}
                       quantity={product.quantity}
                       details={product.details}
-                      shouldUpdate={(newQuantity) => {
-                        shouldUpdate(product.id, newQuantity).then().catch();
-                      }}
+                      shouldUpdate={(newQuantity) =>
+                        shouldUpdate(product.id, newQuantity)
+                      }
                     />
                     <hr className="h-1" />
                   </li>
@@ -334,6 +431,13 @@ const CartComponentContent = ({
                 )}
               </div>
             </div>
+            <p
+              data-bitsnap-checkout-slot="summaryNote"
+              className={cn("opacity-70 text-sm", summaryNote.className)}
+              style={summaryNote.style}
+            >
+              {extrasCalculatedNextText}
+            </p>
           </div>
 
           {countries && countries?.length > 1 && (
@@ -346,7 +450,7 @@ const CartComponentContent = ({
                 {chooseCountryText}
               </h4>
               <CountrySelector
-                id={Math.random().toString()}
+                id={countrySelectorId}
                 open={isCountryOpen}
                 onToggle={() => {
                   setIsCountryOpen(!isCountryOpen);
@@ -376,6 +480,7 @@ const CartComponentContent = ({
                     name: el.details?.name ?? "",
                     id: el.productID,
                     price: el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0,
+                    currency: el.details?.currency,
                     quantity: el.quantity,
                     isDeliverable: el.details?.isDeliverable ?? false,
                     metadata: el.metadata,
@@ -412,6 +517,7 @@ const CartComponentContent = ({
                 isContinueToCheckoutLoading ||
                 selectedCountry == null
               }
+              aria-describedby={isCountryMissing ? countryHintId : undefined}
               className={cn(
                 "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition font-bold",
                 checkoutButton.className,
@@ -424,13 +530,22 @@ const CartComponentContent = ({
                 nextStepText
               )}
             </button>
-            {errMsg.length > 0 && (
+            {isCountryMissing && (
               <p
+                id={countryHintId}
+                className={"text-sm text-center opacity-70"}
+              >
+                {countryRequiredText}
+              </p>
+            )}
+            {shownError.length > 0 && (
+              <p
+                role="alert"
                 data-bitsnap-checkout-slot="error"
                 className={cn("text-sm text-center", error.className)}
                 style={error.style}
               >
-                {errMsg}
+                {shownError}
               </p>
             )}
           </div>

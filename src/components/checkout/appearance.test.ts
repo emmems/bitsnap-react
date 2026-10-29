@@ -168,6 +168,7 @@ describe("checkout slots", () => {
       "totalLabel",
       "totalValue",
       "deliveryText",
+      "summaryNote",
       "countryLabel",
       "countryTrigger",
       "countryDropdown",
