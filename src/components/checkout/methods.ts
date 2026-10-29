@@ -14,6 +14,10 @@ export namespace Bitsnap {
    * Adds a product or variant to the cart. Returns an `Err` instead of adding
    * anything when the backend does not know the id
    * (`item-ids-not-found`, with the unknown ids in `data`).
+   *
+   * `args.url` is the product page: the cart links the item's image and name
+   * to it. A relative URL is resolved against the current page; only `http`
+   * and `https` links are kept.
    */
   export async function addProductToCart(
     id: string,
@@ -21,6 +25,8 @@ export namespace Bitsnap {
     metadata?: Record<string, string | undefined>,
     // Those fields are used to send the price and currency to the analytics
     args?: {
+      /** Product page the cart item links to. */
+      url?: string;
       name?: string;
       price?: number;
       currency?: string;

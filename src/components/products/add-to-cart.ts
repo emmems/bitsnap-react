@@ -9,6 +9,8 @@ export type AddToCartTarget = {
   host?: string;
   /** Open the cart drawer afterwards. */
   showCart: boolean;
+  /** Product page the cart item links to. */
+  url?: string;
   /** Where `add_to_cart` is reported. Omitted: nothing is reported. */
   analytics?: Instrument;
 };
@@ -71,6 +73,7 @@ export async function addProductToCart(
     1,
     undefined,
     {
+      url: target.url,
       name: product.name,
       price: product.price,
       currency: product.currency,

@@ -13,11 +13,14 @@ const SingleProduct = ({
   isNotAvailable,
   quantity,
   details,
+  url,
   shouldUpdate,
 }: {
   isNotAvailable: boolean;
   quantity: number;
   metadata?: { [key: string]: string | undefined };
+  /** Product page; the image and the name link to it. */
+  url?: string;
   details: SingleProduct;
   /** Rejects when the cart could not be changed. */
   shouldUpdate: (newQuantity?: number) => Promise<unknown> | void;
@@ -47,17 +50,25 @@ const SingleProduct = ({
       style={product.style}
     >
       {showImage && (
-        <img
-          data-bitsnap-checkout-slot="productImage"
-          className={cn(
-            "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden",
-            productImage.className,
-          )}
-          style={productImage.style}
-          src={imageUrl}
-          alt=""
-          onError={() => setBrokenImageUrl(imageUrl)}
-        />
+        <ProductLink
+          url={url}
+          // The name links to the same page; one link per item for keyboards.
+          tabIndex={-1}
+          aria-hidden="true"
+          className="contents"
+        >
+          <img
+            data-bitsnap-checkout-slot="productImage"
+            className={cn(
+              "aspect-auto max-w-[30%] max-w-32 max-h-32 py-2 overflow-hidden",
+              productImage.className,
+            )}
+            style={productImage.style}
+            src={imageUrl}
+            alt=""
+            onError={() => setBrokenImageUrl(imageUrl)}
+          />
+        </ProductLink>
       )}
 
       <div className={"flex flex-col w-full"}>
@@ -66,7 +77,12 @@ const SingleProduct = ({
           className={cn("font-medium", productName.className)}
           style={productName.style}
         >
-          {name}
+          <ProductLink
+            url={url}
+            className="text-inherit no-underline hover:underline"
+          >
+            {name}
+          </ProductLink>
         </p>
         {details.variantName != null && details.variantName.length > 0 && (
           <p className="text-sm opacity-70">{details.variantName}</p>
@@ -111,6 +127,25 @@ const SingleProduct = ({
 };
 
 export default SingleProduct;
+
+/** The children as a link to the product page, or as they are without one. */
+const ProductLink = ({
+  url,
+  children,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+  url?: string;
+  children: React.ReactNode;
+}) => {
+  if (url == null) {
+    return <>{children}</>;
+  }
+  return (
+    <a href={url} {...props}>
+      {children}
+    </a>
+  );
+};
 
 const QuantityComponent = ({
   quantity,

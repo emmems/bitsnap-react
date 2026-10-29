@@ -25,6 +25,7 @@ const cartAddToCartSchema = zod.object({
   isSubscription: zod.boolean().default(false),
   quantity: zod.number(),
   metadata: zod.record(zod.string(), zod.string().optional()).optional(),
+  url: zod.string().optional(),
 });
 
 type CartAddToCartEvent = zod.infer<typeof cartAddToCartSchema>;
@@ -199,6 +200,7 @@ function BitsnapCart({
         productID: data.id,
         quantity: data.quantity,
         metadata: data.metadata,
+        url: data.url,
       });
 
       sentPostMessageToIframe({
