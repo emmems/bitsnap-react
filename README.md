@@ -358,8 +358,17 @@ Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
 `mixedRecurring`, `currencyUnsupported`, `priceChanged`.
 
 When "Next step" fails, the cart shows the text of the backend error code
-(the last six keys above), else the message sent by the server, else
-`checkoutFailed`. It never shows the bare code.
+(`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
+`mixedRecurring`, `currencyUnsupported`, `priceChanged`; `unavailableProducts`
+for `product-not-found`). Server errors (5xx, `internal`) and `invalid-request`
+show `checkoutFailed`. For any other 4xx code the cart shows the message sent
+by the server, else `checkoutFailed`. It never shows the bare code, and never
+a message that is HTML, multi-line, longer than 200 characters or a stack
+trace.
+
+These keys were added in a minor release. If you type your own language
+objects, use `Partial<CheckoutTexts>` (the `texts` prop already accepts it) so
+that they keep compiling when new keys appear.
 
 Returns keys (`ReturnsTexts`) cover each step (`emailStepTitle`,
 `codeStepDescription`, `ordersEmpty`, `confirmationSubmit`, `successTitle`,
@@ -769,12 +778,25 @@ async function handleCheckout() {
 }
 ```
 
-On success `createCheckout` returns `{ status: "ok", redirectURL }`. When the
-backend answers with an error it returns an `Err` with `status: "error"`
-instead (`result.ERR === true`): `result.error` is the backend code
-(`no-payment-gateway`, `price-changed`, ...; `internal-error` when there is
-none) and `result.data.message` the reason sent by the server, when there is
-one.
+On success `createCheckout` returns `{ status: "ok", redirectURL }`. A failed
+response no longer throws and no longer yields an undefined `redirectURL`: it
+returns an `Err` with `status: "error"` instead (`result.ERR === true`), typed
+as `CreateCheckoutResult`. Check `result.status === "ok"` before reading
+`redirectURL`. `result.error` is the backend code (`invalid-request`,
+`product-not-available`, `product-not-found`, `no-payment-gateway`,
+`gateway-not-configured`, `shipping-not-configured`, `mixed-recurring`,
+`currency-unsupported`, `price-changed`, `internal`). New backends send
+`internal` for their own failures; `internal-error` is what the library uses
+when an older backend sent no code. `result.data.message` is the reason sent by
+the server, when it was usable. `result.type` is `internal` for 5xx and
+`badInput` for 4xx.
+
+`createPaymentURL` returns the same errors: the backend code in `error`,
+`type: "badInput"` for 4xx (`"internal"` for 5xx) and `data: { message }`.
+When the backend lists unavailable products (`itemIds`) under
+`product-not-available` or `product-not-found` (or sends no code), the error is
+`item-ids-not-found` and `data` is the array of ids. With any other code the
+code is kept and the ids are in `data.itemIds`.
 
 6. Webhook Handler:
 

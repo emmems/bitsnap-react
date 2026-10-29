@@ -99,7 +99,7 @@ describe("cart error after clicking the checkout button", () => {
     buyResponse = jsonError(400, { success: false, code: "no-payment-gateway", error: "Brak bramki" });
     assert.equal(
       await failCheckout(),
-      "Sklep nie ma jeszcze skonfigurowanej płatności. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+      "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
     );
   });
 
@@ -113,9 +113,19 @@ describe("cart error after clicking the checkout button", () => {
     assert.equal(await failCheckout({ texts: { priceChanged: "Zmiana ceny!" } }), "Zmiana ceny!");
   });
 
-  it("shows the server message for a code without its own text", async () => {
+  it("shows the generic text for invalid-request, not the server message", async () => {
     buyResponse = jsonError(400, { success: false, code: "invalid-request", error: "Nieprawidłowe żądanie." });
-    assert.equal(await failCheckout(), "Nieprawidłowe żądanie.");
+    assert.equal(await failCheckout(), "Coś poszło nie tak. Spróbuj ponownie później.");
+  });
+
+  it("shows the server message of a 4xx code without its own text", async () => {
+    buyResponse = jsonError(400, { success: false, code: "some-business-code", error: "Powód od sklepu." });
+    assert.equal(await failCheckout(), "Powód od sklepu.");
+  });
+
+  it("maps product-not-found to the unavailable products text", async () => {
+    buyResponse = jsonError(404, { success: false, code: "product-not-found", error: "Nie ma" });
+    assert.equal(await failCheckout(), "Nie wszystkie produkty są dostępne w magazynie.");
   });
 
   it("shows the unavailable products text for itemIds", async () => {
@@ -125,7 +135,14 @@ describe("cart error after clicking the checkout button", () => {
 
   it("works against an old backend: no Content-Type and a plain error", async () => {
     buyResponse = () => new Response('{"error":"Failed to create payment session."}', { status: 500 });
-    assert.equal(await failCheckout(), "Failed to create payment session.");
+    assert.equal(await failCheckout(), "Coś poszło nie tak. Spróbuj ponownie później.");
+  });
+
+  it("shows the generic text, not the exception, when the request throws", async () => {
+    buyResponse = () => {
+      throw new TypeError("Failed to fetch");
+    };
+    assert.equal(await failCheckout(), "Coś poszło nie tak. Spróbuj ponownie później.");
   });
 
   it("falls back to the generic text for an empty body or HTML", async () => {

@@ -97,9 +97,17 @@ export async function createPaymentURL(request: LinkRequest) {
   };
 }
 
+/**
+ * What `createCheckout` resolves to. A failed response is an `Err` that also
+ * has `status: "error"`, so `result.status === "ok"` narrows to the success.
+ */
+export type CreateCheckoutResult =
+  | { status: "ok"; redirectURL: string }
+  | (Err & { status: "error" });
+
 export async function createCheckout(
   request: LinkRequest & { apiKey?: string; testMode?: boolean },
-) {
+): Promise<CreateCheckoutResult> {
   const projectID = getProjectID();
   if (projectID == null) {
     throw new Error("No project ID found");

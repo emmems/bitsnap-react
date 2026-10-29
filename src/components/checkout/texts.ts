@@ -53,9 +53,9 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     unavailableProducts: "Not all products are available.",
     checkoutFailed: "Something went wrong. Please try again later.",
     noPaymentGateway:
-      "This shop has no payment set up yet. Try again later or contact the seller.",
+      "This shop doesn't accept online payments yet. Try again later or contact the seller.",
     gatewayNotConfigured:
-      "Payment in this shop is not configured correctly. Try again later or contact the seller.",
+      "This shop can't accept payments right now. Try again later or contact the seller.",
     shippingNotConfigured:
       "Delivery in this shop is not configured yet. Try again later or contact the seller.",
     mixedRecurring:
@@ -74,16 +74,16 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
     checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
     noPaymentGateway:
-      "Sklep nie ma jeszcze skonfigurowanej płatności. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+      "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
     gatewayNotConfigured:
-      "Płatności w tym sklepie nie są poprawnie skonfigurowane. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+      "Płatności w tym sklepie nie są poprawnie skonfigurowane. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
     shippingNotConfigured:
-      "Dostawa w tym sklepie nie jest jeszcze skonfigurowana. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+      "Dostawa w tym sklepie nie jest jeszcze skonfigurowana. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
     mixedRecurring:
-      "Subskrypcji i produktów jednorazowych nie można opłacić razem. Kup je osobno.",
+      "Subskrypcji i produktów jednorazowych nie można opłacić razem. Opłać je w osobnych zamówieniach.",
     currencyUnsupported:
-      "Sklep nie przyjmuje płatności w walucie tego koszyka.",
-    priceChanged: "Cena produktu się zmieniła — odśwież stronę.",
+      "Sklep nie przyjmuje płatności w tej walucie. Zmień walutę lub skontaktuj się ze sprzedawcą.",
+    priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
   },
 };
 

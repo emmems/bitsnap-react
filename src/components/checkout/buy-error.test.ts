@@ -53,8 +53,45 @@ describe("parseBuyError", () => {
   it("ignores HTML and long plain text", () => {
     assert.equal(parseBuyError("<!DOCTYPE html><html><body>502</body></html>").message, undefined);
     assert.equal(parseBuyError("<html>oops</html>").message, undefined);
-    assert.equal(parseBuyError("x".repeat(301)).message, undefined);
-    assert.equal(parseBuyError("x".repeat(300)).message, "x".repeat(300));
+    const long = "x ".repeat(99) + "xx";
+    assert.equal(parseBuyError(long + "x").message, undefined);
+    assert.equal(parseBuyError(long).message, long);
+  });
+
+  it("ignores bare proxy markup, multi-line text and stack traces", () => {
+    for (const body of [
+      "<h1>502 Bad Gateway</h1>",
+      "Bad <b>gateway</b>",
+      "Bad gateway\nretry later",
+      "TypeError: x is undefined",
+      json({ error: "Boom at\n    at run (file.js:1:1)" }),
+    ]) {
+      assert.equal(parseBuyError(body).message, undefined, body);
+    }
+  });
+
+  it("ignores messages that look like codes", () => {
+    for (const body of ["internal_error", "bad-gateway", "forbidden", json({ error: "no_payment_gateway" })]) {
+      assert.equal(parseBuyError(body).message, undefined, body);
+    }
+    assert.equal(parseBuyError("Forbidden request").message, "Forbidden request");
+  });
+
+  it("rejects JSON scalars in a wrapped error", () => {
+    for (const error of ["123", "null", "true", '"text here"', "[1]"]) {
+      assert.deepEqual(parseBuyError(json({ error })), { code: "internal-error", message: undefined }, error);
+    }
+  });
+
+  it("reads inner.error before inner.message and carries the inner code up", () => {
+    assert.deepEqual(
+      parseBuyError(json({ error: json({ error: "Brak bramki.", message: "Inne", code: "no-payment-gateway" }) })),
+      { code: "no-payment-gateway", message: "Brak bramki." },
+    );
+    assert.deepEqual(
+      parseBuyError(json({ code: "price-changed", error: json({ message: "Cena się zmieniła.", code: "other" }) })),
+      { code: "price-changed", message: "Cena się zmieniła." },
+    );
   });
 
   it("survives empty, null and non-object bodies", () => {
@@ -75,12 +112,48 @@ describe("buyErrorFromResponse", () => {
     assert.deepEqual(err, { ERR: true, error: "item-ids-not-found", type: "badInput", data: ["a"] });
   });
 
-  it("picks the type from the status and carries the message", () => {
-    assert.deepEqual(buyErrorFromResponse(400, json({ code: "price-changed", error: "m" })), {
+  it("keeps item-ids-not-found for product-not-found and for a missing code", () => {
+    for (const body of [
+      { code: "product-not-found", itemIds: ["a"] },
+      { error: "x", itemIds: ["a"] },
+    ]) {
+      assert.deepEqual(buyErrorFromResponse(404, json(body)), {
+        ERR: true,
+        error: "item-ids-not-found",
+        type: "badInput",
+        data: ["a"],
+      });
+    }
+  });
+
+  it("keeps any other code and puts the ids in data", () => {
+    assert.deepEqual(
+      buyErrorFromResponse(400, json({ code: "price-changed", error: "Cena się zmieniła.", itemIds: ["a", "b"] })),
+      { ERR: true, error: "price-changed", type: "badInput", data: { message: "Cena się zmieniła.", itemIds: ["a", "b"] } },
+    );
+    assert.deepEqual(buyErrorFromResponse(500, json({ code: "internal", itemIds: ["a"] })), {
+      ERR: true,
+      error: "internal",
+      type: "internal",
+      data: { message: undefined, itemIds: ["a"] },
+    });
+  });
+
+  it("does not treat empty itemIds as unavailable products", () => {
+    assert.deepEqual(buyErrorFromResponse(400, json({ code: "price-changed", itemIds: [] })), {
       ERR: true,
       error: "price-changed",
       type: "badInput",
-      data: { message: "m" },
+      data: { message: undefined },
+    });
+  });
+
+  it("picks the type from the status and carries the message", () => {
+    assert.deepEqual(buyErrorFromResponse(400, json({ code: "price-changed", error: "Cena się zmieniła." })), {
+      ERR: true,
+      error: "price-changed",
+      type: "badInput",
+      data: { message: "Cena się zmieniła." },
     });
     const internal = buyErrorFromResponse(500, "");
     assert.equal(internal.error, "internal-error");
@@ -113,14 +186,33 @@ describe("buyErrorText", () => {
     }
     assert.equal(
       buyErrorText({ error: "price-changed" }, get("pl")),
-      "Cena produktu się zmieniła — odśwież stronę.",
+      "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
     );
   });
 
-  it("falls back to the server message, then to the generic text", () => {
-    for (const code of ["invalid-request", "product-not-found", "internal", "internal-error", "toString"]) {
-      assert.equal(buyErrorText({ error: code, data: { message: "Powód" } }, get("pl")), "Powód");
-      assert.equal(buyErrorText({ error: code, data: { message: undefined } }, get("pl")), CHECKOUT_TEXT_TABLES.pl.checkoutFailed);
+  it("maps product-not-found to the unavailable products text", () => {
+    assert.equal(
+      buyErrorText({ error: "product-not-found", type: "badInput", data: { message: "x" } }, get("pl")),
+      CHECKOUT_TEXT_TABLES.pl.unavailableProducts,
+    );
+  });
+
+  it("shows the generic text for internal, invalid-request and 5xx", () => {
+    const message = { message: "Powód" };
+    for (const err of [
+      { error: "internal", type: "badInput", data: message },
+      { error: "internal-error", type: "internal", data: message },
+      { error: "invalid-request", type: "badInput", data: message },
+      { error: "some-business-code", type: "internal", data: message },
+    ]) {
+      assert.equal(buyErrorText(err, get("pl")), CHECKOUT_TEXT_TABLES.pl.checkoutFailed);
+    }
+  });
+
+  it("falls back to the server message of a 4xx, then to the generic text", () => {
+    for (const code of ["some-business-code", "internal-error", "toString"]) {
+      assert.equal(buyErrorText({ error: code, type: "badInput", data: { message: "Powód" } }, get("pl")), "Powód");
+      assert.equal(buyErrorText({ error: code, type: "badInput", data: { message: undefined } }, get("pl")), CHECKOUT_TEXT_TABLES.pl.checkoutFailed);
       assert.equal(buyErrorText({ error: code }, get("en")), CHECKOUT_TEXT_TABLES.en.checkoutFailed);
     }
   });

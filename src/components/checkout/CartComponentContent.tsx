@@ -185,6 +185,7 @@ const CartComponentContent = ({
   async function continueToCheckout() {
     try {
       setErrMsg("");
+      setMissingItemIds([]);
 
       if (products != null) {
         if (!startedCheckout.current && products.length > 0) {
@@ -227,7 +228,8 @@ const CartComponentContent = ({
       await clearCart();
       window.location.href = response.url;
     } catch (e: unknown) {
-      setErrMsg(`${e}`);
+      console.warn("checkout failed", e);
+      setErrMsg(resolveCheckoutText("checkoutFailed"));
     }
   }
 
