@@ -35,11 +35,11 @@ export const STYLES = `
 .root[data-theme=dark]{${vars(PALETTE.dark)};color-scheme:dark}
 button,input{font:inherit;color:inherit}
 .banner,.overlay{pointer-events:auto}
-::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+@supports (color:color-mix(in srgb,red 50%,blue)){::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}}
 .banner{position:absolute;background:var(--bg);color:var(--fg);max-height:92vh;overflow:auto;outline:none;animation:in .22s ease-out}
 .bottom{left:0;right:0;bottom:0;border-top:1px solid var(--border);box-shadow:0 -8px 28px rgba(15,23,42,.08);padding:20px 24px calc(20px + env(safe-area-inset-bottom,0px))}
 .root[data-theme=dark] .bottom{box-shadow:0 -8px 28px rgba(0,0,0,.4)}
-.bottom .inner{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"text actions" "foot actions";gap:4px 40px;align-items:center;max-width:1120px;margin:0 auto}
+.bottom .inner{display:grid;grid-template-columns:minmax(min(100%,42ch),1fr) auto;grid-template-areas:"text actions" "foot actions";gap:4px 40px;align-items:center;max-width:1120px;margin:0 auto}
 .bottom .text{max-width:68ch}
 .bottom .btn,.bottom .link-btn{flex:0 0 auto}
 .card{bottom:16px;width:min(400px,calc(100vw - 32px));border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 12px 32px rgba(15,23,42,.14)}
@@ -51,16 +51,16 @@ button,input{font:inherit;color:inherit}
 .actions{grid-area:actions;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
 .card .actions{justify-content:stretch}
 .foot{grid-area:foot}
-.title{font-size:17px;font-weight:650;line-height:1.35;letter-spacing:-.01em;text-wrap:balance;margin:0 0 6px}
-.desc{margin:0;color:var(--muted);line-height:1.55;text-wrap:pretty}
+.title{overflow-wrap:anywhere;font-size:17px;font-weight:650;line-height:1.35;letter-spacing:-.01em;text-wrap:balance;margin:0 0 6px}
+.desc{overflow-wrap:anywhere;margin:0;color:var(--muted);line-height:1.55;text-wrap:pretty}
 .desc a{color:var(--link);text-decoration:underline;text-underline-offset:3px}
-.btn,.link-btn{min-height:44px;padding:0 20px;border-radius:10px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color .12s ease-out,filter .12s ease-out,border-color .12s ease-out}
+.btn,.link-btn{min-height:38px;padding:0 16px;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color .12s ease-out,filter .12s ease-out,border-color .12s ease-out}
 .btn{border:2px solid var(--accent);background:var(--accent);color:var(--on-accent);flex:1 1 150px}
 .btn:hover{filter:brightness(.93)}
 .btn:active{filter:brightness(.87)}
-.link-btn{border:1px solid var(--border);background:transparent;color:var(--fg);text-decoration:none}
-.link-btn:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
-.link-btn:active{background:color-mix(in srgb,var(--fg) 10%,transparent)}
+.link-btn{border:1px solid var(--off);background:transparent;color:var(--fg);text-decoration:none}
+.link-btn:hover{border-color:var(--fg)}
+@supports (color:color-mix(in srgb,red 50%,blue)){.link-btn:hover{background:color-mix(in srgb,var(--fg) 9%,transparent)}.link-btn:active{background:color-mix(in srgb,var(--fg) 14%,transparent)}}
 .card .link-btn{flex:1 1 100%}
 button:focus-visible,a:focus-visible,.dialog:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .foot{font-size:12px;color:var(--muted);padding-top:8px}
@@ -101,7 +101,7 @@ input:focus-visible+.track{outline:2px solid var(--focus);outline-offset:2px}
 }
 @media(max-width:640px){
 .bottom{padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
-.bottom .inner{grid-template-columns:1fr;grid-template-areas:"text" "actions" "foot";gap:12px}
+.bottom .inner{gap:12px}
 .bottom .actions{justify-content:stretch}
 .bottom .btn{flex:1 1 130px}
 .bottom .link-btn{flex:1 1 100%}
@@ -111,7 +111,8 @@ input:focus-visible+.track{outline:2px solid var(--focus);outline-offset:2px}
 .d-head{padding-left:16px}
 .d-body{padding:0 16px 8px}
 .d-foot{padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px))}
-.btn{flex-basis:130px;padding:0 12px}
+.btn{flex-basis:130px}
+.btn,.link-btn{padding:0 12px;min-height:40px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 `.replace(/\n/g, "");
