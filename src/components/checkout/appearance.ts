@@ -88,6 +88,8 @@ export const CHECKOUT_SLOT_NAMES = [
   "countrySearch",
   "countryOption",
   "paymentButtons",
+  "paymentMethods",
+  "paymentMethodOption",
   "checkoutButton",
   "emptyState",
   "error",

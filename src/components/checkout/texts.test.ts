@@ -43,6 +43,17 @@ const english = {
     "Discounts, shipping and taxes are calculated at the next step",
   loadFailed: "Could not load your cart.",
   retry: "Try again",
+  paymentMethodLegend: "How would you like to pay?",
+  paymentMethodOnline: "Pay online",
+  paymentMethodOnlineDescription:
+    "Card, BLIK code or instant bank payment. You pay right away.",
+  paymentMethodManualTransfer: "Bank transfer",
+  paymentMethodManualBlik: "BLIK – transfer to a phone number",
+  paymentMethodManualBoth: "Bank transfer or BLIK to a phone number",
+  paymentMethodManualDescription:
+    "You pay in your bank's app. We show the payment details after you place the order, and the order waits for your payment.",
+  paymentMethodManualBlikNote:
+    "This is not a BLIK code payment – you do not enter a 6‑digit code.",
 };
 
 const polish = {
@@ -85,6 +96,17 @@ const polish = {
   extrasCalculatedNext: "Rabaty, dostawa i podatki w następnym kroku",
   loadFailed: "Nie udało się wczytać koszyka.",
   retry: "Spróbuj ponownie",
+  paymentMethodLegend: "Jak chcesz zapłacić?",
+  paymentMethodOnline: "Zapłać online",
+  paymentMethodOnlineDescription:
+    "Karta, kod BLIK lub szybki przelew. Płacisz od razu.",
+  paymentMethodManualTransfer: "Przelew bankowy",
+  paymentMethodManualBlik: "BLIK – przelew na telefon",
+  paymentMethodManualBoth: "Przelew lub BLIK na telefon",
+  paymentMethodManualDescription:
+    "Zapłacisz w aplikacji swojego banku. Dane do płatności pokażemy po złożeniu zamówienia, a zamówienie poczeka na Twoją wpłatę.",
+  paymentMethodManualBlikNote:
+    "To nie jest płatność kodem BLIK – nie wpisujesz 6‑cyfrowego kodu.",
 };
 
 describe("checkout texts without overrides", () => {

@@ -76,6 +76,22 @@ export type CheckoutTexts = {
   loadFailed: string;
   /** Button that loads the cart again. */
   retry: string;
+  /** Heading of the payment method choice (shown only when the shop offers paying by hand). */
+  paymentMethodLegend: string;
+  /** Option that pays through the shop's online gateway. */
+  paymentMethodOnline: string;
+  /** Hint under the online option. */
+  paymentMethodOnlineDescription: string;
+  /** Manual option when the seller takes bank transfers only. */
+  paymentMethodManualTransfer: string;
+  /** Manual option when the seller takes BLIK transfers to a phone number only. */
+  paymentMethodManualBlik: string;
+  /** Manual option when the seller takes both. */
+  paymentMethodManualBoth: string;
+  /** What paying by hand means: the details come after the order is placed. */
+  paymentMethodManualDescription: string;
+  /** Shown with a selected manual option that includes BLIK to a phone number. */
+  paymentMethodManualBlikNote: string;
 };
 
 export type CheckoutTextKey = keyof CheckoutTexts;
@@ -121,6 +137,17 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
       "Discounts, shipping and taxes are calculated at the next step",
     loadFailed: "Could not load your cart.",
     retry: "Try again",
+    paymentMethodLegend: "How would you like to pay?",
+    paymentMethodOnline: "Pay online",
+    paymentMethodOnlineDescription:
+      "Card, BLIK code or instant bank payment. You pay right away.",
+    paymentMethodManualTransfer: "Bank transfer",
+    paymentMethodManualBlik: "BLIK – transfer to a phone number",
+    paymentMethodManualBoth: "Bank transfer or BLIK to a phone number",
+    paymentMethodManualDescription:
+      "You pay in your bank's app. We show the payment details after you place the order, and the order waits for your payment.",
+    paymentMethodManualBlikNote:
+      "This is not a BLIK code payment – you do not enter a 6‑digit code.",
   },
   pl: {
     cart: "Koszyk",
@@ -162,6 +189,17 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     extrasCalculatedNext: "Rabaty, dostawa i podatki w następnym kroku",
     loadFailed: "Nie udało się wczytać koszyka.",
     retry: "Spróbuj ponownie",
+    paymentMethodLegend: "Jak chcesz zapłacić?",
+    paymentMethodOnline: "Zapłać online",
+    paymentMethodOnlineDescription:
+      "Karta, kod BLIK lub szybki przelew. Płacisz od razu.",
+    paymentMethodManualTransfer: "Przelew bankowy",
+    paymentMethodManualBlik: "BLIK – przelew na telefon",
+    paymentMethodManualBoth: "Przelew lub BLIK na telefon",
+    paymentMethodManualDescription:
+      "Zapłacisz w aplikacji swojego banku. Dane do płatności pokażemy po złożeniu zamówienia, a zamówienie poczeka na Twoją wpłatę.",
+    paymentMethodManualBlikNote:
+      "To nie jest płatność kodem BLIK – nie wpisujesz 6‑cyfrowego kodu.",
   },
 };
 

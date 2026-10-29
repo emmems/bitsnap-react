@@ -166,4 +166,59 @@
             var(--color-neutral-700)
         );
     }
+    /* Payment method choice (only when the shop offers paying by hand). Cards
+     * use the border token, the selected one the foreground color and the
+     * surface; the radios follow the foreground. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] legend {
+        color: var(--bitsnap-checkout-foreground, inherit);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] {
+        border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:hover {
+        border-color: var(
+            --bitsnap-checkout-muted-foreground,
+            var(--color-neutral-500)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"][data-selected] {
+        border-color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+        background-color: var(--bitsnap-checkout-surface, var(--color-neutral-800));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:has(input:focus-visible) {
+        outline: 2px solid
+            var(--bitsnap-checkout-focus-ring, var(--color-neutral-400));
+        outline-offset: 2px;
+    }
+
+    /* Drawn by hand: a native unchecked radio is a white disc on the dark panel. */
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"] {
+        appearance: none;
+        margin: 0;
+        border-radius: 9999px;
+        border: 1.5px solid
+            var(--bitsnap-checkout-muted-foreground, var(--color-neutral-400));
+        background-color: transparent;
+        outline: none;
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"]:checked {
+        border: 5px solid var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-payment-method-description] {
+        color: var(
+            --bitsnap-checkout-muted-foreground,
+            var(--color-neutral-400)
+        );
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"]:disabled [data-bitsnap-checkout-slot="paymentMethodOption"] {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
 }
