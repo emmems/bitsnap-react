@@ -794,7 +794,7 @@ when an older backend sent no code. `result.data` is a `BuyErrorData`
 is `internal` for 5xx and `badInput` for 4xx.
 
 ```tsx
-import { ITEM_IDS_NOT_FOUND, type BuyErrorData } from "@bitsnap/bitsnap-react";
+import { ITEM_IDS_NOT_FOUND, type BuyErrorData } from "bitsnap-react";
 
 if (result.status === "error") {
   if (result.error === ITEM_IDS_NOT_FOUND) {
