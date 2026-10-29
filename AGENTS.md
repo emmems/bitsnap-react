@@ -46,6 +46,12 @@ Rules:
   the page has not set them; if the page cart belongs to another project or
   host it changes nothing, warns and shows the error state, so such a page
   must pass `onAddToCart`.
+- Cart links: `Bitsnap.addProductToCart(id, qty, metadata, { url })` stores the
+  product page with the cart line (localStorage), and the cart links the
+  item's image and name to it. Relative URLs are resolved against the page
+  that adds the item; only `http`/`https` are kept (`cartItemURL`). The
+  `ADD_TO_CART` postMessage accepts `url` too. `ProductList`'s default action
+  passes `productHref(product)`.
 - Styling: `appearance={{ theme, tokens, elements }}`, scoped to
   `[data-bitsnap-products]`. Texts: `texts`, Polish and English defaults by
   `locale`.

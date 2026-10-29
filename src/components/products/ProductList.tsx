@@ -488,7 +488,7 @@ function ProductListContent({
 
   const { projectID, host } = options;
   const addFor = useCallback(
-    (product: PublicListProduct) => async () => {
+    (product: PublicListProduct, href: string) => async () => {
       if (onAddToCart != null) {
         // The list reports the add itself; a cart helper called inside must not report it again.
         await withCartAnalyticsMuted(() => onAddToCart(product));
@@ -500,6 +500,7 @@ function ProductListContent({
         host,
         showCart: showCartOnAdd,
         analytics: instrument,
+        url: href,
       });
     },
     [onAddToCart, projectID, host, showCartOnAdd, instrument],
@@ -531,16 +532,19 @@ function ProductListContent({
         aria-busy={isLoading || undefined}
         className={cn(grid.className, isLoading && "opacity-60")}
       >
-        {products.map((product, index) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            position={(page - 1) * pageSize + index}
-            href={productHref(product)}
-            onAdd={addFor(product)}
-            renderItem={renderItem}
-          />
-        ))}
+        {products.map((product, index) => {
+          const href = productHref(product);
+          return (
+            <ProductCard
+              key={product.id}
+              product={product}
+              position={(page - 1) * pageSize + index}
+              href={href}
+              onAdd={addFor(product, href)}
+              renderItem={renderItem}
+            />
+          );
+        })}
       </ul>
     );
   }

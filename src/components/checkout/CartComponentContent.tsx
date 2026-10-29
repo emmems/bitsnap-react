@@ -379,6 +379,7 @@ const CartComponentContent = ({
                       )}
                       quantity={product.quantity}
                       details={product.details}
+                      url={product.url}
                       shouldUpdate={(newQuantity) =>
                         shouldUpdate(product.id, newQuantity)
                       }

@@ -27,7 +27,7 @@ const product = {
   price: 2500,
   currency: "PLN",
   metadata: {},
-  image_url: null,
+  image_url: null as string | null,
   isDeliverable: false,
   variants: [{ id: "var1", name: "Blue", price: 2500, currency: "PLN" }],
 };
@@ -173,6 +173,33 @@ describe("cart drawer accessibility", () => {
       panel.querySelector('[data-bitsnap-checkout-slot="summaryNote"]')?.textContent,
       "Discounts, shipping and taxes are calculated at the next step",
     );
+  });
+});
+
+describe("cart product links", () => {
+  it("links the image and the name to the product page given when adding", async () => {
+    product.image_url = "https://cdn.example.test/mug.png";
+    try {
+      await mount();
+      await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1, undefined, { url: "/p/mug" })));
+      await React.act(async () => void (await Bitsnap.addProductToCart("prod1", 1, undefined, { url: "javascript:alert(1)" })));
+      await openCart();
+      const [linked, unsafe] = Array.from(dialog()!.querySelectorAll('[data-bitsnap-checkout-slot="product"]'));
+
+      const expected = new URL("/p/mug", page.win.location.href).href;
+      const nameLink = linked.querySelector<HTMLAnchorElement>('[data-bitsnap-checkout-slot="productName"] a')!;
+      assert.equal(nameLink.getAttribute("href"), expected);
+      assert.equal(nameLink.textContent, "Mug");
+      const imageLink = linked.querySelector('[data-bitsnap-checkout-slot="productImage"]')!.closest("a")!;
+      assert.equal(imageLink.getAttribute("href"), expected);
+      assert.equal(imageLink.getAttribute("tabindex"), "-1", "one tab stop per item");
+      assert.equal(imageLink.getAttribute("aria-hidden"), "true");
+
+      assert.equal(unsafe.querySelector("a"), null, "a javascript: URL is not linked");
+      assert.equal(unsafe.querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
+    } finally {
+      product.image_url = null;
+    }
   });
 });
 

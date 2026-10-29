@@ -614,7 +614,9 @@ when the page has not set them yet (`setProjectID`, `setCustomHost`, or the
 cart script tag). When the page cart already belongs to another project or
 host, the list does not take it over: it logs a warning and shows the error
 message, so pass `onAddToCart` there. The cart item is `cartItemId ?? id`, the
-variant ID for single-variant products.
+variant ID for single-variant products. The default action also passes the
+card's `productHref` as the cart item's `url`, so the image and name in the
+cart link back to the product page.
 Products with variants or a subscription link to the product page ("Wybierz" /
 "Zobacz"). Pass `onAddToCart` to do something else, for example to use your own
 cart.
@@ -720,9 +722,13 @@ import { Bitsnap } from "bitsnap-react";
 // Modern approach using namespace
 async function handleCart() {
   // Add product to cart
-  await Bitsnap.addProductToCart("product-id", 2, {
-    customField: "value",
-  });
+  await Bitsnap.addProductToCart(
+    "product-id",
+    2,
+    { customField: "value" },
+    // Optional: the cart links the item's image and name to this page.
+    { url: "https://shop.example.com/p/product-slug" },
+  );
 
   // Show cart
   Bitsnap.showCart();

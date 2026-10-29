@@ -20,7 +20,11 @@ import { sendAnalyticEvent } from "./frontent.analytics";
 import { mapGooglePayConfiguration } from "./google.pay.mapper";
 import { buildURL } from "./helper.methods";
 import { Err, isErr } from "./lib/err";
-import { findMissingProductIDs, findProductForCartItem } from "./cart-items";
+import {
+  cartItemURL,
+  findMissingProductIDs,
+  findProductForCartItem,
+} from "./cart-items";
 import { round } from "./lib/round.number";
 import { LinkRequest } from "./link.request.schema";
 import {
@@ -48,6 +52,8 @@ type CartProduct = {
   productID: string;
   quantity: number;
   metadata?: { [key: string]: string | undefined };
+  /** Product page the cart item links to (image and name). */
+  url?: string;
 
   // Those fields are used to send the price and currency to the analytics
   name?: string;
@@ -80,6 +86,8 @@ export interface CartMethods {
         productID: string;
         quantity: number;
         metadata?: { [key: string]: string | undefined };
+        /** Product page given when the item was added. */
+        url?: string;
         details?: SingleProduct;
         /** The catalog product, when `productID` is one of its variants. */
         catalogProductID?: string;
@@ -320,6 +328,7 @@ const getProducts: (
       productID: string;
       quantity: number;
       metadata?: { [key: string]: string | undefined };
+      url?: string;
       details?: SingleProduct;
       /** The catalog product, when `productID` is one of its variants. */
       catalogProductID?: string;
@@ -416,6 +425,7 @@ const checkoutProduct = zod.object({
   quantity: zod.number(),
   priceVersion: zod.string().optional(),
   metadata: zod.record(zod.string(), zod.string().optional()).optional(),
+  url: zod.string().optional(),
 });
 type CheckoutProduct = zod.infer<typeof checkoutProduct>;
 const checkoutSchema = zod.object({
@@ -477,6 +487,10 @@ async function addProducts(projectID: string, products: CartProduct[]) {
       quantity: el.quantity,
       priceVersion: latestProducts.find((product) => product.productID === el.productID)?.details?.pricing?.priceVersion,
       metadata: el.metadata,
+      url: cartItemURL(
+        el.url,
+        typeof window !== "undefined" ? window.location.href : undefined,
+      ),
     })),
   );
   trackCartAdd(products, latestProducts);

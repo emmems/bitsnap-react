@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findMissingProductIDs, findProductForCartItem } from "./cart-items";
+import {
+  cartItemURL,
+  findMissingProductIDs,
+  findProductForCartItem,
+} from "./cart-items";
 
 const products = [
   { id: "prodv2_a", variants: [] },
@@ -38,4 +42,28 @@ test("findMissingProductIDs lists unresolved ids once", () => {
     findMissingProductIDs(["prodv2_a"], [{ productID: "prodv2_a" }]),
     [],
   );
+});
+
+test("cartItemURL keeps http(s) links and resolves relative ones", () => {
+  assert.equal(
+    cartItemURL("https://shop.example.com/p/a"),
+    "https://shop.example.com/p/a",
+  );
+  assert.equal(
+    cartItemURL("/p/a", "https://shop.example.com/catalog"),
+    "https://shop.example.com/p/a",
+  );
+  assert.equal(
+    cartItemURL(" p/a ", "http://shop.example.com/catalog/"),
+    "http://shop.example.com/catalog/p/a",
+  );
+});
+
+test("cartItemURL drops empty, unsafe and unresolvable links", () => {
+  assert.equal(cartItemURL(undefined), undefined);
+  assert.equal(cartItemURL("  "), undefined);
+  assert.equal(cartItemURL("javascript:alert(1)"), undefined);
+  assert.equal(cartItemURL("JavaScript:alert(1)", "https://a.example"), undefined);
+  assert.equal(cartItemURL("data:text/html,x"), undefined);
+  assert.equal(cartItemURL("/p/a"), undefined);
 });
