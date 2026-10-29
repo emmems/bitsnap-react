@@ -11,6 +11,18 @@ const english = {
   chooseCountry: "Choose a country",
   nextStep: "Next step",
   unavailableProducts: "Not all products are available.",
+  checkoutFailed: "Something went wrong. Please try again later.",
+  noPaymentGateway:
+    "This shop has no payment set up yet. Try again later or contact the seller.",
+  gatewayNotConfigured:
+    "Payment in this shop is not configured correctly. Try again later or contact the seller.",
+  shippingNotConfigured:
+    "Delivery in this shop is not configured yet. Try again later or contact the seller.",
+  mixedRecurring:
+    "Subscriptions and one-time products cannot be paid for together. Buy them separately.",
+  currencyUnsupported:
+    "The shop cannot accept payments in the currency of this cart.",
+  priceChanged: "The product price has changed. Refresh the page.",
 };
 
 const polish = {
@@ -21,6 +33,17 @@ const polish = {
   chooseCountry: "Wybierz kraj",
   nextStep: "Następny krok",
   unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
+  checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
+  noPaymentGateway:
+    "Sklep nie ma jeszcze skonfigurowanej płatności. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+  gatewayNotConfigured:
+    "Płatności w tym sklepie nie są poprawnie skonfigurowane. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+  shippingNotConfigured:
+    "Dostawa w tym sklepie nie jest jeszcze skonfigurowana. Spróbuj później lub skontaktuj się ze sprzedawcą.",
+  mixedRecurring:
+    "Subskrypcji i produktów jednorazowych nie można opłacić razem. Kup je osobno.",
+  currencyUnsupported: "Sklep nie przyjmuje płatności w walucie tego koszyka.",
+  priceChanged: "Cena produktu się zmieniła — odśwież stronę.",
 };
 
 describe("checkout texts without overrides", () => {

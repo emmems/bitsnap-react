@@ -3,6 +3,7 @@ import { visitorHeaders } from "@/src/analytics/core";
 import { clientHeaders } from "@/src/lib/client-header";
 import { getCheckoutMethods, getLocale, getProjectID } from "./CartProvider";
 import { HOST } from "./constants";
+import { buyErrorFromResponse } from "./buy-error";
 import { buildURL } from "./helper.methods";
 import { Err } from "./lib/err";
 import { LinkRequest } from "./link.request.schema";
@@ -56,6 +57,14 @@ export namespace Bitsnap {
   }
 }
 
+async function readBody(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
 export async function createPaymentURL(request: LinkRequest) {
   const projectID = getProjectID();
   if (projectID == null) {
@@ -76,24 +85,9 @@ export async function createPaymentURL(request: LinkRequest) {
   });
 
   if (result.status != 200) {
-    if (result.headers.get("Content-Type")?.includes("application/json")) {
-      try {
-        const payload = await result.json();
-        if ("itemIds" in payload && Array.isArray(payload.itemIds)) {
-          const itemIds: string[] = payload.itemIds;
-          return Err("item-ids-not-found", "badInput", itemIds);
-        }
-      } catch (error) {}
-      return Err("internal-error", "internal");
-    } else {
-      console.warn(
-        "result",
-        await result.text(),
-        result.status,
-        result.statusText,
-      );
-    }
-    return Err("internal-error", "internal");
+    const err = buyErrorFromResponse(result.status, await readBody(result));
+    console.warn("cannot create payment URL", result.status, err.error);
+    return err;
   }
 
   const response: { url: string; sessionID: string } = await result.json();
@@ -134,12 +128,20 @@ export async function createCheckout(
     body: JSON.stringify(request),
   });
 
+  if (!response.ok) {
+    // `status` keeps `result.status === "ok"` narrowing for existing callers.
+    return {
+      ...buyErrorFromResponse(response.status, await readBody(response)),
+      status: "error" as const,
+    };
+  }
+
   const payload: {
     url: string;
   } = await response.json();
 
   return {
-    status: "ok",
+    status: "ok" as const,
     redirectURL: payload.url,
   };
 }

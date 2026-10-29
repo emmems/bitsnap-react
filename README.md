@@ -353,7 +353,13 @@ copy per language, pass a different object.
 ```
 
 Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
-`chooseCountry`, `nextStep`, `unavailableProducts`.
+`chooseCountry`, `nextStep`, `unavailableProducts`, `checkoutFailed`,
+`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
+`mixedRecurring`, `currencyUnsupported`, `priceChanged`.
+
+When "Next step" fails, the cart shows the text of the backend error code
+(the last six keys above), else the message sent by the server, else
+`checkoutFailed`. It never shows the bare code.
 
 Returns keys (`ReturnsTexts`) cover each step (`emailStepTitle`,
 `codeStepDescription`, `ordersEmpty`, `confirmationSubmit`, `successTitle`,
@@ -762,6 +768,13 @@ async function handleCheckout() {
   }
 }
 ```
+
+On success `createCheckout` returns `{ status: "ok", redirectURL }`. When the
+backend answers with an error it returns an `Err` with `status: "error"`
+instead (`result.ERR === true`): `result.error` is the backend code
+(`no-payment-gateway`, `price-changed`, ...; `internal-error` when there is
+none) and `result.data.message` the reason sent by the server, when there is
+one.
 
 6. Webhook Handler:
 

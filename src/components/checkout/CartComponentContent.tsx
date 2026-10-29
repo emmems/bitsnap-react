@@ -14,7 +14,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { cn } from "@/src/lib/utils";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { getLocale } from "./locale";
-import { useCheckoutText } from "./texts.context";
+import { buyErrorText } from "./buy-error";
+import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
 import { useCheckoutSlot } from "./appearance.context";
 
 const CartComponentContent = ({
@@ -41,6 +42,7 @@ const CartComponentContent = ({
   const skeleton = useCheckoutSlot("skeleton");
 
   const unavailableProductsText = useCheckoutText("unavailableProducts");
+  const resolveCheckoutText = useCheckoutTextResolver();
   const emptyCartText = useCheckoutText("emptyCart");
   const totalText = useCheckoutText("total");
   const deliveryCopy = useCheckoutText("delivery");
@@ -217,7 +219,7 @@ const CartComponentContent = ({
             setMissingItemIds(response.data as string[]);
           }
         } else {
-          setErrMsg(`${response.error}`);
+          setErrMsg(buyErrorText(response, resolveCheckoutText));
         }
         return;
       }
