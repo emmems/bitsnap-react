@@ -71,10 +71,25 @@ describe("parseBuyError", () => {
   });
 
   it("ignores messages that look like codes", () => {
-    for (const body of ["internal_error", "bad-gateway", "forbidden", json({ error: "no_payment_gateway" })]) {
+    for (const body of [
+      "internal_error",
+      "bad-gateway",
+      "forbidden",
+      "INTERNAL_ERROR",
+      "ECONNREFUSED",
+      "internalError",
+      "[object Object]",
+      "undefined",
+      json({ error: "no_payment_gateway" }),
+    ]) {
       assert.equal(parseBuyError(body).message, undefined, body);
     }
     assert.equal(parseBuyError("Forbidden request").message, "Forbidden request");
+  });
+
+  it("falls back to the wrapped message when the wrapped error is unusable", () => {
+    const body = json({ error: json({ error: "", message: "Karta odrzucona.", code: "x" }) });
+    assert.deepEqual(parseBuyError(body).message, "Karta odrzucona.");
   });
 
   it("rejects JSON scalars in a wrapped error", () => {

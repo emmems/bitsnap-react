@@ -105,7 +105,7 @@ describe("cart error after clicking the checkout button", () => {
 
   it("follows the locale and the merchant overrides", async () => {
     buyResponse = jsonError(400, { success: false, code: "price-changed", error: "x" });
-    assert.equal(await failCheckout({ locale: "en-US" }), "The product price has changed. Refresh the page.");
+    assert.equal(await failCheckout({ locale: "en-US" }), "The product price has changed. Refresh the page to see the current price.");
   });
 
   it("lets the merchant override a mapped text", async () => {

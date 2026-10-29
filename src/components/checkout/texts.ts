@@ -55,14 +55,14 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     noPaymentGateway:
       "This shop doesn't accept online payments yet. Try again later or contact the seller.",
     gatewayNotConfigured:
-      "This shop can't accept payments right now. Try again later or contact the seller.",
+      "Payments in this shop are not set up correctly. Try again later or contact the seller.",
     shippingNotConfigured:
       "Delivery in this shop is not configured yet. Try again later or contact the seller.",
     mixedRecurring:
-      "Subscriptions and one-time products cannot be paid for together. Buy them separately.",
+      "Subscriptions and one-time products cannot be paid for together. Pay for them in separate orders.",
     currencyUnsupported:
-      "The shop cannot accept payments in the currency of this cart.",
-    priceChanged: "The product price has changed. Refresh the page.",
+      "The shop doesn't accept payments in this currency. Contact the seller.",
+    priceChanged: "The product price has changed. Refresh the page to see the current price.",
   },
   pl: {
     cart: "Koszyk",
@@ -82,7 +82,7 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     mixedRecurring:
       "Subskrypcji i produktów jednorazowych nie można opłacić razem. Opłać je w osobnych zamówieniach.",
     currencyUnsupported:
-      "Sklep nie przyjmuje płatności w tej walucie. Zmień walutę lub skontaktuj się ze sprzedawcą.",
+      "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
     priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
   },
 };

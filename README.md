@@ -366,7 +366,7 @@ by the server, else `checkoutFailed`. It never shows the bare code, and never
 a message that is HTML, multi-line, longer than 200 characters or a stack
 trace.
 
-These keys were added in a minor release. If you type your own language
+These keys were added in 1.11.0. If you type your own language
 objects, use `Partial<CheckoutTexts>` (the `texts` prop already accepts it) so
 that they keep compiling when new keys appear.
 
@@ -787,9 +787,23 @@ as `CreateCheckoutResult`. Check `result.status === "ok"` before reading
 `gateway-not-configured`, `shipping-not-configured`, `mixed-recurring`,
 `currency-unsupported`, `price-changed`, `internal`). New backends send
 `internal` for their own failures; `internal-error` is what the library uses
-when an older backend sent no code. `result.data.message` is the reason sent by
-the server, when it was usable. `result.type` is `internal` for 5xx and
-`badInput` for 4xx.
+when an older backend sent no code. `result.data` is a `BuyErrorData`
+(`{ message?, itemIds? }`), except for `item-ids-not-found`
+(`ITEM_IDS_NOT_FOUND`), where it is the array of ids; both are exported.
+`message` is the reason sent by the server, when it was usable. `result.type`
+is `internal` for 5xx and `badInput` for 4xx.
+
+```tsx
+import { ITEM_IDS_NOT_FOUND, type BuyErrorData } from "@bitsnap/bitsnap-react";
+
+if (result.status === "error") {
+  if (result.error === ITEM_IDS_NOT_FOUND) {
+    const ids = result.data as string[];
+  } else {
+    const { message } = (result.data ?? {}) as BuyErrorData;
+  }
+}
+```
 
 `createPaymentURL` returns the same errors: the backend code in `error`,
 `type: "badInput"` for 4xx (`"internal"` for 5xx) and `data: { message }`.

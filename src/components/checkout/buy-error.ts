@@ -58,9 +58,17 @@ function looksLikeMarkup(text: string): boolean {
   return /<\/?[a-z!?][^>]*>/i.test(text);
 }
 
-/** A bare code such as `internal_error`: not meant to be read by a shopper. */
+/**
+ * A bare code such as `internal_error`, `INTERNAL_ERROR` or `ECONNREFUSED`, or
+ * a stringified non-message: not meant to be read by a shopper.
+ */
 function looksLikeCode(text: string): boolean {
-  return /^[a-z]+(?:[-_][a-z]+)*$/.test(text);
+  return (
+    // A capitalised word ("Ups") still reads as a message.
+    (/^[A-Za-z][A-Za-z0-9]*(?:[-_.:][A-Za-z0-9]+)*$/.test(text) &&
+      !/^[A-Z][a-z]+$/.test(text)) ||
+    /^\[object \w+\]$|^(?:undefined|null)$/.test(text)
+  );
 }
 
 function looksLikeStack(text: string): boolean {
@@ -84,7 +92,7 @@ function plainMessage(text: string): string | undefined {
 
 type UnwrappedError = { message?: string; code?: string };
 
-/** The deepest JSON string `error` is wrapped in, before it is plain text. */
+/** How many levels (a JSON string or an object each) `error` is unwrapped. */
 const MAX_UNWRAP_DEPTH = 3;
 
 /**
@@ -97,7 +105,11 @@ function unwrapMessage(error: unknown, depth = 0): UnwrappedError {
       return {};
     }
     const inner = error as { error?: unknown; message?: unknown; code?: unknown };
-    const result = unwrapMessage(inner.error ?? inner.message, depth + 1);
+    let result = unwrapMessage(inner.error, depth + 1);
+    if (result.message == null && inner.message != null) {
+      const fromMessage = unwrapMessage(inner.message, depth + 1);
+      result = { ...fromMessage, code: result.code ?? fromMessage.code };
+    }
     if (typeof inner.code === "string" && inner.code.length > 0) {
       result.code = inner.code;
     }
