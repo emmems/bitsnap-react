@@ -81,6 +81,7 @@ export const CHECKOUT_SLOT_NAMES = [
   "totalLabel",
   "totalValue",
   "deliveryText",
+  "summaryNote",
   "countryLabel",
   "countryTrigger",
   "countryDropdown",

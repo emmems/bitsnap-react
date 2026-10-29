@@ -1,12 +1,17 @@
 import ApplePayButtonModule from "apple-pay-button";
 import { PublicApiClient } from "src/public.api.client";
-import CartProvider, { getProjectID, useCartProvider } from "./CartProvider";
+import CartProvider, {
+  getCheckoutSelection,
+  getProjectID,
+  useCartProvider,
+} from "./CartProvider";
 import { HOST } from "./constants";
 import { isErr } from "./lib/err";
 import { currentProjectID } from "./project-id";
 import { round } from "./lib/round.number";
 import { useQuery } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import { useCheckoutText } from "./texts.context";
 import {
   InstrumentProvider,
   useInstrument,
@@ -54,6 +59,8 @@ export type Props = {
     name: string;
     id: string;
     price: number;
+    /** Currency of `price` (minor units); defaults to PLN. */
+    currency?: string;
     quantity: number;
     isDeliverable?: boolean;
     metadata?: { [key: string]: string | undefined };
@@ -84,15 +91,52 @@ function ApplePayButtonComponent({
     setEmail,
     setPostalCode,
     clearCart,
+    getApplePayPreview,
   } = useCartProvider();
   const instrument = useInstrumentContext();
+  const paymentForCartText = useCheckoutText("paymentForCart");
   const { data: isApplePayAvailable } = useQuery({
     queryKey: ["is-apple-pay-available"],
     queryFn: checkIfApplePayIsAvailable,
   });
+  const itemsKey = items.map((el) => `${el.id}:${el.quantity}`).join(",");
+  const selection = getCheckoutSelection();
+  const { data: preview } = useQuery({
+    queryKey: [
+      "apple-pay-preview",
+      itemsKey,
+      selection.country ?? "",
+      selection.couponCode ?? "",
+      selection.selectedDeliveryMethod ?? "",
+      selection.postalCode ?? "",
+    ],
+    queryFn: () =>
+      getApplePayPreview({
+        items: items.map((el) => ({
+          productID: el.id,
+          quantity: el.quantity,
+          metadata: el.metadata,
+        })),
+      }),
+    enabled: isApplePayAvailable === true,
+  });
   if (isApplePayAvailable != true) {
     return null;
   }
+  // The backend's answer when it is there; else the cart's own currency and
+  // total, with no delivery in it (it is added once the buyer picks a method).
+  const loadedPreview =
+    preview != null && !isErr(preview)
+      ? preview
+      : {
+          countryCode: selection.country || "PL",
+          currencyCode: items[0]?.currency ?? "PLN",
+          totalAmount: `${round(
+            items.reduce((acc, item) => acc + item.price * item.quantity, 0) /
+              100,
+            2,
+          )}`,
+        };
 
   const expectedItems = items.map((el) => ({
     productID: el.id,
@@ -121,42 +165,32 @@ function ApplePayButtonComponent({
         name: el.name,
         price: el.price,
         quantity: el.quantity,
-        currency: "PLN",
+        currency: loadedPreview.currencyCode,
       })),
     });
     const requiresShipping =
       items.find((el) => el.isDeliverable === true) != null;
+    // The session has to be created inside the click, so country, currency
+    // and total come from the backend's answer that was loaded beforehand.
     const session = new ApplePaySession(14, {
-      countryCode: "PL",
+      countryCode: loadedPreview.countryCode,
       merchantCapabilities: ["supports3DS"],
       supportedNetworks: ["visa", "masterCard"],
-      currencyCode: "PLN",
+      currencyCode: loadedPreview.currencyCode,
       total: {
-        amount: `${round(
-          items.reduce((acc, item) => acc + item.price * item.quantity, 0) /
-            100,
-          2
-        )}`,
-        label: "Płatność za koszyk",
+        amount: loadedPreview.totalAmount,
+        label: paymentForCartText,
         type: "pending",
       },
-      lineItems: [
-        ...items.map(
-          (item) =>
-            ({
-              amount: `${round((item.price * item.quantity) / 100, 2)}`,
-              label: item.name,
-              type: "final",
-            } as ApplePayJS.ApplePayLineItem)
-        ),
-        requiresShipping
-          ? ({
-              amount: `16.99`,
-              type: "pending",
-              label: "Dostawa",
-            } as ApplePayJS.ApplePayLineItem)
-          : undefined,
-      ].filter((el) => el != null),
+      // Delivery is added once the buyer picks a contact and a method.
+      lineItems: items.map(
+        (item) =>
+          ({
+            amount: `${round((item.price * item.quantity) / 100, 2)}`,
+            label: item.name,
+            type: "final",
+          } as ApplePayJS.ApplePayLineItem)
+      ),
       ...(requiresShipping
         ? {
             shippingMethods: [],
@@ -207,7 +241,7 @@ function ApplePayButtonComponent({
           session.abort();
         }
       } catch (error) {
-        session.abort;
+        session.abort();
       }
     };
 

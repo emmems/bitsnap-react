@@ -2,6 +2,10 @@ export interface SingleProduct {
   id: string;
   ownerID: string;
   name: string;
+  /** For a variant line: the product name without the variant, `name` stays "product variant". */
+  baseName?: string;
+  /** For a variant line: the name of the variant. */
+  variantName?: string;
   description: string | null;
   price: number;
   pricing?: ProductPricing;

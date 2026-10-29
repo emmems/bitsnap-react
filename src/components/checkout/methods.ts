@@ -90,10 +90,17 @@ export async function createPaymentURL(request: LinkRequest) {
     return err;
   }
 
-  const response: { url: string; sessionID: string } = await result.json();
+  const response: {
+    url: string;
+    sessionID: string;
+    orderId?: string;
+    projectId?: string;
+  } = await result.json();
 
   return {
     url: response.url,
+    ...(response.orderId != null ? { orderId: response.orderId } : {}),
+    ...(response.projectId != null ? { projectId: response.projectId } : {}),
   };
 }
 

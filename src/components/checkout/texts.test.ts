@@ -23,6 +23,26 @@ const english = {
   currencyUnsupported:
     "The shop cannot accept payments in the currency of this cart.",
   priceChanged: "The product price has changed. Refresh the page.",
+  close: "Close cart",
+  remove: "Remove",
+  quantity: "Quantity",
+  increaseQuantity: "Increase quantity",
+  decreaseQuantity: "Decrease quantity",
+  openCart: "Open cart",
+  cartItemsCount: "Items in cart",
+  lowestPrice30Days: "Lowest price in the last 30 days:",
+  noPriceHistory: "No price data for the last 30 days",
+  redirectFailed: "Could not redirect to the payment. Please try again later.",
+  subscriptionUnsupported: "Subscriptions cannot be added to the cart yet.",
+  searchCountry: "Find a country",
+  noCountriesFound: "No countries found",
+  countryRequired: "Choose a country to continue.",
+  paymentForCart: "Cart payment",
+  coupon: "Coupon",
+  extrasCalculatedNext:
+    "Discounts, shipping and taxes are calculated at the next step",
+  loadFailed: "Could not load your cart.",
+  retry: "Try again",
 };
 
 const polish = {
@@ -44,6 +64,26 @@ const polish = {
     "Subskrypcji i produktów jednorazowych nie można opłacić razem. Kup je osobno.",
   currencyUnsupported: "Sklep nie przyjmuje płatności w walucie tego koszyka.",
   priceChanged: "Cena produktu się zmieniła — odśwież stronę.",
+  close: "Zamknij koszyk",
+  remove: "Usuń",
+  quantity: "Ilość",
+  increaseQuantity: "Zwiększ ilość",
+  decreaseQuantity: "Zmniejsz ilość",
+  openCart: "Otwórz koszyk",
+  cartItemsCount: "Produktów w koszyku",
+  lowestPrice30Days: "Najniższa cena z 30 dni:",
+  noPriceHistory: "Brak danych o cenie z ostatnich 30 dni",
+  redirectFailed:
+    "Nie udało się przekierować do płatności. Spróbuj ponownie później.",
+  subscriptionUnsupported: "Subskrypcji nie można jeszcze dodać do koszyka.",
+  searchCountry: "Znajdź kraj",
+  noCountriesFound: "Nie znaleziono krajów",
+  countryRequired: "Wybierz kraj, aby przejść dalej.",
+  paymentForCart: "Płatność za koszyk",
+  coupon: "Kupon",
+  extrasCalculatedNext: "Rabaty, dostawa i podatki w następnym kroku",
+  loadFailed: "Nie udało się wczytać koszyka.",
+  retry: "Spróbuj ponownie",
 };
 
 describe("checkout texts without overrides", () => {

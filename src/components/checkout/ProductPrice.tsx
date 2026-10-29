@@ -1,5 +1,6 @@
 import type { ProductPricing } from "./product.details.model";
 import { formatCurrency } from "./lib/round.number";
+import { useCheckoutText } from "./texts.context";
 
 export function ProductPrice({
   price,
@@ -12,6 +13,8 @@ export function ProductPrice({
   pricing?: ProductPricing;
   quantity?: number;
 }) {
+  const lowestPriceText = useCheckoutText("lowestPrice30Days");
+  const noPriceHistoryText = useCheckoutText("noPriceHistory");
   const regular = pricing?.regularPrice ?? price;
   const effective = pricing?.effectivePrice ?? price;
   const onSale = pricing?.discount?.status === "ACTIVE" && effective < regular;
@@ -28,8 +31,8 @@ export function ProductPrice({
           </span>
           <span className="mt-1 block text-xs text-neutral-600">
             {pricing?.referencePrice.historyAvailable && pricing.referencePrice.amount != null
-              ? `Najniższa cena z 30 dni: ${formatCurrency(pricing.referencePrice.amount, currency)}`
-              : "Brak danych o cenie z ostatnich 30 dni"}
+              ? `${lowestPriceText} ${formatCurrency(pricing.referencePrice.amount, currency)}`
+              : noPriceHistoryText}
           </span>
         </>
       ) : (
