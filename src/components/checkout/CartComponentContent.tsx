@@ -117,18 +117,31 @@ const CartComponentContent = ({
 
   const products = isErr(data) ? undefined : data;
 
+  const selectedCountry =
+    countryData != null && !isErr(countryData) && countryData != ""
+      ? countryData
+      : undefined;
+
   // Whether the shop lets the buyer pay by hand (transfer / BLIK to a phone)
-  // for this cart. Asked once per cart content; any failure means "no choice".
+  // or on delivery for this cart. Asked once per cart content and country
+  // (cash on delivery is for Poland only); any failure means "no choice".
+  // Without a country "Next step" is disabled, so there is nothing to ask yet.
   const queryClient = useQueryClient();
   const cartSignature =
-    products == null || products.length === 0
+    products == null || products.length === 0 || selectedCountry == null
       ? undefined
       : products
           .map((el) => `${el.productID}:${el.quantity}`)
           .sort()
           .join(",");
   const paymentMethodsQuery = {
-    queryKey: ["cart-payment-methods", getProjectID(), currentLocale, cartSignature],
+    queryKey: [
+      "cart-payment-methods",
+      getProjectID(),
+      currentLocale,
+      selectedCountry,
+      cartSignature,
+    ],
     queryFn: async (): Promise<Choice | null> =>
       provider.getPaymentMethodChoice().catch(() => null),
     staleTime: 60_000,
@@ -162,10 +175,6 @@ const CartComponentContent = ({
     products?.some((product) => product.details?.isDeliverable === true) ??
     false;
 
-  const selectedCountry =
-    countryData != null && !isErr(countryData) && countryData != ""
-      ? countryData
-      : undefined;
   // The hint waits for the answer: the country is read asynchronously.
   const isCountryMissing = countryData !== undefined && selectedCountry == null;
 
@@ -311,10 +320,12 @@ const CartComponentContent = ({
 
       // What this order is made of; only these lines go once it is paid.
       const cartLinesBeforeBuy = getCartLines();
-      const response = await continueToCheckoutAsync(
+      const paymentMethod =
         choice != null
-          ? { paymentMethod: effectivePaymentMethod(choice, selectedPaymentMethod) }
-          : undefined,
+          ? effectivePaymentMethod(choice, selectedPaymentMethod)
+          : undefined;
+      const response = await continueToCheckoutAsync(
+        paymentMethod != null ? { paymentMethod } : undefined,
       );
 
       if (isErr(response)) {
@@ -325,6 +336,12 @@ const CartComponentContent = ({
           if ("data" in response && Array.isArray(response.data)) {
             setMissingItemIds(response.data as string[]);
           }
+        } else if (
+          paymentMethod === "cod" &&
+          response.error == "gateway-not-configured"
+        ) {
+          // The shop turned cash on delivery off, or this cart does not qualify.
+          setErrMsg(resolveCheckoutText("paymentMethodCodUnavailable"));
         } else {
           setErrMsg(buyErrorText(response, resolveCheckoutText));
         }
@@ -332,7 +349,10 @@ const CartComponentContent = ({
       }
 
       // The cart stays until the order is paid; without an order to ask about it is cleared now.
+      // A cash on delivery order is placed and paid to the courier, never
+      // online: it would stay unpaid here, so the cart is cleared at once.
       if (
+        paymentMethod === "cod" ||
         !rememberPendingOrder(response, {
           cartProjectId: getProjectID(),
           lines: cartLinesBeforeBuy,

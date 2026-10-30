@@ -54,6 +54,11 @@ const english = {
     "You pay in your bank's app. We show the payment details after you place the order, and the order waits for your payment.",
   paymentMethodManualBlikNote:
     "This is not a BLIK code payment – you do not enter a 6‑digit code.",
+  paymentMethodCod: "Cash on delivery",
+  paymentMethodCodDescription:
+    "You pay the courier in cash or by card when you receive the parcel.",
+  paymentMethodCodUnavailable:
+    "Cash on delivery is not available for this order. Choose another way to pay.",
 };
 
 const polish = {
@@ -107,6 +112,11 @@ const polish = {
     "Zapłacisz w aplikacji swojego banku. Dane do płatności pokażemy po złożeniu zamówienia, a zamówienie poczeka na Twoją wpłatę.",
   paymentMethodManualBlikNote:
     "To nie jest płatność kodem BLIK – nie wpisujesz 6‑cyfrowego kodu.",
+  paymentMethodCod: "Płatność przy odbiorze",
+  paymentMethodCodDescription:
+    "Zapłacisz kurierowi gotówką lub kartą, gdy odbierzesz przesyłkę.",
+  paymentMethodCodUnavailable:
+    "Płatność przy odbiorze nie jest dostępna dla tego zamówienia. Wybierz inną formę płatności.",
 };
 
 describe("checkout texts without overrides", () => {

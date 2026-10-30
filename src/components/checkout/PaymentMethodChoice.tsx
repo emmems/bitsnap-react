@@ -9,9 +9,10 @@ import {
 import { useCheckoutTextResolver } from "./texts.context";
 
 /**
- * "Pay online" or "transfer / BLIK to the seller's phone", shown above the
- * checkout button when the shop offers both. Native radios give the group
- * semantics and the arrow-key navigation; the whole card is the label.
+ * "Pay online", "transfer / BLIK to the seller's phone" or "cash on delivery",
+ * shown above the checkout button when the shop offers two or more of them.
+ * Native radios give the group semantics and the arrow-key navigation; the
+ * whole card is the label.
  */
 export function PaymentMethodChoice({
   choice,
@@ -46,6 +47,10 @@ export function PaymentMethodChoice({
       title: text(manualPaymentTitleKey(choice.manualAccountTypes)),
       description: text("paymentMethodManualDescription"),
       note: hasBlik ? text("paymentMethodManualBlikNote") : undefined,
+    },
+    cod: {
+      title: text("paymentMethodCod"),
+      description: text("paymentMethodCodDescription"),
     },
   };
 

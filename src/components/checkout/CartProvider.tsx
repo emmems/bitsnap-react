@@ -113,8 +113,8 @@ export interface CartMethods {
   getAvailableCountries: () => Promise<Err | { name: string; code: string }[]>;
 
   /**
-   * Whether the buyer may choose between paying online and paying the seller
-   * by hand for the current cart. `null` (also on any failure) means nothing
+   * Whether the buyer may choose between paying online, paying the seller by
+   * hand and paying on delivery for the current cart. `null` (also on any failure) means nothing
    * to choose.
    */
   getPaymentMethodChoice: () => Promise<PaymentMethodChoice | null>;

@@ -33,6 +33,34 @@ describe("parsePaymentMethodChoice", () => {
     }
   });
 
+  it("reads cash on delivery, also as the third method", () => {
+    assert.deepEqual(
+      parsePaymentMethodChoice({
+        success: true,
+        choice: { methods: ["online", "manual", "cod"], manualAccountTypes: ["blik"] },
+      }),
+      { methods: ["online", "manual", "cod"], manualAccountTypes: ["blik"] },
+    );
+    assert.deepEqual(
+      parsePaymentMethodChoice({ choice: { methods: ["online", "cod"], manualAccountTypes: [] } }),
+      { methods: ["online", "cod"], manualAccountTypes: [] },
+    );
+  });
+
+  it("leaves out methods it does not know and keeps the rest in order", () => {
+    assert.deepEqual(
+      parsePaymentMethodChoice({
+        choice: { methods: ["cod", "voucher", "online", "cod"], manualAccountTypes: [] },
+      }),
+      { methods: ["cod", "online"], manualAccountTypes: [] },
+    );
+    assert.equal(
+      parsePaymentMethodChoice({ choice: { methods: ["cod", "voucher"] } }),
+      null,
+      "one known method is nothing to choose",
+    );
+  });
+
   it("drops unknown and repeated account types", () => {
     assert.deepEqual(
       parsePaymentMethodChoice({
@@ -48,6 +76,10 @@ describe("effectivePaymentMethod", () => {
   it("defaults to the first method and keeps an offered pick", () => {
     assert.equal(effectivePaymentMethod({ ...choice, methods: [...choice.methods] }, undefined), "manual");
     assert.equal(effectivePaymentMethod({ ...choice, methods: [...choice.methods] }, "online"), "online");
+  });
+  it("falls back to the first method when cash on delivery is no longer offered", () => {
+    assert.equal(effectivePaymentMethod({ methods: ["online", "manual", "cod"], manualAccountTypes: [] }, "cod"), "cod");
+    assert.equal(effectivePaymentMethod({ methods: ["online", "manual"], manualAccountTypes: [] }, "cod"), "online");
   });
 });
 
