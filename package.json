@@ -37,7 +37,8 @@
     "*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "AGENTS.md"
   ],
   "types": "./dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",
