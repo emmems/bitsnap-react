@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -22,14 +22,23 @@
     "type": "git",
     "url": "git+https://github.com/emmems/bitsnap-react.git"
   },
-  "keywords": ["bitsnap", "checkout", "shop", "ecommerce"],
+  "keywords": [
+    "bitsnap",
+    "checkout",
+    "shop",
+    "ecommerce"
+  ],
   "author": "Piotr Michalik",
   "license": "SEE LICENSE IN LICENSE file",
   "bugs": {
     "url": "https://github.com/emmems/bitsnap-react/issues"
   },
-  "sideEffects": ["*.css"],
-  "files": ["dist"],
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",
   "devDependencies": {
@@ -192,14 +201,30 @@
   },
   "typesVersions": {
     "*": {
-      "models": ["./dist/models.d.ts"],
-      "internal": ["./dist/internal.d.ts"],
-      "errors": ["./dist/errors.d.ts"],
-      "returns": ["./dist/returns.d.ts"],
-      "catalog": ["./dist/catalog.d.ts"],
-      "course": ["./dist/course.d.ts"],
-      "consent": ["./dist/consent.d.ts"],
-      "analytics": ["./dist/analytics.d.ts"]
+      "models": [
+        "./dist/models.d.ts"
+      ],
+      "internal": [
+        "./dist/internal.d.ts"
+      ],
+      "errors": [
+        "./dist/errors.d.ts"
+      ],
+      "returns": [
+        "./dist/returns.d.ts"
+      ],
+      "catalog": [
+        "./dist/catalog.d.ts"
+      ],
+      "course": [
+        "./dist/course.d.ts"
+      ],
+      "consent": [
+        "./dist/consent.d.ts"
+      ],
+      "analytics": [
+        "./dist/analytics.d.ts"
+      ]
     }
   }
 }
