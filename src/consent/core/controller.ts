@@ -1,4 +1,4 @@
-import { normalizeProjectKey } from "../../analytics/contract";
+import { CONSENT_SHOWN_ACTION, normalizeProjectKey } from "../../analytics/contract";
 import { activateScripts } from "./activate";
 import {
   DEFAULT_API_HOST,
@@ -34,6 +34,9 @@ const none = (): ConsentChoices => ({ analytics: false, marketing: false, prefer
 
 const copy = (state: ConsentState | null): ConsentState | null =>
   state && { id: state.id, ts: state.ts, bv: state.bv, c: { ...state.c } };
+
+/** Pages that already sent their impression (survives a controller being recreated, e.g. StrictMode). */
+const shownOn = new WeakMap<object, Set<string>>();
 
 /** Sync `get()`-style API with no DOM until a layer is shown. Never throws into the page. */
 export function createConsent(options: ConsentOptions = {}): BitsnapConsentApi {
@@ -97,25 +100,36 @@ export function createConsent(options: ConsentOptions = {}): BitsnapConsentApi {
     }, undefined);
   }
 
-  function log(action: ConsentAction, record: ConsentState) {
+  /** POST /consent, the same transport for choices and impressions. */
+  function send(payload: Record<string, unknown>) {
     if (preview || !projectKey || typeof fetch !== "function") return;
     safe(() => {
-      const body = JSON.stringify({
-        k: projectKey,
-        consent_id: record.id,
-        action,
-        c: record.c,
-        bv: record.bv,
-        host: win?.location?.hostname ?? "",
-        ts: record.ts,
-      });
       fetch(`${collectHost.replace(/\/+$/, "")}/consent`, {
         method: "POST",
         keepalive: true,
         credentials: "omit",
-        body,
+        body: JSON.stringify({ k: projectKey, host: win?.location?.hostname ?? "", ...payload }),
       }).catch(() => {});
     }, undefined);
+  }
+
+  function log(action: ConsentAction, record: ConsentState) {
+    send({
+      consent_id: record.id,
+      action,
+      c: record.c,
+      bv: record.bv,
+      ts: record.ts,
+    });
+  }
+
+  /** The banner opened on its own: one impression per page load and project, however many controllers run. */
+  function logShown() {
+    if (!win || !projectKey) return;
+    const keys = shownOn.get(win) ?? new Set<string>();
+    if (keys.has(projectKey)) return;
+    shownOn.set(win, keys.add(projectKey));
+    send({ action: CONSENT_SHOWN_ACTION, bv: config.version, ts: Math.floor(Date.now() / 1000) });
   }
 
   /** Granted categories the current config still offers. */
@@ -226,6 +240,8 @@ export function createConsent(options: ConsentOptions = {}): BitsnapConsentApi {
     }
     // A tracker that waits on `ready` has to see the final state, rejection included.
     pending.splice(0).forEach((fn) => safe(fn, undefined));
+    // Counted after queued calls ran: a banner that acceptAll() closed at once was never seen.
+    if (!destroyed && !preview && !bannerOff && state === null) logShown();
     safe(() => win.dispatchEvent(new win.CustomEvent("bitsnap:consent:ready")), undefined);
     return copy(state);
   })().catch(() => null);

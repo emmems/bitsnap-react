@@ -193,6 +193,13 @@ export const STOREFRONT_EVENT_SPEC = {
     preferences: "boolean",
     banner_version: "number",
   },
+  /**
+   * Written by the collector's POST /consent (action `shown`), never sent to
+   * POST /e. A banner impression: no consent id, no choice, no visitor.
+   */
+  consent_shown: {
+    banner_version: "number",
+  },
 } as const;
 
 /** Merchant behaviour in /app, sent through the same tracker core. */
@@ -549,8 +556,10 @@ export const CONSENT_ACTIONS = [
   "withdraw",
 ] as const;
 export type ConsentAction = (typeof CONSENT_ACTIONS)[number];
+/** POST /consent `action` of a banner impression (not a choice, not in `CONSENT_ACTIONS`). */
+export const CONSENT_SHOWN_ACTION = "shown";
 
-/** POST /consent body. */
+/** POST /consent body of a choice (`CONSENT_ACTIONS`). */
 export interface ConsentLogBody {
   k: string;
   /** Same random id as `ConsentCookie.id`. 16 to 64 chars of `[A-Za-z0-9_-]`. */
@@ -564,6 +573,25 @@ export interface ConsentLogBody {
   /** Unix SECONDS (like the cookie), not ms. */
   ts: number;
 }
+
+/**
+ * POST /consent body of a banner impression: the banner opened by itself
+ * because the visitor has no valid choice. Once per page load; no consent id
+ * and no choice.
+ */
+export interface ConsentShownBody {
+  k: string;
+  action: typeof CONSENT_SHOWN_ACTION;
+  /** Banner version. */
+  bv: number;
+  /** Hostname the banner ran on. Collector overwrites it with the Origin host. */
+  host: string;
+  /** Unix SECONDS (like the cookie), not ms. */
+  ts: number;
+}
+
+/** Any POST /consent body; discriminate on `action`. */
+export type ConsentBody = ConsentLogBody | ConsentShownBody;
 
 /** `bitsnap_consent`, or `bitsnap_consent_<projectKey>` for `data-scope="project"`. */
 export function consentCookieName(scope: "site" | "project", projectKey?: string): string {
@@ -1037,9 +1065,10 @@ export function sanitizeProps(
 export interface ValidateOptions {
   /**
    * Who sent it. `browser` (default) is POST /e: the event must belong to
-   * `storefront_events` or `app_events`, `consent_updated` is refused (only
-   * POST /consent writes it) and `source` must fit the stream. `server` is the
-   * instapay emitter: any stream, `source` must fit the stream.
+   * `storefront_events` or `app_events`, `consent_updated` and `consent_shown`
+   * are refused (only POST /consent writes them) and `source` must fit the
+   * stream. `server` is the instapay emitter: any stream, `source` must fit the
+   * stream.
    */
   from?: "browser" | "server";
 }
@@ -1064,7 +1093,9 @@ export function validateEnvelope(
   const stream = STREAM_FOR_EVENT[e.event as EventName];
   if (from === "browser") {
     if (stream === "business_events") return fail("server_only_event");
-    if (e.event === "consent_updated") return fail("consent_via_consent_endpoint");
+    if (e.event === "consent_updated" || e.event === "consent_shown") {
+      return fail("consent_via_consent_endpoint");
+    }
   }
   if (
     typeof e.ts !== "number" ||

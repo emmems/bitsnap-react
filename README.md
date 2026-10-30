@@ -1315,7 +1315,7 @@ The standalone file is `dist/embed/consent.js` (about 9 KB gzipped, no React). A
 
 For a live preview in a settings page, add `data-preview="on"`: the banner is shown on every load, nothing is read from or written to the cookie, and nothing is sent to the collect host. `data-title` and `data-description` replace the banner heading and text (the same options exist as `preview`, `title` and `description` in the core `ConsentOptions`).
 
-With `data-project` the banner loads its config from `/api/consent/config` (3 s timeout, then defaults) and sends each choice to `<collect host>/consent`. Without it nothing leaves the page.
+With `data-project` the banner loads its config from `/api/consent/config` (3 s timeout, then defaults) and sends each choice to `<collect host>/consent`. When the banner opens on its own (no valid stored choice, or a newer banner version), it also sends one anonymous impression ping per page load, `{ k, action: "shown", bv, host, ts }`: no id, no choice, nothing stored, and none when the visitor reopens the settings. Without a project key nothing leaves the page.
 
 ### React
 
