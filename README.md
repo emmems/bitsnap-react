@@ -1,5 +1,12 @@
 # Bitsnap Checkout
 
+## Instructions for coding agents
+
+Read [AGENTS.md](./AGENTS.md) before integrating this package. Follow the
+[Next.js](https://docs.bitsnap.pl/en/guides/nextjs/) or
+[Astro](https://docs.bitsnap.pl/en/guides/astro/) recipe. Keep API keys and webhook
+secrets on the server.
+
 The library is designed to provide a complete e-commerce checkout solution that can be easily integrated into web applications, with focus on:
 
 - User experience
@@ -782,19 +789,35 @@ async function legacyHandleCart() {
 }
 ```
 
-5. Creating Checkout/Payment:
+5. Creating Checkout/Payment (server-side only):
 
-```tsx
-import { createCheckout, LinkRequest } from "bitsnap-react";
+`createCheckout` sends an `Authorization: Bearer` header, so a browser key would
+be visible to anyone loading your page. Create the checkout in a server route or
+server action and redirect the browser to the returned URL:
 
-async function handleCheckout() {
-  const request: LinkRequest = {
-    items: [
-      {
-        id: "product-id",
-        quantity: 1,
-      },
-    ],
+```ts
+// app/api/bitsnap/checkout/route.ts
+import { Bitsnap, type LinkRequest } from "bitsnap-js";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const projectID = process.env.BITSNAP_PROJECT_ID;
+  const apiKey = process.env.BITSNAP_API_KEY;
+  if (!projectID || !apiKey) {
+    return new Response("Not configured", { status: 500 });
+  }
+
+  // Pick the fields you accept. Do not forward a raw client body to the API.
+  const { items } = (await request.json()) as {
+    items?: Array<{ id: string; quantity: number }>;
+  };
+  if (!items?.length) {
+    return new Response("No items", { status: 400 });
+  }
+
+  const linkRequest: LinkRequest = {
+    items,
     details: {
       email: "customer@example.com",
       name: "John Doe",
@@ -807,19 +830,26 @@ async function handleCheckout() {
     },
     askForAddress: true,
     askForPhone: true,
+    apiKey,
+    testMode: true,
   };
 
-  const result = await createCheckout({
-    ...request,
-    apiKey: "your-api-key",
-    testMode: true,
-  });
+  const result = await Bitsnap.createCheckout(projectID, linkRequest);
 
-  if (result.status === "ok") {
-    window.location.href = result.redirectURL;
+  // The SDK does not check the HTTP status. Check that a URL came back.
+  if (!result.redirectURL) {
+    return new Response("Checkout failed", { status: 502 });
   }
+  return Response.json({ url: result.redirectURL });
 }
 ```
+
+`bitsnap-react` also exports its own `createCheckout(request)`. It takes the same
+request and sends `apiKey` as an `Authorization: Bearer` header, so it is
+**server-side only**: calling it from a client component, an island or any
+browser bundle would expose the project API key to every visitor. A normal
+checkout needs no key at all. For a keyed server checkout use
+`Bitsnap.createCheckout(projectID, request)` from `bitsnap-js`.
 
 On success `createCheckout` returns `{ status: "ok", redirectURL }`. A failed
 response no longer throws and no longer yields an undefined `redirectURL`: it
@@ -855,32 +885,56 @@ When the backend lists unavailable products (`itemIds`) under
 `item-ids-not-found` and `data` is the array of ids. With any other code the
 code is kept and the ids are in `data.itemIds`.
 
-6. Webhook Handler:
-
 ```tsx
-import { handleWebhook } from "bitsnap-react";
+// Client component: no key, only the returned URL.
+const { url } = await fetch("/api/bitsnap/checkout", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ items: [{ id: "product-id", quantity: 1 }] }),
+}).then((r) => r.json());
+window.location.href = url;
+```
 
-async function processWebhook(req: Request) {
+Without a key, the browser can still create a normal checkout for a public
+product by adding it to the cart and calling `Bitsnap.showCart()`. Only server
+test checkout needs `apiKey`.
+
+6. Webhook Handler (server-side only):
+
+`handleWebhook` is exported by `bitsnap-js`, not by `bitsnap-react`. Install
+`bitsnap-js` and run this in a server route.
+
+```ts
+// app/api/bitsnap/webhook/route.ts
+import { Event, handleWebhook } from "bitsnap-js";
+
+export const runtime = "nodejs";
+
+export async function processWebhook(req: Request) {
+  const webhookSecret = process.env.BITSNAP_WEBHOOK_SECRET;
+  if (!webhookSecret) return new Response("Not configured", { status: 500 });
+
+  // Pass the raw body and the full URL. Never call req.json() first.
   const payload = await req.text();
-  const url = req.url;
   const headers = Object.fromEntries(req.headers);
-  const webhookSecret = "your-webhook-secret";
 
-  const result = await handleWebhook(payload, url, headers, webhookSecret);
+  const result = await handleWebhook(payload, req.url, headers, webhookSecret);
 
   if (result.isErr) {
     console.error("Webhook error:", result.error);
-    return;
+    return new Response("Invalid signature", { status: 401 });
   }
 
   // Process the webhook event
   const { projectId, environment, eventData } = result;
 
+  // Parsed enums are numeric. Compare against the exported Event enum,
+  // not against the string "TRANSACTION_SUCCESS".
   switch (eventData?.event) {
-    case "TRANSACTION_SUCCESS":
+    case Event.TRANSACTION_SUCCESS:
       // Handle successful transaction
       break;
-    case "TRANSACTION_FAILURE":
+    case Event.TRANSACTION_FAILURE:
       // Handle failed transaction
       break;
     // Handle other events...
@@ -891,14 +945,13 @@ async function processWebhook(req: Request) {
 Complete Example:
 
 ```tsx
+"use client";
+
 import {
   BitsnapCheckout,
   setProjectID,
   setCustomHost,
   Bitsnap,
-  createCheckout,
-  handleWebhook,
-  type LinkRequest,
 } from "bitsnap-react";
 
 // Configure globally
@@ -914,30 +967,22 @@ function Store() {
     Bitsnap.showCart();
   }
 
+  // A hosted checkout link without an API key: create it in a server route
+  // (see "Creating Checkout/Payment" above) and follow the returned URL.
   async function processCheckout(
     items: Array<{ id: string; quantity: number }>,
   ) {
-    const checkoutRequest: LinkRequest = {
-      items,
-      askForAddress: true,
-      askForPhone: true,
-      details: {
-        email: "customer@example.com",
-      },
-      redirect: {
-        successURL: "/success",
-        cancelURL: "/cancel",
-      },
-    };
-
-    const result = await createCheckout({
-      ...checkoutRequest,
-      testMode: true,
+    const response = await fetch("/api/bitsnap/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
     });
-
-    if (result.status === "ok") {
-      window.location.href = result.redirectURL;
+    if (!response.ok) {
+      console.error("Checkout failed");
+      return;
     }
+    const { url } = await response.json();
+    window.location.href = url;
   }
 
   return (
@@ -954,6 +999,9 @@ function Store() {
   );
 }
 ```
+
+`createCheckout` and `handleWebhook` are not part of this client bundle: the
+keyed checkout and webhook verification belong to `bitsnap-js` on the server.
 
 ---
 

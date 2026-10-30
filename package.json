@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -37,7 +37,8 @@
     "*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "AGENTS.md"
   ],
   "types": "./dist/index.d.ts",
   "homepage": "https://github.com/emmems/bitsnap-react#readme",

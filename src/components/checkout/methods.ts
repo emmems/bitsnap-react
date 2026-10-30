@@ -147,6 +147,21 @@ export type CreateCheckoutResult =
   | { status: "ok"; redirectURL: string }
   | (Err & { status: "error" });
 
+/**
+ * Creates a checkout link.
+ *
+ * @warning SERVER-SIDE ONLY. When `apiKey` is set, this sends it as an
+ * `Authorization: Bearer` header to the Bitsnap API. Calling it from a client
+ * component, browser bundle, island or any code shipped to the browser exposes
+ * the project API key to every visitor and to anyone reading the bundle or its
+ * source maps. Use it only in a server route, server action or backend module
+ * that reads the key from a server-only environment variable.
+ *
+ * The safe default is to omit `apiKey` entirely: a normal checkout for a public
+ * product needs no key and can be created from the browser. For a keyed server
+ * test checkout use `Bitsnap.createCheckout(projectID, request)` from
+ * `bitsnap-js` instead. See AGENTS.md.
+ */
 export async function createCheckout(
   request: LinkRequest & { apiKey?: string; testMode?: boolean },
 ): Promise<CreateCheckoutResult> {
