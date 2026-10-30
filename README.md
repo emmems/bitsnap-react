@@ -377,10 +377,12 @@ there and the cart is cleared.
 
 When the shop offers cash on delivery and the cart qualifies (delivery to
 Poland, at least one shipped product, no subscription), the cart lists
-"Płatność przy odbiorze" / "Cash on delivery" last. The buyer pays the courier;
-the order is placed at once and the cart is cleared (it is never paid online,
-so it is not kept as a pending order). The cart asks again when the buyer
-changes the country. If the shop refuses cash on delivery for the order
+"Płatność przy odbiorze" / "Cash on delivery" last. The buyer pays the courier.
+Like any order, the cart is kept until the buyer has finished the order's
+details form: the order is then "placed" (or "paid" once the seller marks it)
+and its lines leave the cart. A buyer who goes back from the form still has the
+cart. The cart asks again when the buyer changes the country; until the answer
+arrives it keeps showing the last choice without cash on delivery. If the shop refuses cash on delivery for the order
 anyway, the cart shows `paymentMethodCodUnavailable` and asks for the methods
 again.
 

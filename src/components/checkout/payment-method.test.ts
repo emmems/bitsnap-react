@@ -4,6 +4,7 @@ import {
   effectivePaymentMethod,
   manualPaymentTitleKey,
   parsePaymentMethodChoice,
+  withoutCod,
 } from "./payment-method.ts";
 
 describe("parsePaymentMethodChoice", () => {
@@ -80,6 +81,20 @@ describe("effectivePaymentMethod", () => {
   it("falls back to the first method when cash on delivery is no longer offered", () => {
     assert.equal(effectivePaymentMethod({ methods: ["online", "manual", "cod"], manualAccountTypes: [] }, "cod"), "cod");
     assert.equal(effectivePaymentMethod({ methods: ["online", "manual"], manualAccountTypes: [] }, "cod"), "online");
+  });
+});
+
+describe("withoutCod", () => {
+  it("drops cash on delivery and keeps the rest", () => {
+    assert.deepEqual(
+      withoutCod({ methods: ["online", "manual", "cod"], manualAccountTypes: ["blik"] }),
+      { methods: ["online", "manual"], manualAccountTypes: ["blik"] },
+    );
+  });
+
+  it("is null when fewer than two methods are left", () => {
+    assert.equal(withoutCod({ methods: ["online", "cod"], manualAccountTypes: [] }), null);
+    assert.equal(withoutCod(null), null);
   });
 });
 

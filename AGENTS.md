@@ -73,10 +73,14 @@ Rules:
   `paymentMethodCodUnavailable`. Anything else (null, error, 404 of an old backend, 5 s
   timeout) is "no choice": plain `/buy`, no `paymentMethod`. A click before the
   answer waits for it and, if a choice arrives, shows it instead of buying.
+  While a new country or cart is asked for, the last choice stays as
+  `placeholderData` without `cod` (`withoutCod`); a click then fetches the new
+  answer and buys only if it still offers the selected method.
 - Pending order (`pending-order.ts`): the cart is kept until a
-  `/payment/common/...` order is paid. A `/payment/manualPayment/<project>/<order>`
-  page is a placed order paid outside Bitsnap, so the cart is cleared at once;
-  so is any order bought with `cod` (it stays unpaid until the seller marks it).
+  `/payment/common/...` order is paid, or `placed` (a `cod` order the buyer
+  accepted on the order's details form; it is paid to the courier). A
+  `/payment/manualPayment/<project>/<order>` page is a placed order paid
+  outside Bitsnap, so the cart is cleared at once.
 - Express buttons (Apple Pay, Google Pay) are separate online flows.
 - Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
 

@@ -152,6 +152,13 @@ describe("reconcilePendingOrder", () => {
     assert.equal(storage.values.has(PENDING_ORDER_KEY), false);
   });
 
+  it("clears the cart and the key once a cash on delivery order is placed, like a paid one", async () => {
+    const { storage, calls, deps } = setup("placed");
+    assert.equal(await reconcilePendingOrder(deps), "paid");
+    assert.deepEqual(calls.removed, [LINES]);
+    assert.equal(storage.values.has(PENDING_ORDER_KEY), false);
+  });
+
   it("skips an order made from another project's cart without asking", async () => {
     const { storage, calls, deps } = setup("paid");
     assert.equal(await reconcilePendingOrder({ ...deps, projectId: "other" }), "pending");
@@ -331,6 +338,7 @@ describe("orderStatusFromResponse", () => {
   it("reads a typed status", () => {
     assert.equal(orderStatusFromResponse({ details: { status: "paid" } }), "paid");
     assert.equal(orderStatusFromResponse({ details: { status: "created" } }), "created");
+    assert.equal(orderStatusFromResponse({ details: { status: "placed" } }), "placed");
     assert.equal(orderStatusFromResponse({ details: { status: "canceled" } }), "canceled");
   });
 

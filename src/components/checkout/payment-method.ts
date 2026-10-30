@@ -69,6 +69,18 @@ export function parsePaymentMethodChoice(body: unknown): PaymentMethodChoice | n
   };
 }
 
+/**
+ * The choice without cash on delivery, `null` when fewer than two methods are
+ * left: shown while the choice for a new country is asked for.
+ */
+export function withoutCod(choice: PaymentMethodChoice | null): PaymentMethodChoice | null {
+  if (choice == null) {
+    return null;
+  }
+  const methods = choice.methods.filter((method) => method !== "cod");
+  return methods.length < 2 ? null : { ...choice, methods };
+}
+
 /** The method the buyer picked, or the seller's first one when the pick is not offered. */
 export function effectivePaymentMethod(
   choice: PaymentMethodChoice,

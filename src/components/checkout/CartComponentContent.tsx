@@ -22,6 +22,7 @@ import { useCheckoutStore } from "./state";
 import { PaymentMethodChoice } from "./PaymentMethodChoice";
 import {
   effectivePaymentMethod,
+  withoutCod,
   type PaymentMethod,
   type PaymentMethodChoice as Choice,
 } from "./payment-method";
@@ -126,6 +127,8 @@ const CartComponentContent = ({
   // or on delivery for this cart. Asked once per cart content and country
   // (cash on delivery is for Poland only); any failure means "no choice".
   // Without a country "Next step" is disabled, so there is nothing to ask yet.
+  // Until a new country or cart is answered, the last choice stays on screen
+  // without cash on delivery, which the new answer may not offer.
   const queryClient = useQueryClient();
   const cartSignature =
     products == null || products.length === 0 || selectedCountry == null
@@ -147,9 +150,14 @@ const CartComponentContent = ({
     staleTime: 60_000,
     retry: false,
   } as const;
-  const { data: paymentMethodChoiceData } = useQuery({
+  const {
+    data: paymentMethodChoiceData,
+    isPlaceholderData: isPaymentMethodChoicePlaceholder,
+  } = useQuery({
     ...paymentMethodsQuery,
     enabled: cartSignature != null,
+    placeholderData: (previous: Choice | null | undefined) =>
+      previous === undefined ? undefined : withoutCod(previous),
   });
   const paymentMethodChoice =
     cartSignature != null ? (paymentMethodChoiceData ?? null) : null;
@@ -272,9 +280,18 @@ const CartComponentContent = ({
       useCheckoutStore.getState().setNotice(undefined);
 
       // A click before the choice arrived waits for it (at most the request
-      // timeout); a choice the buyer has not seen yet is shown, not used.
+      // timeout); a choice the buyer has not seen yet is shown, not used. The
+      // last choice shown in the meantime is used if the new one still offers
+      // the selected method.
       let choice = paymentMethodChoice;
-      if (cartSignature != null && paymentMethodChoiceData === undefined) {
+      let paymentMethod =
+        choice != null
+          ? effectivePaymentMethod(choice, selectedPaymentMethod)
+          : undefined;
+      if (
+        cartSignature != null &&
+        (paymentMethodChoiceData === undefined || isPaymentMethodChoicePlaceholder)
+      ) {
         setIsWaitingForChoice(true);
         try {
           choice = await queryClient
@@ -283,7 +300,9 @@ const CartComponentContent = ({
         } finally {
           setIsWaitingForChoice(false);
         }
-        if (choice != null) {
+        if (choice == null) {
+          paymentMethod = undefined;
+        } else if (paymentMethod == null || !choice.methods.includes(paymentMethod)) {
           // Let the buyer see the options first; focus moves to the selected one.
           window.setTimeout(() => {
             paymentMethodsRef.current
@@ -320,10 +339,6 @@ const CartComponentContent = ({
 
       // What this order is made of; only these lines go once it is paid.
       const cartLinesBeforeBuy = getCartLines();
-      const paymentMethod =
-        choice != null
-          ? effectivePaymentMethod(choice, selectedPaymentMethod)
-          : undefined;
       const response = await continueToCheckoutAsync(
         paymentMethod != null ? { paymentMethod } : undefined,
       );
@@ -348,11 +363,9 @@ const CartComponentContent = ({
         return;
       }
 
-      // The cart stays until the order is paid; without an order to ask about it is cleared now.
-      // A cash on delivery order is placed and paid to the courier, never
-      // online: it would stay unpaid here, so the cart is cleared at once.
+      // The cart stays until the order is paid (or placed, for cash on
+      // delivery); without an order to ask about it is cleared now.
       if (
-        paymentMethod === "cod" ||
         !rememberPendingOrder(response, {
           cartProjectId: getProjectID(),
           lines: cartLinesBeforeBuy,
