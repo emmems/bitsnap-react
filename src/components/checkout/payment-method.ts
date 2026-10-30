@@ -1,7 +1,8 @@
 /**
- * The buyer's choice between paying online and paying the seller by hand
- * (bank transfer or "BLIK przelew na telefon"), offered when the seller turned
- * on "show at checkout" for the manual payment gateway.
+ * The buyer's choice between paying online, paying the seller by hand (bank
+ * transfer or "BLIK przelew na telefon") and paying the courier on delivery,
+ * offered when the seller turned on "show at checkout" for the manual payment
+ * gateway or offers cash on delivery.
  *
  * `POST /public-commerce/payment-methods` takes the body of `/buy` and answers
  * `{ success: true, choice: null }` (nothing to choose) or
@@ -12,11 +13,12 @@
 
 import type { CheckoutTextKey } from "./texts";
 
-export type PaymentMethod = "online" | "manual";
+/** `cod` is cash on delivery: the buyer pays the courier (Poland only, shipped carts). */
+export type PaymentMethod = "online" | "manual" | "cod";
 export type ManualAccountType = "bankTransfer" | "blik";
 
 export type PaymentMethodChoice = {
-  /** In the seller's order; the first one is selected by default. */
+  /** In the seller's order (cash on delivery last); the first one is selected by default. */
   methods: PaymentMethod[];
   /** How the manual option is paid; decides its label. */
   manualAccountTypes: ManualAccountType[];
@@ -25,7 +27,7 @@ export type PaymentMethodChoice = {
 /** A slow answer must not hold up the "Next step" button for long. */
 export const PAYMENT_METHODS_TIMEOUT_MS = 5000;
 
-const METHODS: readonly PaymentMethod[] = ["online", "manual"];
+const METHODS: readonly PaymentMethod[] = ["online", "manual", "cod"];
 const ACCOUNT_TYPES: readonly ManualAccountType[] = ["bankTransfer", "blik"];
 
 function uniqueKnown<T extends string>(value: unknown, known: readonly T[]): T[] {
@@ -43,7 +45,8 @@ function uniqueKnown<T extends string>(value: unknown, known: readonly T[]): T[]
 
 /**
  * The choice in a `payment-methods` answer, or `null` when there is nothing
- * to choose: `choice: null`, a malformed answer, or fewer than both methods.
+ * to choose: `choice: null`, a malformed answer, or fewer than two known
+ * methods. Methods this version does not know are left out.
  */
 export function parsePaymentMethodChoice(body: unknown): PaymentMethodChoice | null {
   if (typeof body !== "object" || body == null) {
@@ -64,6 +67,18 @@ export function parsePaymentMethodChoice(body: unknown): PaymentMethodChoice | n
       ACCOUNT_TYPES,
     ),
   };
+}
+
+/**
+ * The choice without cash on delivery, `null` when fewer than two methods are
+ * left: shown while the choice for a new country is asked for.
+ */
+export function withoutCod(choice: PaymentMethodChoice | null): PaymentMethodChoice | null {
+  if (choice == null) {
+    return null;
+  }
+  const methods = choice.methods.filter((method) => method !== "cod");
+  return methods.length < 2 ? null : { ...choice, methods };
 }
 
 /** The method the buyer picked, or the seller's first one when the pick is not offered. */

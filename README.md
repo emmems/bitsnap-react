@@ -154,7 +154,7 @@ built-in styles):
 | `countrySearch`      | Country search field                        |
 | `countryOption`      | Single country option                       |
 | `paymentButtons`     | Apple Pay / Google Pay wrappers              |
-| `paymentMethods`     | "How would you like to pay?" group (online or transfer / BLIK to a phone) |
+| `paymentMethods`     | "How would you like to pay?" group (online, transfer / BLIK to a phone, cash on delivery) |
 | `paymentMethodOption`| Single payment method card                   |
 | `checkoutButton`     | "Next step" button                          |
 | `emptyState`         | Empty cart message                          |
@@ -361,9 +361,10 @@ Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
 `paymentMethodOnline`, `paymentMethodOnlineDescription`,
 `paymentMethodManualTransfer`, `paymentMethodManualBlik`,
 `paymentMethodManualBoth`, `paymentMethodManualDescription`,
-`paymentMethodManualBlikNote`.
+`paymentMethodManualBlikNote`, `paymentMethodCod`,
+`paymentMethodCodDescription`, `paymentMethodCodUnavailable`.
 
-### Paying online or by transfer / BLIK to a phone
+### Paying online, by transfer / BLIK to a phone or on delivery
 
 When the shop turned on manual payments with "show at checkout", the cart asks
 the buyer how they want to pay before "Next step": online (card, BLIK code,
@@ -374,11 +375,23 @@ seller's account and phone number are shown only after the order is placed, on
 the Bitsnap payment page the cart redirects to; the order waits for the payment
 there and the cart is cleared.
 
+When the shop offers cash on delivery and the cart qualifies (delivery to
+Poland, at least one shipped product, no subscription), the cart lists
+"Płatność przy odbiorze" / "Cash on delivery" last. The buyer pays the courier.
+Like any order, the cart is kept until the buyer has finished the order's
+details form: the order is then "placed" (or "paid" once the seller marks it)
+and its lines leave the cart. A buyer who goes back from the form still has the
+cart. The cart asks again when the buyer changes the country; until the answer
+arrives it keeps showing the last choice without cash on delivery. If the shop refuses cash on delivery for the order
+anyway, the cart shows `paymentMethodCodUnavailable` and asks for the methods
+again.
+
 The cart asks `POST /public-commerce/payment-methods` (same body as `/buy`) once
 per cart content. `choice: null`, an error, a timeout (5 s) or an older
 bitsnap.pl that does not have the endpoint leave the cart as before: no choice
-and a plain `/buy`. `/buy` gets `paymentMethod: "online" | "manual"` only when
-the choice was shown. Apple Pay and Google Pay are online payments and do not
+and a plain `/buy`. `/buy` gets `paymentMethod: "online" | "manual" | "cod"`
+only when the choice was shown; the choice appears whenever the answer lists
+two or more methods this version knows (others are ignored). Apple Pay and Google Pay are online payments and do not
 change.
 
 When "Next step" fails, the cart shows the text of the backend error code

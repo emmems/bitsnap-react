@@ -7,6 +7,7 @@ const page = setupReactPage();
 
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
+let focusManager: typeof import("@tanstack/react-query").focusManager;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
 let Bitsnap: typeof import("./methods.ts").Bitsnap;
 let useCheckoutStore: typeof import("./state.ts").useCheckoutStore;
@@ -14,6 +15,7 @@ let useCheckoutStore: typeof import("./state.ts").useCheckoutStore;
 before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
+  ({ focusManager } = await import("@tanstack/react-query"));
   BitsnapCheckout = (await import("./BitsnapCart.tsx")).default;
   ({ Bitsnap } = await import("./methods.ts"));
   ({ useCheckoutStore } = await import("./state.ts"));
@@ -35,6 +37,9 @@ const product = {
 /** What POST /payment-methods answers with. */
 let paymentMethodsResponse: () => Response | Promise<Response>;
 let buyUrl = "";
+let countries: { name: string; code: string }[] = [];
+/** Replaces the successful /buy answer when set. */
+let buyAnswer: (() => Response) | undefined;
 let paymentMethodsBodies: string[] = [];
 let buyBodies: string[] = [];
 const roots: Array<{ unmount: () => void }> = [];
@@ -54,18 +59,20 @@ beforeEach(() => {
   paymentMethodsBodies = [];
   buyBodies = [];
   buyUrl = "https://bitsnap.pl/payment/common/p/o";
+  buyAnswer = undefined;
+  countries = [{ name: "Polska", code: "PL" }];
   paymentMethodsResponse = () => json({ success: true, choice: null });
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/public-commerce/products")) return json({ success: true, result: [product] });
-    if (url.includes("/public-commerce/countries")) return json([{ name: "Polska", code: "PL" }]);
+    if (url.includes("/public-commerce/countries")) return json(countries);
     if (url.includes("/public-commerce/payment-methods")) {
       paymentMethodsBodies.push(String(init?.body));
       return paymentMethodsResponse();
     }
     if (url.includes("/public-commerce/buy")) {
       buyBodies.push(String(init?.body));
-      return json({ url: buyUrl, sessionID: "s" });
+      return buyAnswer?.() ?? json({ url: buyUrl, sessionID: "s" });
     }
     if (init?.method === "POST" && url.endsWith("/e")) return new Response(null, { status: 202 });
     return new Response("{}", { status: 404 });
@@ -88,6 +95,7 @@ const fieldset = () => doc().querySelector<HTMLFieldSetElement>('[data-bitsnap-c
 const radios = () => [...doc().querySelectorAll<HTMLInputElement>('[data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"]')];
 const optionTitles = () =>
   [...doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodOption"] span.font-semibold')].map((el) => el.textContent);
+const errorText = () => doc().querySelector('[data-bitsnap-checkout-slot="error"]')?.textContent;
 
 async function openCart(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
   const container = doc().createElement("div");
@@ -99,6 +107,18 @@ async function openCart(props: Partial<React.ComponentProps<typeof BitsnapChecko
   });
   await React.act(async () => void (await Bitsnap.addProductToCart("var1", 2)));
   await React.act(async () => Bitsnap.showCart());
+  await settle();
+}
+
+/** What the country selector does: store the country, then read it again (here on a refocus). */
+async function changeCountry(code: string) {
+  const checkout = JSON.parse(page.win.localStorage.getItem("checkout")!);
+  page.win.localStorage.setItem("checkout", JSON.stringify({ ...checkout, country: code }));
+  await React.act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  focusManager.setFocused(undefined);
   await settle();
 }
 
@@ -195,6 +215,125 @@ describe("payment method choice in the cart", () => {
 
     await clickCheckout();
     assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "online");
+  });
+
+  it("shows cash on delivery last, with its hint, next to online and manual", async () => {
+    paymentMethodsResponse = choiceOf(["online", "manual", "cod"], ["bankTransfer"]);
+    await openCart();
+    assert.deepEqual(optionTitles(), ["Zapłać online", "Przelew bankowy", "Płatność przy odbiorze"]);
+    assert.deepEqual(radios().map((el) => [el.value, el.checked]), [
+      ["online", true],
+      ["manual", false],
+      ["cod", false],
+    ]);
+    const cod = doc().querySelector('[data-payment-method="cod"]')!;
+    assert.equal(cod.getAttribute("data-bitsnap-checkout-slot"), "paymentMethodOption", "same card as the others");
+    const hint = doc().getElementById(radios()[2].getAttribute("aria-describedby")!);
+    assert.equal(hint?.textContent, "Zapłacisz kurierowi gotówką lub kartą, gdy odbierzesz przesyłkę.");
+    assert.deepEqual(JSON.parse(paymentMethodsBodies[0]).countries, ["PL"], "asked for the cart's country");
+  });
+
+  it("offers a choice of online and cash on delivery alone, in English and with overrides", async () => {
+    paymentMethodsResponse = choiceOf(["online", "cod"], []);
+    await openCart({ locale: "en-US", texts: { paymentMethodCodDescription: "Pay the courier" } });
+    assert.deepEqual(optionTitles(), ["Pay online", "Cash on delivery"]);
+    assert.ok(fieldset()!.textContent?.includes("Pay the courier"));
+  });
+
+  it("sends cod and keeps the cart with a pending order until the order is placed", async () => {
+    paymentMethodsResponse = choiceOf(["online", "manual", "cod"], ["blik"]);
+    // The details form of the order: the buyer may still go back or be refused cod there.
+    buyUrl = "https://bitsnap.pl/payment/common/hashedP/ord_7";
+    await openCart();
+    await React.act(async () => radios()[2].click());
+    assert.deepEqual(radios().map((el) => el.checked), [false, false, true]);
+    assert.equal(fieldset()!.textContent?.includes("cyfrowego kodu"), false, "no BLIK note on cash on delivery");
+
+    await clickCheckout();
+    assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "cod");
+    assert.equal(JSON.parse(page.win.localStorage.getItem("checkout")!).products.length, 1, "the cart stays");
+    const pending = JSON.parse(page.win.localStorage.getItem("bitsnap-pending-order")!);
+    assert.equal(pending.orderId, "ord_7");
+    assert.equal(pending.projectId, "hashedP");
+  });
+
+  it("keeps the choice without cod while a new country is asked for, and buys on one click", async () => {
+    countries = [
+      { name: "Polska", code: "PL" },
+      { name: "Niemcy", code: "DE" },
+    ];
+    paymentMethodsResponse = choiceOf(["online", "manual", "cod"], ["bankTransfer"]);
+    await openCart();
+    await React.act(async () => radios()[2].click());
+
+    let answer!: (response: Response) => void;
+    paymentMethodsResponse = () => new Promise<Response>((resolve) => (answer = resolve));
+    await changeCountry("DE");
+    assert.equal(paymentMethodsBodies.length, 2, "asked for the new country");
+    assert.deepEqual(JSON.parse(paymentMethodsBodies[1]).countries, ["DE"]);
+    assert.deepEqual(
+      radios().map((el) => [el.value, el.checked]),
+      [["online", true], ["manual", false]],
+      "the last choice stays, without cash on delivery",
+    );
+
+    await clickCheckout();
+    assert.equal(buyBodies.length, 0, "waits for the new answer");
+    await React.act(async () => answer(choiceOf(["online", "manual"], ["bankTransfer"])()));
+    await settle();
+    assert.equal(buyBodies.length, 1, "one click is enough");
+    assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "online");
+  });
+
+  it("does not send a stale method: a new answer without it is shown first", async () => {
+    countries = [
+      { name: "Polska", code: "PL" },
+      { name: "Niemcy", code: "DE" },
+    ];
+    paymentMethodsResponse = choiceOf(["manual", "online", "cod"], ["blik"]);
+    await openCart();
+
+    let answer!: (response: Response) => void;
+    paymentMethodsResponse = () => new Promise<Response>((resolve) => (answer = resolve));
+    await changeCountry("DE");
+    assert.deepEqual(radios().map((el) => el.value), ["manual", "online"]);
+
+    await clickCheckout();
+    await React.act(async () => answer(choiceOf(["online", "cod"], [])()));
+    await settle();
+    assert.equal(buyBodies.length, 0, "the new choice is shown, not bought");
+    assert.deepEqual(radios().map((el) => [el.value, el.checked]), [["online", true], ["cod", false]]);
+  });
+
+  it("explains a refused cash on delivery and asks for the methods again", async () => {
+    paymentMethodsResponse = choiceOf(["online", "cod"], []);
+    buyAnswer = () =>
+      json({ success: false, code: "gateway-not-configured", error: "Płatność przy odbiorze jest niedostępna" }, 400);
+    await openCart();
+    await React.act(async () => radios()[1].click());
+    paymentMethodsResponse = () => json({ success: true, choice: null });
+    await clickCheckout();
+
+    assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "cod");
+    assert.equal(
+      errorText(),
+      "Płatność przy odbiorze nie jest dostępna dla tego zamówienia. Wybierz inną formę płatności.",
+    );
+    assert.equal(paymentMethodsBodies.length, 2, "asked again after the refusal");
+    assert.equal(fieldset(), null, "cash on delivery is gone with the new answer");
+    assert.equal(JSON.parse(page.win.localStorage.getItem("checkout")!).products.length, 1, "the cart stays");
+  });
+
+  it("keeps the regular text for gateway-not-configured when cod was not picked", async () => {
+    paymentMethodsResponse = choiceOf(["online", "cod"], []);
+    buyAnswer = () => json({ success: false, code: "gateway-not-configured", error: "x" }, 400);
+    await openCart();
+    await clickCheckout();
+    assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "online");
+    assert.equal(
+      errorText(),
+      "Płatności w tym sklepie nie są poprawnie skonfigurowane. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
+    );
   });
 
   it("clears the cart and remembers no pending order for the manual payment page", async () => {

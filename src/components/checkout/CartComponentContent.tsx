@@ -22,6 +22,7 @@ import { useCheckoutStore } from "./state";
 import { PaymentMethodChoice } from "./PaymentMethodChoice";
 import {
   effectivePaymentMethod,
+  withoutCod,
   type PaymentMethod,
   type PaymentMethodChoice as Choice,
 } from "./payment-method";
@@ -117,26 +118,46 @@ const CartComponentContent = ({
 
   const products = isErr(data) ? undefined : data;
 
+  const selectedCountry =
+    countryData != null && !isErr(countryData) && countryData != ""
+      ? countryData
+      : undefined;
+
   // Whether the shop lets the buyer pay by hand (transfer / BLIK to a phone)
-  // for this cart. Asked once per cart content; any failure means "no choice".
+  // or on delivery for this cart. Asked once per cart content and country
+  // (cash on delivery is for Poland only); any failure means "no choice".
+  // Without a country "Next step" is disabled, so there is nothing to ask yet.
+  // Until a new country or cart is answered, the last choice stays on screen
+  // without cash on delivery, which the new answer may not offer.
   const queryClient = useQueryClient();
   const cartSignature =
-    products == null || products.length === 0
+    products == null || products.length === 0 || selectedCountry == null
       ? undefined
       : products
           .map((el) => `${el.productID}:${el.quantity}`)
           .sort()
           .join(",");
   const paymentMethodsQuery = {
-    queryKey: ["cart-payment-methods", getProjectID(), currentLocale, cartSignature],
+    queryKey: [
+      "cart-payment-methods",
+      getProjectID(),
+      currentLocale,
+      selectedCountry,
+      cartSignature,
+    ],
     queryFn: async (): Promise<Choice | null> =>
       provider.getPaymentMethodChoice().catch(() => null),
     staleTime: 60_000,
     retry: false,
   } as const;
-  const { data: paymentMethodChoiceData } = useQuery({
+  const {
+    data: paymentMethodChoiceData,
+    isPlaceholderData: isPaymentMethodChoicePlaceholder,
+  } = useQuery({
     ...paymentMethodsQuery,
     enabled: cartSignature != null,
+    placeholderData: (previous: Choice | null | undefined) =>
+      previous === undefined ? undefined : withoutCod(previous),
   });
   const paymentMethodChoice =
     cartSignature != null ? (paymentMethodChoiceData ?? null) : null;
@@ -162,10 +183,6 @@ const CartComponentContent = ({
     products?.some((product) => product.details?.isDeliverable === true) ??
     false;
 
-  const selectedCountry =
-    countryData != null && !isErr(countryData) && countryData != ""
-      ? countryData
-      : undefined;
   // The hint waits for the answer: the country is read asynchronously.
   const isCountryMissing = countryData !== undefined && selectedCountry == null;
 
@@ -263,9 +280,18 @@ const CartComponentContent = ({
       useCheckoutStore.getState().setNotice(undefined);
 
       // A click before the choice arrived waits for it (at most the request
-      // timeout); a choice the buyer has not seen yet is shown, not used.
+      // timeout); a choice the buyer has not seen yet is shown, not used. The
+      // last choice shown in the meantime is used if the new one still offers
+      // the selected method.
       let choice = paymentMethodChoice;
-      if (cartSignature != null && paymentMethodChoiceData === undefined) {
+      let paymentMethod =
+        choice != null
+          ? effectivePaymentMethod(choice, selectedPaymentMethod)
+          : undefined;
+      if (
+        cartSignature != null &&
+        (paymentMethodChoiceData === undefined || isPaymentMethodChoicePlaceholder)
+      ) {
         setIsWaitingForChoice(true);
         try {
           choice = await queryClient
@@ -274,7 +300,9 @@ const CartComponentContent = ({
         } finally {
           setIsWaitingForChoice(false);
         }
-        if (choice != null) {
+        if (choice == null) {
+          paymentMethod = undefined;
+        } else if (paymentMethod == null || !choice.methods.includes(paymentMethod)) {
           // Let the buyer see the options first; focus moves to the selected one.
           window.setTimeout(() => {
             paymentMethodsRef.current
@@ -312,9 +340,7 @@ const CartComponentContent = ({
       // What this order is made of; only these lines go once it is paid.
       const cartLinesBeforeBuy = getCartLines();
       const response = await continueToCheckoutAsync(
-        choice != null
-          ? { paymentMethod: effectivePaymentMethod(choice, selectedPaymentMethod) }
-          : undefined,
+        paymentMethod != null ? { paymentMethod } : undefined,
       );
 
       if (isErr(response)) {
@@ -325,13 +351,20 @@ const CartComponentContent = ({
           if ("data" in response && Array.isArray(response.data)) {
             setMissingItemIds(response.data as string[]);
           }
+        } else if (
+          paymentMethod === "cod" &&
+          response.error == "gateway-not-configured"
+        ) {
+          // The shop turned cash on delivery off, or this cart does not qualify.
+          setErrMsg(resolveCheckoutText("paymentMethodCodUnavailable"));
         } else {
           setErrMsg(buyErrorText(response, resolveCheckoutText));
         }
         return;
       }
 
-      // The cart stays until the order is paid; without an order to ask about it is cleared now.
+      // The cart stays until the order is paid (or placed, for cash on
+      // delivery); without an order to ask about it is cleared now.
       if (
         !rememberPendingOrder(response, {
           cartProjectId: getProjectID(),

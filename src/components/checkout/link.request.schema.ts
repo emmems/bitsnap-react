@@ -114,10 +114,10 @@ export const linkRequestSchema = zod.object({
   blikCode: zod.string().optional(),
   /**
    * The buyer's pick when the cart offered a choice (`payment-methods`):
-   * `manual` is a transfer / BLIK to the seller's phone, `online` the
-   * regular gateway. Omitted when no choice was shown.
+   * `manual` is a transfer / BLIK to the seller's phone, `cod` cash on
+   * delivery, `online` the regular gateway. Omitted when no choice was shown.
    */
-  paymentMethod: zod.enum(["online", "manual"]).optional(),
+  paymentMethod: zod.enum(["online", "manual", "cod"]).optional(),
   couponCode: zod.string().optional(),
 
   redirect: zod

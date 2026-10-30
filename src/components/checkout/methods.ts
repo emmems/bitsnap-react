@@ -90,8 +90,9 @@ function cartRequestInit(projectID: string, request: LinkRequest) {
 }
 
 /**
- * Whether the buyer may choose between paying online and paying the seller by
- * transfer / BLIK to a phone number, for the cart `/buy` would get. `null`
+ * Whether the buyer may choose between paying online, paying the seller by
+ * transfer / BLIK to a phone number and paying on delivery, for the cart
+ * `/buy` would get. `null`
  * means nothing to choose, also when the request fails.
  */
 export async function getPaymentMethodChoice(

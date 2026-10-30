@@ -45,13 +45,17 @@ export function subtractOrderLines<T extends { id: string; quantity: number }>(
   return rest;
 }
 
-/** `unknown` is an order the backend does not know (yet) or a status we do not recognise. */
-export type OrderStatus = "created" | "paid" | "canceled" | "unknown";
+/**
+ * `placed` is a cash on delivery order the buyer accepted: it is paid to the
+ * courier later, so for the cart it is as finished as a paid one. `unknown` is
+ * an order the backend does not know (yet) or a status we do not recognise.
+ */
+export type OrderStatus = "created" | "placed" | "paid" | "canceled" | "unknown";
 
 export type PendingOrderOutcome =
   /** Nothing was pending. */
   | "none"
-  /** Paid: its cart lines were removed and the order forgotten. */
+  /** Paid or placed: its cart lines were removed and the order forgotten. */
   | "paid"
   /** Canceled: the order was forgotten, the cart stays. */
   | "canceled"
@@ -255,7 +259,10 @@ export function orderStatusFromResponse(response: {
 }): OrderStatus {
   const status =
     response.details?.status ?? readUnknownStatus(response.details?.$unknown);
-  return status === "created" || status === "paid" || status === "canceled"
+  return status === "created" ||
+    status === "placed" ||
+    status === "paid" ||
+    status === "canceled"
     ? status
     : "unknown";
 }
@@ -293,8 +300,8 @@ function readUnknownStatus(unknown: unknown): string | undefined {
 
 /**
  * Settles the order that was pending when the buyer left for the payment
- * page. Paid: removes the order's cart lines (not what was added since),
- * forgets the order. Canceled or older than 24 hours: forgets the order only.
+ * page. Paid, or placed (cash on delivery): removes the order's cart lines
+ * (not what was added since), forgets the order. Canceled or older than 24 hours: forgets the order only.
  * Anything else (not paid yet, backend or network error) keeps it for the
  * next call. An order of another project (`projectId` is the cart's project
  * id) is left alone and not asked about.
@@ -340,7 +347,7 @@ export async function reconcilePendingOrder(deps: {
     return "pending";
   }
 
-  if (status === "paid") {
+  if (status === "paid" || status === "placed") {
     try {
       await deps.removeLines(order.lines);
     } catch {
