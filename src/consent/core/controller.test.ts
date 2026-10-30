@@ -542,7 +542,7 @@ describe("storage and network", () => {
     assert.match(shadowOf(dom.window.document)!.textContent!, /Hello cookies/);
 
     clickButton(shadowOf(dom.window.document)!, "Accept all");
-    const post = calls.find((call) => call.url.endsWith("/consent"))!;
+    const post = calls.find((call) => call.url.endsWith("/consent") && JSON.parse(call.init!.body as string).action === "accept_all")!;
     assert.equal(post.url, "https://collect.example.test/consent");
     assert.equal(post.init!.method, "POST");
     assert.equal(post.init!.keepalive, true);
@@ -712,3 +712,154 @@ describe("storage and network", () => {
 function writeStored(doc: Document) {
   doc.cookie = `bitsnap_consent=${encodeState({ id: "abcdefgh12345678", ts: 1, bv: 1, c: { analytics: true, marketing: false, preferences: false } })}; Path=/`;
 }
+
+describe("banner impression", () => {
+  const collect = "https://collect.example.test";
+  let calls: { url: string; body: Record<string, unknown> }[];
+
+  function mockFetch(version = 7) {
+    calls = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/consent/config")) {
+        return new Response(JSON.stringify({ enabled: true, config: { ...config, version } }));
+      }
+      calls.push({ url: String(url), body: JSON.parse(init!.body as string) });
+      return new Response("ok");
+    }) as typeof fetch;
+  }
+  const project = { config: undefined, projectKey: "pk_Ab12Cd", apiHost: "https://api.example.test", collectHost: collect };
+  const shown = () => calls.filter((call) => call.body.action === "shown");
+  const stored = (bv: number) =>
+    `bitsnap_consent=${encodeState({ id: "abc", ts: 1, bv, c: { analytics: false, marketing: true, preferences: false } })}; Path=/`;
+
+  it("reports the banner opening on its own, once, with no id and no choice", async () => {
+    setupDom();
+    mockFetch();
+    await make(project).ready;
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, `${collect}/consent`);
+    const body = calls[0].body;
+    assert.deepEqual(Object.keys(body).sort(), ["action", "bv", "host", "k", "ts"]);
+    assert.equal(body.k, "Ab12Cd");
+    assert.equal(body.action, "shown");
+    assert.equal(body.bv, 7);
+    assert.equal(body.host, "shop.example.test");
+    assert.ok(Math.abs((body.ts as number) - Date.now() / 1000) < 5, "unix seconds");
+  });
+
+  it("reports it again as an impression when the stored choice is for an older banner version", async () => {
+    const dom = setupDom();
+    dom.window.document.cookie = stored(1);
+    mockFetch(2);
+    await make(project).ready;
+    assert.equal(shown().length, 1);
+    assert.equal(shown()[0].body.bv, 2);
+  });
+
+  it("does not report a banner that a choice made before ready closed at once", async () => {
+    setupDom();
+    mockFetch();
+    const api = make(project);
+    api.acceptAll();
+    await api.ready;
+    assert.equal(shown().length, 0);
+    assert.equal(calls.filter((call) => call.body.action === "accept_all").length, 1);
+  });
+
+  it("lets a keyless controller not take the impression of a keyed one", async () => {
+    setupDom();
+    mockFetch();
+    await make({ ...project, projectKey: undefined }).ready;
+    await make(project).ready;
+    assert.equal(shown().length, 1);
+  });
+
+  it("does not report when the config fails to load and a choice is stored", async () => {
+    const dom = setupDom();
+    dom.window.document.cookie = stored(7);
+    calls = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/consent/config")) return new Response("nope", { status: 404 });
+      calls.push({ url: String(url), body: JSON.parse(init!.body as string) });
+      return new Response("ok");
+    }) as typeof fetch;
+    await make(project).ready;
+    assert.equal(shown().length, 0);
+  });
+
+  it("counts an open() made before ready only when the banner would open anyway", async () => {
+    const dom = setupDom();
+    dom.window.document.cookie = stored(7);
+    mockFetch();
+    const withChoice = make(project);
+    withChoice.open();
+    await withChoice.ready;
+    assert.equal(shown().length, 0, "a valid choice: the open is manual");
+
+    setupDom();
+    mockFetch();
+    const fresh = make(project);
+    fresh.open();
+    await fresh.ready;
+    assert.equal(shown().length, 1, "no choice: the banner opens on its own, once");
+  });
+
+  it("does not report when a valid choice is stored", async () => {
+    const dom = setupDom();
+    dom.window.document.cookie = stored(7);
+    mockFetch();
+    const api = make(project);
+    await api.ready;
+    assert.equal(shadowOf(dom.window.document), null);
+    assert.deepEqual(calls, []);
+  });
+
+  it("does not report a manual open, a footer link or a reset", async () => {
+    const dom = setupDom(`<a href="#" data-bitsnap-consent-open id="o">Cookie settings</a>`);
+    dom.window.document.cookie = stored(7);
+    mockFetch();
+    const api = make(project);
+    await api.ready;
+    api.open();
+    (dom.window.document.getElementById("o") as HTMLElement).click();
+    api.reset();
+    assert.deepEqual(shown(), []);
+  });
+
+  it("does not report without a project key", async () => {
+    setupDom();
+    mockFetch();
+    await make({ collectHost: collect }).ready;
+    assert.deepEqual(calls, []);
+  });
+
+  it("does not report a preview, or a banner the project switched off", async () => {
+    setupDom();
+    mockFetch();
+    await make({ ...project, preview: true }).ready;
+    assert.deepEqual(calls, []);
+
+    setupDom();
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/consent/config")) return new Response(JSON.stringify({ enabled: false, config: { version: 3 } }));
+      calls.push({ url: String(url), body: JSON.parse(init!.body as string) });
+      return new Response("ok");
+    }) as typeof fetch;
+    await make(project).ready;
+    assert.deepEqual(calls, []);
+  });
+
+  it("sends one per page load however many controllers run, and the choice still logs", async () => {
+    const dom = setupDom();
+    mockFetch();
+    const first = make(project);
+    first.destroy(); // like a React StrictMode double effect
+    const second = make(project);
+    const third = make(project);
+    await Promise.all([first.ready, second.ready, third.ready]);
+    assert.equal(shown().length, 1);
+    clickButton(shadowOf(dom.window.document)!, "Accept all");
+    assert.equal(calls.filter((call) => call.body.action === "accept_all").length, 1);
+    assert.equal(shown().length, 1);
+  });
+});
