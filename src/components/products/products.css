@@ -83,6 +83,15 @@
         border-radius: var(--bitsnap-products-radius, 8px);
     }
 
+    /* "3D" badge: dark pill readable over any product photo. */
+    [data-bitsnap-products] [data-bitsnap-products-slot="model3dBadge"] {
+        background-color: var(--bitsnap-products-model3d-badge-background, rgb(23 23 23 / 0.82));
+        color: var(--bitsnap-products-model3d-badge-foreground, #ffffff);
+        border-radius: 999px;
+        letter-spacing: 0.02em;
+        pointer-events: none;
+    }
+
     [data-bitsnap-products] [data-bitsnap-products-slot="badge"][data-kind="unavailable"] {
         color: var(--bitsnap-products-error, #dc2626);
     }

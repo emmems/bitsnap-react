@@ -43,6 +43,28 @@ const catalogCjsShim: Plugin = {
 };
 
 /**
+ * `bitsnap-react/viewer3d` is ESM only (three and R3F are ESM). The CommonJS
+ * build gets a stub that says so; `package.json` exports only `import` for it.
+ */
+const viewer3dCjsStub: Plugin = {
+  name: "viewer3d-cjs-stub",
+  setup(build) {
+    // With `splitting`, tsup builds CommonJS as ESM and converts it
+    // afterwards, so `format` is "esm" in both builds; the output extension
+    // tells them apart.
+    const extension = build.initialOptions.outExtension?.[".js"] ?? ".js";
+    if (build.initialOptions.format === "esm" && extension === ".mjs") {
+      return;
+    }
+    build.onLoad({ filter: /src[\\/]viewer3d[\\/]index\.ts$/ }, () => ({
+      loader: "js",
+      contents:
+        'throw new Error("bitsnap-react/viewer3d is ESM only: use import, not require");',
+    }));
+  },
+};
+
+/**
  * Standalone Bitsnap Consent script for a plain `<script>` tag: no React, no
  * externals, one file in `dist/embed/`. The library config keeps `dist/embed`
  * out of its clean step, because both builds run side by side.
@@ -89,6 +111,7 @@ export default defineConfig((overrideOptions) => {
       course: "src/course/index.ts",
       consent: "src/consent/index.ts",
       analytics: "src/analytics/index.ts",
+      viewer3d: "src/viewer3d/index.ts",
     },
     dts: true,
     onSuccess: shouldPublish ? "pnpm publish" : undefined,
@@ -102,8 +125,9 @@ export default defineConfig((overrideOptions) => {
     minify: true,
     sourcemap: true,
     platform: "browser",
-    external: ["react", "react-dom"],
-    esbuildPlugins: [catalogCjsShim],
+    // three and React Three Fiber are optional peers of `bitsnap-react/viewer3d`.
+    external: ["react", "react-dom", /^three($|\/)/, /^@react-three\//],
+    esbuildPlugins: [catalogCjsShim, viewer3dCjsStub],
     define: {
       PACKAGE_NAME: `"${name}"`,
       PACKAGE_VERSION: `"${version}"`,

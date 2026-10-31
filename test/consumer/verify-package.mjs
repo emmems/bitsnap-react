@@ -68,6 +68,8 @@ const requiredFiles = [
   "analytics.d.ts",
   "analytics.d.mts",
   "embed/analytics.js",
+  "viewer3d.mjs",
+  "viewer3d.d.mts",
 ];
 
 for (const file of requiredFiles) {
@@ -366,6 +368,103 @@ assert.ok(
   }
   const gzipped = gzipSync(embed, { level: 9 }).length;
   assert.ok(gzipped < 8 * 1024, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8192)`);
+}
+
+// 3D viewer: `bitsnap-react/viewer3d` is ESM only and the only entry that can
+// reach three / React Three Fiber, and only through a dynamic import. The main
+// and catalog entries must never reach them, statically or dynamically.
+{
+  const THREE_IMPORT = /(?:from\s*|import\s*\(\s*|require\(\s*|import\s*)["'](?:three(?:\/[^"']*)?|@react-three\/[^"']+)["']/;
+
+  /** Files reachable from `file` through relative imports (static, or static + dynamic). */
+  function reachable(file, { dynamic }) {
+    const seen = new Set();
+    const queue = [file];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const text = readFileSync(join(dist, current), "utf8");
+      const pattern = dynamic
+        ? /(?:from\s*|import\s*\(\s*|require\(\s*|import\s*)["'](\.{1,2}\/[^"']+)["']/g
+        : /(?:from\s*|require\(\s*|import\s*)["'](\.{1,2}\/[^"']+)["']/g;
+      for (const match of text.matchAll(pattern)) {
+        if (/\.css$/.test(match[1])) continue;
+        queue.push(join(dirname(current), match[1]));
+      }
+    }
+    return [...seen];
+  }
+  const reachesThree = (files) =>
+    files.filter((file) => THREE_IMPORT.test(readFileSync(join(dist, file), "utf8")));
+
+  for (const entry of ["index.mjs", "catalog.mjs", "index.js", "catalog.js"]) {
+    const files = reachable(entry, { dynamic: true });
+    assert.deepEqual(
+      reachesThree(files),
+      [],
+      `dist/${entry} reaches three or @react-three (${files.length} files checked)`,
+    );
+    assert.ok(
+      !files.some((file) => /^viewer3d|Viewer3D-/.test(file)),
+      `dist/${entry} reaches the 3D viewer`,
+    );
+  }
+
+  const viewerStatic = reachable("viewer3d.mjs", { dynamic: false });
+  assert.deepEqual(
+    reachesThree(viewerStatic),
+    [],
+    "dist/viewer3d.mjs imports three statically: it must stay behind import()",
+  );
+  const viewerAll = reachable("viewer3d.mjs", { dynamic: true });
+  assert.ok(
+    reachesThree(viewerAll).some((file) => /^Viewer3D-/.test(file)),
+    "the lazy Viewer3D chunk of dist/viewer3d.mjs does not import three",
+  );
+
+  // ESM only: no `require` condition, and the CommonJS file only says so.
+  const viewerExport = packageJSON.exports["./viewer3d"];
+  assert.ok(viewerExport.import, "package.json exports ./viewer3d without import");
+  assert.equal(viewerExport.require, undefined, "./viewer3d must be ESM only");
+  for (const peer of ["three", "@react-three/fiber", "@react-three/drei"]) {
+    assert.ok(packageJSON.peerDependencies[peer], `missing peer dependency ${peer}`);
+    assert.equal(
+      packageJSON.peerDependenciesMeta?.[peer]?.optional,
+      true,
+      `peer dependency ${peer} must be optional`,
+    );
+  }
+
+  const viewer = await import(join(dist, "viewer3d.mjs"));
+  for (const name of ["Product3DViewer", "Model3DViewer", "useProduct3DModel", "formatModelSize"]) {
+    assert.equal(typeof viewer[name], "function", `missing viewer3d export ${name}`);
+  }
+  assert.equal(viewer.AUTO_LOAD_MAX_BYTES, 10 * 1024 * 1024);
+
+  // The server render shows the poster and never loads three.
+  const { renderToString } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const html = renderToString(
+    createElement(viewer.Model3DViewer, {
+      model: {
+        previewUrl: "https://files.example.test/m.glb",
+        previewSize: 24 * 1024 * 1024,
+        thumbnailUrl: "https://files.example.test/t.webp",
+        illustrative: true,
+      },
+      productName: "Figurka",
+    }),
+  );
+  assert.match(html, /data-bitsnap-viewer3d/);
+  assert.match(html, /t\.webp/);
+  assert.match(html, /Model 3D jest poglądowy/);
+  assert.equal(renderToString(createElement(viewer.Product3DViewer, { productId: "prodv2_x", projectID: "p" })), "");
+
+  const declaration = readFileSync(join(dist, "viewer3d.d.mts"), "utf8");
+  for (const name of ["Product3DViewerProps", "UseProduct3DModelResult", "Model3DView", "Viewer3DCopy"]) {
+    assert.match(declaration, new RegExp(name), `dist/viewer3d.d.mts lacks ${name}`);
+  }
 }
 
 const returnsNames = [

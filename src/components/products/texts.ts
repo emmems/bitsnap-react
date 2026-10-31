@@ -26,6 +26,10 @@ export type ProductListTexts = {
   unavailable: string;
   /** Badge of subscription products. */
   subscription: string;
+  /** Badge of products with a 3D model. */
+  model3d: string;
+  /** Screen reader label of the 3D badge. */
+  model3dLabel: string;
   /** Price of products whose variants differ in price. `{price}` is the lowest one. */
   priceFrom: string;
   /** Screen reader label of the struck-through regular price. */
@@ -58,6 +62,8 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     viewProduct: "View",
     unavailable: "Unavailable",
     subscription: "Subscription",
+    model3d: "3D",
+    model3dLabel: "3D model",
     priceFrom: "from {price}",
     originalPrice: "Original price",
     loading: "Loading products",
@@ -78,6 +84,8 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     viewProduct: "Zobacz",
     unavailable: "Niedostępny",
     subscription: "Subskrypcja",
+    model3d: "3D",
+    model3dLabel: "Model 3D",
     priceFrom: "od {price}",
     originalPrice: "Cena przed obniżką",
     loading: "Ładowanie produktów",

@@ -70,6 +70,7 @@ export const PRODUCT_LIST_SLOT_NAMES = [
   "price",
   "comparePrice",
   "badge",
+  "model3dBadge",
   "actions",
   "addToCartButton",
   "selectButton",
