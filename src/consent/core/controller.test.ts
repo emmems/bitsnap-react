@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { createConsent } from "./controller.ts";
 import { fetchRemoteConfig } from "./config.ts";
 import { cookieName, encodeState, parseCookie, readConsent } from "./cookie.ts";
-import { clickButton, setupDom, shadowOf, visible } from "./testing.ts";
+import { clickButton, setupDom, shadowOf, visible, waitForExit } from "./testing.ts";
 import type { BitsnapConsentApi, ConsentChangeDetail, ConsentConfig } from "./types.ts";
 
 const config: Partial<ConsentConfig> = {
@@ -71,11 +71,79 @@ describe("consent banner", () => {
     assert.deepEqual(stored.c, { analytics: true, marketing: true, preferences: true });
     assert.equal(stored.bv, 1);
     assert.deepEqual(api.get(), stored);
-    assert.ok(!visible(shadowOf(doc)!, ".banner"));
+    assert.ok(visible(shadowOf(doc)!, ".banner"), "the banner fades out first");
+    await waitForExit();
+    assert.ok(!visible(shadowOf(doc)!, ".banner"), "and is gone afterwards");
     assert.equal(events.length, 1);
     assert.equal(events[0].action, "accept_all");
     assert.equal(windowEvent?.action, "accept_all");
     assert.match(doc.cookie, /bitsnap_consent=/);
+  });
+
+  it("fades the banner in when it opens and out before it disappears", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!;
+    const banner = root.querySelector<HTMLElement>(".banner")!;
+
+    assert.ok(banner.classList.contains("enter"), "the banner fades in");
+
+    clickButton(root, "Accept all");
+    assert.ok(banner.classList.contains("closing"), "the banner fades out");
+    assert.ok(visible(root, ".banner"), "it stays on the page while it fades");
+    await waitForExit();
+    assert.ok(!visible(root, ".banner"), "and is gone afterwards");
+    assert.ok(!banner.classList.contains("closing"), "the exit class is taken off");
+  });
+
+  it("fades the settings layer out as well", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!;
+    const overlay = root.querySelector<HTMLElement>(".overlay")!;
+
+    clickButton(root, "Settings");
+    assert.ok(overlay.classList.contains("enter"), "the settings fade in");
+    assert.ok(visible(root, ".overlay"));
+
+    doc.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.ok(overlay.classList.contains("closing"), "the settings fade out");
+    await waitForExit();
+    assert.ok(!visible(root, ".overlay"), "and are gone afterwards");
+  });
+
+  it("brings the banner back at once when the settings close without a choice", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!;
+    const banner = root.querySelector<HTMLElement>(".banner")!;
+
+    clickButton(root, "Settings");
+    doc.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.ok(visible(root, ".banner"), "the banner is back at once");
+    assert.ok(banner.classList.contains("enter"), "and fades in again");
+  });
+
+  it("hides the layers at once when the visitor asks for less motion", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    (dom.window as unknown as { matchMedia: () => unknown }).matchMedia = () => ({
+      matches: true,
+      addEventListener() {},
+      removeEventListener() {},
+    });
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!;
+
+    clickButton(root, "Accept all");
+    assert.ok(!visible(root, ".banner"), "no fade-out, no waiting");
   });
 
   it("reject all stores a refusal", async () => {
@@ -119,8 +187,9 @@ describe("consent banner", () => {
     const root = shadowOf(doc)!;
     clickButton(root, "Settings");
     doc.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    assert.ok(!visible(root, ".overlay"));
-    assert.ok(visible(root, ".banner"));
+    assert.ok(visible(root, ".banner"), "the banner comes back at once");
+    await waitForExit();
+    assert.ok(!visible(root, ".overlay"), "the settings fade out");
   });
 
   it("traps Tab inside the settings dialog", async () => {
@@ -149,6 +218,7 @@ describe("consent banner", () => {
     doc.getElementById("o")!.click();
     assert.ok(visible(root, ".overlay"));
     api.close();
+    await waitForExit();
     assert.ok(!visible(root, ".overlay"));
     api.open();
     await api.ready;
@@ -374,6 +444,7 @@ describe("stored consent", () => {
     const state = api.get()!;
     assert.equal(state.bv, 6);
     assert.deepEqual(state.c, { analytics: true, marketing: false, preferences: false });
+    await waitForExit();
     assert.ok(!visible(shadowOf(doc)!, ".banner"));
   });
 
@@ -659,6 +730,7 @@ describe("storage and network", () => {
 
       const root = shadowOf(doc)!;
       clickButton(root, "Accept all");
+      await waitForExit();
       assert.ok(!visible(root, ".banner"));
       assert.equal(doc.cookie, "");
       assert.equal(api.get(), null);

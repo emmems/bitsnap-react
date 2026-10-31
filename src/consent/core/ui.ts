@@ -40,6 +40,19 @@ const CLOSE_ICON =
 
 const FOCUSABLE = "button:not([disabled]),input:not([disabled]),a[href]";
 
+/**
+ * How long the exit animation runs. The banner and the settings layer fade
+ * out before they disappear, so the page does not blink.
+ */
+export const EXIT_ANIMATION_MS = 200;
+
+/** A running exit animation: the node, its listener and its fallback timer. */
+type Exit = {
+  node: HTMLElement;
+  listener: (event: Event) => void;
+  timer: number | undefined;
+};
+
 export function createUI(options: UIOptions): ConsentUI {
   const { doc, config, texts, locale } = options;
   const labels = UI_LABELS[locale];
@@ -54,6 +67,8 @@ export function createUI(options: UIOptions): ConsentUI {
   let opener: HTMLElement | null = null;
   let media: MediaQueryList | null = null;
   const toggles = new Map<ConsentCategory, HTMLInputElement>();
+  /** The exit animations running right now; at most one per node. */
+  const exits: Exit[] = [];
 
   function el<K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -245,6 +260,68 @@ export function createUI(options: UIOptions): ConsentUI {
     return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
   }
 
+  /** Whether the visitor asked for less motion: the layers then come and go at once. */
+  function reducedMotion(): boolean {
+    try {
+      return doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Stops a running exit animation; the node stays where it is. */
+  function stopExit(node: HTMLElement) {
+    const index = exits.findIndex((exit) => exit.node === node);
+    if (index === -1) return;
+    const [exit] = exits.splice(index, 1);
+    exit.node.removeEventListener("animationend", exit.listener);
+    if (exit.timer !== undefined) doc.defaultView?.clearTimeout(exit.timer);
+    exit.node.classList.remove("closing");
+  }
+
+  /** Hides the node at once, without an animation. */
+  function hideNow(node: HTMLElement) {
+    stopExit(node);
+    node.hidden = true;
+  }
+
+  /**
+   * Fades the node out and hides it when the animation ends. The timer is the
+   * fallback for a browser that sends no event (a hidden tab, a reduced
+   * motion setting): the layer always disappears.
+   */
+  function exitTo(node: HTMLElement) {
+    stopExit(node);
+    if (node.hidden) return;
+    if (reducedMotion()) {
+      node.hidden = true;
+      return;
+    }
+    node.classList.add("closing");
+    const listener = (event: Event) => {
+      // Another animation of a child ends first; only our own counts.
+      if (event.target !== node) return;
+      finish();
+    };
+    const timer = doc.defaultView?.setTimeout(finish, EXIT_ANIMATION_MS + 120);
+    function finish() {
+      stopExit(node);
+      node.hidden = true;
+    }
+    node.addEventListener("animationend", listener);
+    exits.push({ node, listener, timer });
+  }
+
+  /** Shows the node and plays the entrance animation again. */
+  function enter(node: HTMLElement) {
+    stopExit(node);
+    node.hidden = false;
+    // The class has to leave and come back, or the animation does not restart.
+    node.classList.remove("enter");
+    void node.offsetWidth;
+    node.classList.add("enter");
+  }
+
   function onKeydown(event: KeyboardEvent) {
     if (layer !== "settings") return;
     if (event.key === "Escape") {
@@ -273,8 +350,8 @@ export function createUI(options: UIOptions): ConsentUI {
       ensure();
       layer = "banner";
       doc.removeEventListener("keydown", onKeydown, true);
-      overlay.hidden = true;
-      banner.hidden = false;
+      hideNow(overlay);
+      enter(banner);
       if (focus) banner.focus({ preventScroll: true });
     } catch {
       // never throw into the host page
@@ -291,8 +368,9 @@ export function createUI(options: UIOptions): ConsentUI {
       const current = options.getChoices();
       toggles.forEach((input, key) => (input.checked = !!current?.[key]));
       layer = "settings";
-      banner.hidden = true;
-      overlay.hidden = false;
+      hideNow(banner);
+      enter(overlay);
+      enter(dialog);
       doc.addEventListener("keydown", onKeydown, true);
       dialog.focus({ preventScroll: true });
     } catch {
@@ -303,13 +381,13 @@ export function createUI(options: UIOptions): ConsentUI {
   function closeSettings() {
     if (layer !== "settings") return;
     doc.removeEventListener("keydown", onKeydown, true);
-    overlay.hidden = true;
+    exitTo(overlay);
     if (options.hasChoice()) {
       layer = "none";
       opener?.focus?.({ preventScroll: true });
     } else {
       layer = "banner";
-      banner.hidden = false;
+      enter(banner);
       settingsButton.focus({ preventScroll: true });
     }
   }
@@ -319,14 +397,15 @@ export function createUI(options: UIOptions): ConsentUI {
     doc.removeEventListener("keydown", onKeydown, true);
     const wasSettings = layer === "settings";
     layer = "none";
-    banner.hidden = true;
-    overlay.hidden = true;
+    exitTo(banner);
+    exitTo(overlay);
     if (wasSettings) opener?.focus?.({ preventScroll: true });
   }
 
   function destroy() {
     doc.removeEventListener("keydown", onKeydown, true);
     media?.removeEventListener?.("change", applyTheme);
+    while (exits.length > 0) stopExit(exits[0]!.node);
     host?.remove();
     host = null;
     shadow = null;
