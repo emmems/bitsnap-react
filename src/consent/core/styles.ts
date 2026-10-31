@@ -36,7 +36,9 @@ export const STYLES = `
 button,input{font:inherit;color:inherit}
 .banner,.overlay{pointer-events:auto}
 @supports (color:color-mix(in srgb,red 50%,blue)){::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}}
-.banner{position:absolute;background:var(--bg);color:var(--fg);max-height:92vh;overflow:auto;outline:none;animation:in .22s ease-out}
+.banner{position:absolute;background:var(--bg);color:var(--fg);max-height:92vh;overflow:auto;outline:none}
+.banner.enter{animation:in .22s ease-out}
+.banner.closing{animation:out .2s ease-in forwards;pointer-events:none}
 .bottom{left:0;right:0;bottom:0;border-top:1px solid var(--border);box-shadow:0 -8px 28px rgba(15,23,42,.08);padding:20px 24px calc(20px + env(safe-area-inset-bottom,0px))}
 .root[data-theme=dark] .bottom{box-shadow:0 -8px 28px rgba(0,0,0,.4)}
 .bottom .inner{display:grid;grid-template-columns:minmax(min(100%,42ch),1fr) auto;grid-template-areas:"text actions" "foot actions";gap:4px 40px;align-items:center;max-width:1120px;margin:0 auto}
@@ -68,8 +70,11 @@ button:focus-visible,a:focus-visible,.dialog:focus-visible{outline:2px solid var
 .foot a:hover{text-decoration:underline}
 .foot b{color:var(--fg);font-weight:700;letter-spacing:-.01em}
 .foot svg{display:block}
-.overlay{position:absolute;inset:0;background:rgba(10,12,16,.58);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade .2s ease-out}
-.dialog{background:var(--bg);color:var(--fg);width:100%;max-width:560px;max-height:min(92vh,760px);display:flex;flex-direction:column;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.35);outline:none;animation:in .22s ease-out}
+.overlay{position:absolute;inset:0;background:rgba(10,12,16,.58);display:flex;align-items:center;justify-content:center;padding:16px}
+.overlay.enter{animation:fade .2s ease-out}
+.overlay.closing{animation:fadeout .2s ease-in forwards;pointer-events:none}
+.dialog{background:var(--bg);color:var(--fg);width:100%;max-width:560px;max-height:min(92vh,760px);display:flex;flex-direction:column;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.35);outline:none}
+.dialog.enter{animation:in .22s ease-out}
 .d-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 8px 8px 24px}
 .d-head .title{margin:0;font-size:18px}
 .x{width:44px;height:44px;border:0;border-radius:10px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
@@ -95,6 +100,8 @@ input:focus-visible+.track{outline:2px solid var(--focus);outline-offset:2px}
 .d-foot .actions{justify-content:stretch}
 @keyframes in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(12px)}}
+@keyframes fadeout{from{opacity:1}to{opacity:0}}
 @media(max-width:960px){
 .bottom .inner{grid-template-columns:minmax(0,1fr);grid-template-areas:"text" "actions" "foot";gap:14px}
 .bottom .actions{justify-content:flex-start}
