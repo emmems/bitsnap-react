@@ -22,6 +22,37 @@ It uses modern React patterns and libraries like:
 - Protocol Buffers for data serialization
 - Tailwind CSS for styling
 
+## 1.18.0
+
+Customer panel changes after 1.17.0 (`BitsnapPanel` / `PanelPage`, course,
+audiobook player, `ProductList`).
+
+- **Panel navigation.** A bottom bar on phones and a sidebar from `md` up:
+  Biblioteka, Zamówienia, Zwroty, Konto. The sidebar shows the shop logo and
+  name, the customer's e-mail and "Wyloguj się". New **Konto** screen
+  (e-mail, language, logout). Orders show amounts in the customer's locale and
+  a retry button when loading fails.
+- **Library.** Product cards with a type badge (Audio, Kurs, Pliki, Bilet) and
+  one action ("Słuchaj", "Otwórz kurs", "Pobierz pliki", "Pokaż bilet").
+  Product details show real file names, a ticket card and Google Play next to
+  the App Store link. A product in the URL can be an id or the old protobuf
+  JSON value.
+- **`ProductList` on phones: two columns.** New appearance token
+  `gridMinWidth` (default `9rem`); set `appearance.tokens.gridMinWidth: "100%"`
+  to keep one column.
+- **Course.** On phones: tabs (Opis, Pliki, Pytania), a sticky bar with
+  previous / mark as completed / next above the panel navigation, an up-next
+  card and a contents toggle (also for tests and locked items). Collapsible
+  outline sections. On desktop, previous / completed / next are one row.
+- **Audiobook player.** No autoplay on open. HLS errors are recovered (an
+  expired chapter URL is fetched again once, also on Safari's native HLS) and
+  shown with a retry button. Previous / next chapter, ±10 s, speed
+  (remembered per device), sleep timer and time left. Lock-screen controls
+  seek by 10 s. Styles are scoped to `.bitsnap-react`, dark mode supported.
+  New optional `AudioPlayer` props: `author`, `locale`, `onError`,
+  `onExpiredUrl`, `onFinished`, `coverShownBeside`; ref methods
+  `selectChapter`, `retry`, `getError`.
+
 ## 1.17.0
 
 Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,

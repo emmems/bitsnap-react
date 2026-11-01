@@ -7,16 +7,15 @@ import {
   type UserProduct,
 } from "../../gen/proto/public/v1/public_api_pb";
 import { useInstrumentContext } from "../../analytics/instrument";
-import { cn } from "../../lib/utils";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { Button } from "../../ui/button";
 import AudioPlayer, {
   type AudioPlayerMethods,
 } from "../audio-player/AudioPlayer";
 import LoadingIndicator from "../LoadingIndicator";
-import { getPanelTexts } from "../texts";
+import ChapterList from "../audio-player/ChapterList";
 
-import { ProgressBar } from "./ProgressBar";
+import { getProductTexts } from "./products/texts";
 
 interface PanelProductDetailsProps {
   accessToken: string;
@@ -40,8 +39,8 @@ const PanelProductDetails = ({
   product,
   styles,
   reveal,
-  onOpenCourse,
 }: PanelProductDetailsProps) => {
+  const t = getProductTexts();
   const productType: UserProductType = product.productType;
   const instrument = useInstrumentContext();
   const trackDownload = () =>
@@ -53,6 +52,7 @@ const PanelProductDetails = ({
 
   const audioPlayerRef = useRef<AudioPlayerMethods>(null!);
   const [filesRefAnimation] = useAutoAnimate();
+  const [fileError, setFileError] = useState(false);
   const [filesResponse, setFilesResponse] = useState<string[] | null>(null);
   const { mutateAsync: fileDetailsAsync, isPending: isFileLoading } =
     useMutation(rpcProvider.publicApi.userPanelGetFileDetails);
@@ -96,6 +96,7 @@ const PanelProductDetails = ({
   const [chapters, setChapters] = useState<ChapterWithPublicUrl[] | null>(null);
 
   async function handleFileDownload() {
+    setFileError(false);
     try {
       const filesResult = await fileDetailsAsync({
         accessId: product.accessId,
@@ -106,10 +107,12 @@ const PanelProductDetails = ({
         setFilesResponse(filesResult.result.value.files);
         return;
       } else {
+        setFileError(true);
         warn("Pobranie plików nie powiodło się. Zalecamy kontakt.");
         warn("Kod błędu: ", filesResult.result.value);
       }
     } catch (err) {
+      setFileError(true);
       warn("Nieoczekiwany błąd. Spróbuj ponownie za chwilę.");
       error("Błąd podczas pobierania danych:" + err);
     }
@@ -165,6 +168,7 @@ const PanelProductDetails = ({
   }
 
   useEffect(() => {
+    if (productType === UserProductType.FILE) void handleFileDownload();
     if (productType === UserProductType.AUDIO) {
       handleAudioDownload().then().catch();
       handleAudioURLsDownload().then().catch();
@@ -204,72 +208,85 @@ const PanelProductDetails = ({
   return (
     <div>
       <div className="mb-3 space-y-4 rounded bg-white p-4 dark:bg-black">
-        <Button onClick={() => reveal()} variant="ghost" className="w-fit">
+        <Button
+          onClick={() => reveal()}
+          variant="ghost"
+          className="min-h-11 w-fit"
+        >
           <ChevronLeft className="h-6 w-6" />
-          <span className="font-inter text-sm font-medium">Wróć</span>
+          <span className="font-inter text-sm font-medium">{t.back}</span>
         </Button>
       </div>
 
-      <main className="grid grid-cols-1 justify-center gap-6 sm:justify-start lg:grid-cols-2">
-        <div className="flex w-full max-w-xl flex-col gap-6">
+      <main className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <header className="flex min-w-0 flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900 lg:row-span-2 lg:self-start">
+          <img
+            src={product.productImageUrl}
+            alt={product.productName}
+            width={384}
+            height={384}
+            draggable={false}
+            className="aspect-square max-h-72 w-full object-contain"
+          />
+          <h2 className="text-2xl font-semibold">{product.productName}</h2>
+        </header>
+        <div className="flex min-w-0 flex-col gap-6">
           {productType === UserProductType.FILE && (
-            <div
+            <section
               ref={filesRefAnimation}
-              className="flex flex-col space-y-4 rounded bg-white p-6 drop-shadow-xl dark:border dark:border-neutral-700 dark:bg-neutral-800 dark:drop-shadow-none"
+              className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900"
             >
-              <div className="flex items-center justify-between gap-x-4">
-                <h4 className="text-xl font-semibold">Twoje pliki</h4>
-                {(filesResponse == null || filesResponse.length == 0) && (
-                  <Button
-                    onClick={handleFileDownload}
-                    aria-label="Download Product"
-                    className="text-sm font-medium transition-opacity duration-300 ease-in-out hover:opacity-80 active:opacity-80"
-                    style={styles}
-                  >
-                    {isFileLoading ? <LoadingIndicator /> : "Wyświetl"}
-                  </Button>
-                )}
-              </div>
-
+              <h3 className="text-xl font-semibold">{t.yourFiles}</h3>
               {isFileLoading && (
-                <div className="flex flex-col items-start gap-2">
-                  <ProgressBar />
-                  <p className="font-bold transition hover:text-blue-600">
-                    Trwa przygotowanie plików...
-                  </p>
+                <div role="status" aria-label={t.loading}>
+                  <LoadingIndicator />
                 </div>
               )}
-
-              {filesResponse != null && filesResponse.length > 0 && (
-                <div className="flex flex-col items-start justify-start gap-2">
-                  {filesResponse.map((el, index) => (
-                    <a
-                      key={index}
-                      target="_blank"
-                      className="flex w-fit items-center gap-2 rounded-md bg-neutral-800 px-3 py-2 text-neutral-200 dark:bg-neutral-200 dark:text-neutral-800"
-                      href={el}
-                      download
-                      onClick={trackDownload}
+              {fileError && (
+                <div role="alert">
+                  <p>{t.fileError}</p>
+                  <Button className="min-h-11" onClick={handleFileDownload}>
+                    {t.retry}
+                  </Button>
+                </div>
+              )}
+              {filesResponse?.length === 0 && <p>{t.noFiles}</p>}
+              {filesResponse && (
+                <ul className="flex flex-col gap-3">
+                  {filesResponse.map((url, index) => (
+                    <li
+                      key={url}
+                      className="flex min-w-0 flex-wrap items-center justify-between gap-3"
                     >
-                      {`Plik numer ${index + 1}`}
-                      <Download width={14} height={14} />
-                    </a>
+                      <span className="min-w-0 break-all text-sm">
+                        {downloadFileName(url) || `${t.file} ${index + 1}`}
+                      </span>
+                      <a
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href={url}
+                        download
+                        onClick={trackDownload}
+                        className="inline-flex min-h-11 items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-neutral-100 dark:text-neutral-900"
+                        aria-label={`${t.download}: ${downloadFileName(url) || `${t.file} ${index + 1}`}`}
+                      >
+                        {t.download}
+                        <Download className="size-4" aria-hidden="true" />
+                      </a>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </div>
+            </section>
           )}
-
-          {productType === UserProductType.COURSE && (
-            <div className="flex flex-col items-center justify-center rounded-xl bg-white p-6 drop-shadow-xl dark:bg-neutral-900 dark:drop-shadow-none">
-              <Button
-                onClick={() => onOpenCourse(product.accessId)}
-                className="text-sm font-medium transition-opacity duration-300 ease-in-out hover:opacity-80 active:opacity-80"
-                style={styles}
-              >
-                {getPanelTexts().openCourse}
-              </Button>
-            </div>
+          {productType === UserProductType.TICKET && (
+            <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
+              <h3 className="text-lg font-semibold">{t.ticket}</h3>
+              <p className="mt-2 font-medium">{product.productName}</p>
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+                {t.ticketInfo}
+              </p>
+            </section>
           )}
 
           {productType === UserProductType.AUDIO && (
@@ -295,7 +312,16 @@ const PanelProductDetails = ({
                         <>
                           <AudioPlayer
                             ref={audioPlayerRef}
+                            coverShownBeside
                             chapters={chapters}
+                            author={
+                              typeof audioResponse?.author === "string"
+                                ? audioResponse.author
+                                : undefined
+                            }
+                            onExpiredUrl={() => {
+                              void handleAudioURLsDownload();
+                            }}
                             title={
                               (audioResponse as { name?: string })?.name ??
                               product.productName ??
@@ -340,7 +366,7 @@ const PanelProductDetails = ({
                       />
                     </a>
 
-                    <a href="https://docs.bitsnap.pl/guides/audiobook">
+                    <a href="https://play.google.com/store/apps/details?id=com.bitsnap.Bitsnap">
                       <img
                         width="100"
                         src="https://bitsnap.pl/playstore.svg"
@@ -355,95 +381,40 @@ const PanelProductDetails = ({
 
           <div className="flex items-center justify-center rounded-xl bg-white p-3 drop-shadow-xl dark:bg-neutral-900 dark:drop-shadow-none">
             {productType === UserProductType.AUDIO && (
-              <div className="max-h-96 w-full overflow-y-auto">
-                {isAudioLoading ? (
-                  <div className="jusitfy-center flex flex-col items-center gap-2">
-                    <LoadingIndicator />
-                    <p>Ładowanie rozdziałów...</p>
-                  </div>
-                ) : (
-                  <div>
-                    <h2 className="mb-3 text-xl font-semibold">Rozdziały</h2>
-                    {chapters == null ? (
-                      <p>Brak rozdziałów do wyświetlenia.</p>
-                    ) : (
-                      <ul className="flex w-full flex-col gap-2">
-                        {chapters.map((chapter, index) => (
-                          <li
-                            key={index}
-                            className="flex items-center justify-between"
-                          >
-                            <button
-                              className={cn(
-                                "w-full rounded-lg p-2 text-left transition hover:bg-neutral-200 active:bg-neutral-200 dark:hover:bg-neutral-700 dark:active:bg-neutral-700",
-                                selectedChapter?.id == chapter.id
-                                  ? "bg-neutral-200 dark:bg-neutral-700"
-                                  : "bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300",
-                              )}
-                              onClick={() => {
-                                audioPlayerRef.current.selectChapter(chapter);
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium">
-                                  {chapter.name}
-                                </p>
-                                {chapter.duration && (
-                                  <span className="text-xs text-neutral-500">
-                                    {Math.floor(chapter.duration / 60)}:
-                                    {String(
-                                      Math.floor(chapter.duration % 60),
-                                    ).padStart(2, "0")}
-                                  </span>
-                                )}
-                              </div>
-                              {chapter.description && (
-                                <p className="mt-3 text-xs">
-                                  {chapter.description}
-                                </p>
-                              )}
-                            </button>
-
-                            {audioResponse &&
-                              (audioResponse as { isDownloadable?: boolean })
-                                .isDownloadable &&
-                              chapter.downloadableUrl && (
-                                <a
-                                  href={chapter.downloadableUrl}
-                                  onClick={trackDownload}
-                                >
-                                  <Download width={14} height={14} />
-                                </a>
-                              )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ChapterList
+                chapters={chapters}
+                currentID={selectedChapter?.id}
+                productID={product.productId}
+                loading={isAudioLoading}
+                downloadable={audioResponse?.isDownloadable === true}
+                onDownload={trackDownload}
+                onSelect={(chapter) =>
+                  audioPlayerRef.current?.selectChapter(chapter)
+                }
+              />
             )}
           </div>
         </div>
 
-        <div className="w-full max-w-3xl space-y-6 rounded-xl bg-white p-6 drop-shadow-xl dark:bg-neutral-900 dark:drop-shadow-none">
-          <h2 className="text-3xl font-semibold">{product.productName}</h2>
-          <p className="text-sm font-normal text-neutral-600 dark:text-neutral-300">
+        <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
+          <p className="whitespace-pre-wrap text-sm text-neutral-600 dark:text-neutral-300">
             {product.productDescription}
           </p>
-
-          <img
-            src={product.productImageUrl}
-            alt="Product Photo"
-            width={384}
-            height={384}
-            className="max-h-sm max-w-sm"
-            draggable={false}
-          />
-        </div>
+        </section>
       </main>
     </div>
   );
 };
 
 export default PanelProductDetails;
+
+/** File RPC exposes URLs only; no size or filename metadata. */
+export function downloadFileName(url: string): string {
+  try {
+    return decodeURIComponent(
+      new URL(url, "https://bitsnap.pl").pathname.split("/").pop() || "",
+    );
+  } catch {
+    return "";
+  }
+}

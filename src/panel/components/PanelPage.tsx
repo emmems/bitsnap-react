@@ -52,6 +52,7 @@ const PanelPage = ({
   analytics,
 }: Pick<PanelProps, "returnsAppearance" | "returnsTexts" | "analytics"> = {}) => {
   const { projectID, theme, loginURL, host } = usePanelConfig();
+  const [, refreshLocale] = useState(0);
   const instrument = useInstrument(projectID, analytics, "panel");
 
   const accessToken = getPanelSession(projectID, host);
@@ -199,7 +200,7 @@ useEffect(() => {
     <InstrumentProvider value={instrument}>
     <div
       ref={panelParentRef}
-      className="font-inter relative min-h-screen w-screen bg-beige-100 text-black dark:bg-black dark:text-white md:flex"
+      className="font-inter relative flex h-dvh w-full flex-col bg-beige-100 text-black dark:bg-black dark:text-white md:flex-row"
     >
       <PanelProductHeaderComponent
         activeScreen={activeScreen}
@@ -208,9 +209,11 @@ useEffect(() => {
         styles={styles}
         theme={theme}
         logout={logout}
+        email={email}
+        projectID={projectID}
       />
 
-      <main className="flex h-[calc(100vh-80px)] flex-col overflow-y-auto w-full p-5 md:h-screen">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto w-full p-5 pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-5">
         {activeScreen === "products" && (
           <PanelProductGridComponent
             projectID={projectID ?? ""}
@@ -276,7 +279,11 @@ useEffect(() => {
           )}
 
         {activeScreen === "profile" && (
-          <PanelProfileComponent email={email} logout={logout} />
+          <PanelProfileComponent
+            email={email}
+            logout={logout}
+            onLocaleChange={() => refreshLocale(value => value + 1)}
+          />
         )}
       </main>
     </div>

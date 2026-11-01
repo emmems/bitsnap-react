@@ -244,3 +244,20 @@ describe("ProductList analytics", () => {
 });
 
 process.on("exit", teardownReactPage);
+
+it("keeps compact grid tracks and allows one-column merchant overrides", async () => {
+  const { container } = await mount({
+    appearance: { tokens: { gridMinWidth: "100%" } },
+  });
+  const grid = container.querySelector('[data-bitsnap-products-slot="grid"]')!;
+  assert.ok(
+    grid.className.includes("var(--bitsnap-products-grid-min-width,9rem)"),
+  );
+  const boundary = container.querySelector<HTMLElement>(
+    "[data-bitsnap-products]",
+  )!;
+  assert.equal(
+    boundary.style.getPropertyValue("--bitsnap-products-grid-min-width"),
+    "100%",
+  );
+});

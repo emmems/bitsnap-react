@@ -1,12 +1,10 @@
-import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { LogOut, Undo2 } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { LogOut } from "lucide-react";
+import type { CSSProperties } from "react";
 import { cn } from "../../lib/utils";
-import { Button } from "../../ui/button";
-import type { GetThemeOutput } from "../types";
-
-import type { PanelScreen } from "../types";
+import { LoginBrandLogo, useLoginBranding } from "../../ui/email-code-login/LoginBrandLogo";
+import type { GetThemeOutput, PanelScreen } from "../types";
 import { getPanelTexts } from "../texts";
+import { panelNavItems, navScreen } from "./nav/items";
 
 interface PanelProductHeaderComponentProps {
   activeScreen: PanelScreen;
@@ -15,336 +13,52 @@ interface PanelProductHeaderComponentProps {
   styles: CSSProperties;
   theme?: GetThemeOutput;
   logout: () => void;
+  email?: string | null;
+  projectID?: string;
 }
 
-function PanelProductHeaderComponent({
+export default function PanelProductHeaderComponent({
   activeScreen,
   setActiveScreen,
   setParams,
-  styles: _styles,
   theme,
   logout,
+  email,
+  projectID,
 }: PanelProductHeaderComponentProps) {
+  const texts = getPanelTexts();
+  const { data: branding } = useLoginBranding(projectID ?? "", Boolean(projectID));
   return (
-    <header className="md:border-r-neutral-150 md:bg-beige-50 fixed right-0 bottom-0 left-0 z-10 flex h-12 w-full items-center bg-neutral-800 md:static md:z-0 md:min-h-screen md:w-auto md:border-r dark:md:border-r-neutral-900">
-      <MobileMenu
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-      />
-
-      <SidebarMenu
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-        theme={theme}
-        logout={logout}
-      />
+    <header className="flex h-14 shrink-0 items-center border-b border-neutral-200 bg-white px-4 md:h-dvh md:w-56 md:flex-col md:items-stretch md:border-r md:border-b-0 md:py-5 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex min-w-0 items-center gap-3 md:mb-6 md:flex-col md:items-start">
+        <LoginBrandLogo projectId={projectID} logoUrl={theme?.logoURL} logoDarkUrl={theme?.logoDarkURL} name={branding?.name} className="shrink-0" />
+        {branding?.name && <span title={branding.name} className="truncate text-sm font-medium md:line-clamp-2 md:whitespace-normal">{branding.name}</span>}
+      </div>
+      <nav aria-label={texts.navigationLabel} className="fixed inset-x-0 bottom-0 z-10 flex h-[calc(56px+env(safe-area-inset-bottom))] items-start justify-around border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] md:static md:h-auto md:flex-1 md:flex-col md:justify-start md:gap-2 md:border-0 md:bg-transparent md:pb-0 dark:border-neutral-800 dark:bg-neutral-900">
+        {panelNavItems.map(({ screen, label, icon: Icon }) => {
+          const active = navScreen(activeScreen) === screen;
+          return (
+            <button
+              key={screen}
+              type="button"
+              aria-current={active ? "page" : undefined}
+              onClick={() => {
+                setActiveScreen(screen);
+                setParams({ product: undefined, state: screen });
+              }}
+            className={cn("flex h-14 min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[11px] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-current md:h-11 md:w-full md:flex-none md:flex-row md:justify-start md:gap-3 md:rounded-md md:px-3 md:text-sm", active ? "bg-neutral-100 font-semibold text-black dark:bg-neutral-800 dark:text-white" : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800")}>
+            <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span>{texts[label]}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="hidden border-t border-neutral-200 pt-4 md:block dark:border-neutral-800">
+        {email && <p title={email} className="mb-3 truncate text-sm text-neutral-600 dark:text-neutral-400">{email}</p>}
+        <button type="button" onClick={logout} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-current dark:text-red-400 dark:hover:bg-neutral-800">
+          <LogOut className="h-4 w-4" aria-hidden="true" />{texts.logout}
+        </button>
+      </div>
     </header>
-  );
-}
-
-export default PanelProductHeaderComponent;
-
-interface MobileMenuProps {
-  activeScreen: PanelScreen;
-  setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: string; state: PanelScreen }) => void;
-}
-
-function MobileMenu({
-  activeScreen,
-  setActiveScreen,
-  setParams,
-}: MobileMenuProps) {
-  const { returnsNavLabel } = getPanelTexts();
-
-  return (
-    <nav className="flex w-full items-center justify-evenly gap-4 md:hidden">
-      <MobileButton
-        panelScreen="products"
-        label="Produkty"
-        imageURL="/icons/bitsnap-24x24.svg"
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-      />
-
-      <MobileButton
-        panelScreen="orders"
-        label="Faktury"
-        imageURL="/icons/category-24x24.svg"
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-      />
-
-      <MobileButton
-        panelScreen="returns"
-        label={returnsNavLabel}
-        icon={<Undo2 className="h-5 w-5 text-white" aria-hidden />}
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-      />
-
-      <MobileButton
-        panelScreen="profile"
-        label="Profil"
-        imageURL="/icons/profile-24x24.svg"
-        activeScreen={activeScreen}
-        setActiveScreen={setActiveScreen}
-        setParams={setParams}
-      />
-    </nav>
-  );
-}
-
-interface MobileButtonProps {
-  panelScreen: PanelScreen;
-  label: string;
-  imageURL?: string;
-  icon?: ReactNode;
-  activeScreen: PanelScreen;
-  setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: string; state: PanelScreen }) => void;
-}
-
-function MobileButton({
-  panelScreen,
-  label,
-  imageURL,
-  icon,
-  activeScreen,
-  setActiveScreen,
-  setParams,
-}: MobileButtonProps) {
-  return (
-    <Button
-      onClick={() => {
-        setActiveScreen(panelScreen);
-        setParams({
-          product: undefined,
-          state: panelScreen,
-        });
-      }}
-      aria-label={label}
-      variant={null}
-      className={cn(
-        "flex flex-col gap-0",
-        activeScreen === panelScreen ? "opacity-100" : "opacity-50",
-      )}
-    >
-      {icon ?? <img src={imageURL} alt={label} className="scale-75" />}
-      <span className="text-xs font-normal text-white">{label}</span>
-    </Button>
-  );
-}
-
-interface SidebarButtonProps {
-  panelScreen: PanelScreen;
-  label: string;
-  imageURL?: string;
-  darkImageURL?: string;
-  icon?: ReactNode;
-  activeScreen: PanelScreen;
-  setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: string; state: PanelScreen }) => void;
-  isExpanded: boolean;
-}
-
-function SidebarButton({
-  panelScreen,
-  label,
-  imageURL,
-  darkImageURL,
-  icon,
-  activeScreen,
-  setActiveScreen,
-  setParams,
-  isExpanded,
-}: SidebarButtonProps) {
-  return (
-    <Button
-      onClick={() => {
-        setActiveScreen(panelScreen);
-        setParams({
-          product: undefined,
-          state: panelScreen,
-        });
-      }}
-      variant={activeScreen === panelScreen ? "secondary" : "ghost"}
-      className="justify-start"
-    >
-      {icon != null ? (
-        <span
-          className={cn(
-            "inline-flex h-5 w-5 items-center justify-center",
-            isExpanded ? "mr-4" : "mr-2",
-          )}
-        >
-          {icon}
-        </span>
-      ) : (
-        <>
-          <img
-            src={imageURL}
-            alt={label}
-            className={cn(
-              "aspect-auto h-5 w-5 dark:hidden",
-              isExpanded ? "mr-4" : "mr-2",
-            )}
-          />
-          <img
-            src={darkImageURL}
-            alt={label}
-            className={cn(
-              "hidden aspect-auto h-5 w-5 dark:inline",
-              isExpanded ? "mr-4" : "mr-2",
-            )}
-          />
-        </>
-      )}
-      {isExpanded && (
-        <span className="md:text-medium hidden md:inline">{label}</span>
-      )}
-    </Button>
-  );
-}
-
-interface SidebarMenuProps {
-  activeScreen: PanelScreen;
-  setActiveScreen: (screen: PanelScreen) => void;
-  setParams: (params: { product?: string; state: PanelScreen }) => void;
-  theme?: GetThemeOutput;
-  logout: () => void;
-}
-
-function SidebarMenu({
-  activeScreen,
-  setActiveScreen,
-  setParams,
-  theme,
-  logout,
-}: SidebarMenuProps) {
-  const [sidebarExpandRef] = useAutoAnimate();
-  const [isExpanded, setIsExpanded] = useState(true);
-  const { returnsNavLabel } = getPanelTexts();
-
-  return (
-    <div
-      ref={sidebarExpandRef}
-      className={cn(
-        "hidden px-4 pt-4 pb-12 md:flex md:h-full md:flex-col dark:bg-neutral-900",
-        isExpanded ? "md:w-52" : "md:w-16",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <CompanyLogo theme={theme} isExpanded={isExpanded} />
-      </div>
-
-      <SidebarSeparator className="my-6" />
-
-      <div className="flex flex-1 flex-col gap-2">
-        <SidebarButton
-          panelScreen="products"
-          label="Produkty"
-          imageURL="/icons/bitsnap-dark-24x24.svg"
-          darkImageURL="/icons/bitsnap-24x24.svg"
-          activeScreen={activeScreen}
-          setActiveScreen={setActiveScreen}
-          setParams={setParams}
-          isExpanded={isExpanded}
-        />
-
-        <SidebarButton
-          panelScreen="orders"
-          label="Zamówienia"
-          imageURL="/icons/category-dark-24x24.svg"
-          darkImageURL="/icons/category-24x24.svg"
-          activeScreen={activeScreen}
-          setActiveScreen={setActiveScreen}
-          setParams={setParams}
-          isExpanded={isExpanded}
-        />
-
-        <SidebarButton
-          panelScreen="returns"
-          label={returnsNavLabel}
-          icon={<Undo2 className="h-5 w-5" aria-hidden />}
-          activeScreen={activeScreen}
-          setActiveScreen={setActiveScreen}
-          setParams={setParams}
-          isExpanded={isExpanded}
-        />
-
-        <SidebarButton
-          panelScreen="profile"
-          label="Profil"
-          imageURL="/icons/profile-dark-24x24.svg"
-          darkImageURL="/icons/profile-24x24.svg"
-          activeScreen={activeScreen}
-          setActiveScreen={setActiveScreen}
-          setParams={setParams}
-          isExpanded={isExpanded}
-        />
-      </div>
-
-      <SidebarSeparator className="mb-6" />
-
-      <Button onClick={logout}>
-        <LogOut className="mr-2" width={16} height={16} />
-        {isExpanded && (
-          <p className="md:text-medium hidden md:inline md:text-center">
-            Wyloguj się
-          </p>
-        )}
-      </Button>
-    </div>
-  );
-}
-
-interface SidebarSeparatorProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-function SidebarSeparator({ className }: SidebarSeparatorProps) {
-  return (
-    <div className={cn("relative h-px w-full bg-neutral-300", className)}>
-      <div className="absolute -top-px left-0 h-1 w-1 rounded-full bg-neutral-500"></div>
-      <div className="absolute -top-px right-0 h-1 w-1 rounded-full bg-neutral-500"></div>
-    </div>
-  );
-}
-
-interface CompanyLogoProps {
-  theme?: GetThemeOutput;
-  isExpanded: boolean;
-}
-
-function CompanyLogo({ theme, isExpanded: _isExpanded }: CompanyLogoProps) {
-  return (
-    <>
-      {theme == null && (
-        <p className="text-xl tracking-wider md:inline dark:text-neutral-200">
-          bitsnap.
-        </p>
-      )}
-      {(theme?.logoDarkURL || theme?.logoURL) && (
-        <img
-          src={theme.logoDarkURL ?? theme.logoURL}
-          alt="Company Logo"
-          className="hidden h-6 w-6 dark:inline"
-          draggable={false}
-        />
-      )}
-
-      {theme?.logoURL && (
-        <img
-          src={theme.logoURL}
-          alt="Company Logo"
-          className="h-6 w-6 dark:hidden"
-          draggable={false}
-        />
-      )}
-    </>
   );
 }

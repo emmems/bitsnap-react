@@ -1,18 +1,38 @@
 import { ChevronLeft, ChevronRight, Download, Paperclip } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
-import { formatBytes, isPlaybackComplete, resumePosition } from "./logic";
+import {
+  fillTemplate,
+  formatBytes,
+  isPlaybackComplete,
+  resumePosition,
+} from "./logic";
 import { LessonQuestions, LessonRatingBox } from "./LessonSocial";
 import { sanitizeLessonHtml } from "./sanitize";
-import type { Course, ItemRef, Lesson, ProgressSaved } from "./types";
+import type {
+  Course,
+  CourseItem,
+  ItemRef,
+  Lesson,
+  ProgressSaved,
+} from "./types";
 import { ACCENT_BUTTON, CARD } from "./ui";
 import { VideoPlayer, type PlaybackReport } from "./VideoPlayer";
 
 type LessonPaneProps = {
   lesson: Lesson;
+  mobileOutline?: ReactNode;
+  nextItem?: CourseItem;
   /** 1-based place of the lesson among the lessons of the course. */
   position?: number;
   courseType: Course["type"];
@@ -37,6 +57,8 @@ type LessonPaneProps = {
  */
 export function LessonPane({
   lesson,
+  mobileOutline,
+  nextItem,
   position = 0,
   courseType,
   prev,
@@ -56,6 +78,12 @@ export function LessonPane({
   const lastSavedPosition = useRef<number | undefined>(undefined);
   const lastKnownPosition = useRef(lesson.positionSeconds);
   const [saving, setSaving] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [announced, setAnnounced] = useState(false);
+  const tabId = useId();
+  const [activeTab, setActiveTab] = useState(
+    courseType === "video" ? "lessons" : "description",
+  );
 
   // The pane lives as long as one view of the lesson.
   useEffect(() => {
@@ -96,6 +124,7 @@ export function LessonPane({
     if (saved.completed && !completedRef.current) {
       completedRef.current = true;
       setCompleted(true);
+      setAnnounced(true);
       track("lesson_completed", { lesson_id: lesson.id, position });
     }
     onProgressSaved(lesson.id, saved);
@@ -141,10 +170,80 @@ export function LessonPane({
   const description = lesson.description.trim();
   const hasBody = html !== "" || description !== "";
 
+  const tabs = [
+    ...(courseType === "video" && mobileOutline
+      ? [{ id: "lessons", label: texts.lessonsTab ?? texts.contents }]
+      : []),
+    { id: "description", label: texts.descriptionTab ?? lesson.title },
+    ...(lesson.attachments.length
+      ? [{ id: "files", label: texts.filesTab ?? texts.attachments }]
+      : []),
+    { id: "questions", label: texts.questionsTab ?? texts.questionsTitle },
+  ];
+  const selectedTab = tabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : tabs[0].id;
+  const panelClass = (id: string) =>
+    cn(selectedTab !== id && "hidden", "lg:block");
+  const panelProps = (id: string) => ({
+    id: `${tabId}-panel-${id}`,
+    role: "tabpanel" as const,
+    "aria-labelledby": `${tabId}-tab-${id}`,
+    tabIndex: 0,
+  });
+  const nextLocked = nextItem?.locked ?? false;
+  const completionButton = !preview && (
+    <Button
+      size="sm"
+      variant={completed ? "outline" : "default"}
+      className={cn(
+        "min-h-11 h-auto whitespace-normal",
+        !completed && ACCENT_BUTTON,
+      )}
+      disabled={completed || saving}
+      onClick={markComplete}
+    >
+      {completed ? texts.markedComplete : texts.markComplete}
+    </Button>
+  );
+  const navigation = (mobile: boolean) => (
+    <nav
+      aria-label={texts.lessonNavigation ?? texts.contents}
+      data-lesson-navigation={mobile ? "mobile" : "desktop"}
+      className={
+        mobile
+          ? "fixed inset-x-0 bottom-[var(--course-mobile-bottom,0px)] z-40 flex items-center justify-between gap-2 border-t border-neutral-200 bg-white px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:border-neutral-700 dark:bg-neutral-900 lg:hidden"
+          : "hidden items-center justify-between gap-3 lg:flex"
+      }
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        className="min-h-11"
+        disabled={prev == null}
+        onClick={() => prev && onNavigate(prev)}
+      >
+        <ChevronLeft aria-hidden />
+        {mobile ? (texts.mobilePrev ?? texts.prevItem) : texts.prevItem}
+      </Button>
+      {completionButton}
+      <Button
+        variant="outline"
+        size="sm"
+        className="min-h-11"
+        disabled={next == null || nextLocked}
+        onClick={() => next && !nextLocked && onNavigate(next)}
+      >
+        {mobile ? (texts.mobileNext ?? texts.nextItem) : texts.nextItem}
+        <ChevronRight aria-hidden />
+      </Button>
+    </nav>
+  );
+
   return (
     <article
       data-lesson-id={lesson.id}
-      className="min-w-0 space-y-5"
+      className="min-w-0 space-y-5 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--course-mobile-bottom,0px))] lg:pb-0"
       aria-labelledby={`lesson-${lesson.id}`}
     >
       {lesson.video && (
@@ -159,11 +258,72 @@ export function LessonPane({
           durationHint={lesson.video.durationSeconds}
           autoPlay={startPlaying}
           onReport={handleReport}
-          onEnded={onEnded}
+          onEnded={() => {
+            setEnded(true);
+            onEnded();
+          }}
           onExpired={onUrlsExpired}
         />
       )}
 
+      {navigation(false)}
+      <div className="lg:hidden" role="tablist" aria-label={texts.contents}>
+        <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-700">
+          {tabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`${tabId}-tab-${tab.id}`}
+              aria-selected={selectedTab === tab.id}
+              aria-controls={`${tabId}-panel-${tab.id}`}
+              tabIndex={selectedTab === tab.id ? 0 : -1}
+              className={cn(
+                "min-h-11 min-w-11 shrink-0 border-b-2 px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2",
+                selectedTab === tab.id
+                  ? "border-current"
+                  : "border-transparent text-neutral-600 dark:text-neutral-300",
+              )}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => {
+                const offset =
+                  event.key === "ArrowRight"
+                    ? 1
+                    : event.key === "ArrowLeft"
+                      ? -1
+                      : 0;
+                if (!offset && event.key !== "Home" && event.key !== "End")
+                  return;
+                event.preventDefault();
+                const target =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : (index + offset + tabs.length) % tabs.length;
+                setActiveTab(tabs[target].id);
+                event.currentTarget.parentElement
+                  ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                  [target]?.focus();
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {courseType === "video" && mobileOutline && (
+        <div
+          {...panelProps("lessons")}
+          className={cn(
+            CARD,
+            selectedTab !== "lessons" && "hidden",
+            "lg:hidden",
+          )}
+        >
+          {mobileOutline}
+        </div>
+      )}
       <div className={cn(CARD, "space-y-5")}>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <h2
@@ -172,21 +332,9 @@ export function LessonPane({
           >
             {lesson.title}
           </h2>
-          {!preview && (
-            <Button
-              size="sm"
-              variant={completed ? "outline" : "default"}
-              className={cn(!completed && ACCENT_BUTTON)}
-              disabled={completed || saving}
-              onClick={markComplete}
-            >
-              {completed ? texts.markedComplete : texts.markComplete}
-            </Button>
-          )}
         </header>
-
         {courseType === "video" && lesson.video && (
-          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+          <label className="flex min-h-11 w-fit cursor-pointer items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
             <input
               type="checkbox"
               checked={autoplay}
@@ -195,86 +343,75 @@ export function LessonPane({
             {texts.autoplay}
           </label>
         )}
+        <div
+          {...panelProps("description")}
+          className={panelClass("description")}
+        >
+          {description !== "" && (
+            <p className="text-sm break-words whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">
+              {description}
+            </p>
+          )}
 
-        {description !== "" && (
-          <p className="text-sm break-words whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">
-            {description}
-          </p>
-        )}
+          {html !== "" && (
+            <div
+              className="bitsnap-course-html break-words [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_img]:h-auto [&_img]:max-w-full [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-6"
+              // Sanitised by DOMPurify (see sanitize.ts).
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          )}
 
-        {html !== "" && (
-          <div
-            className="bitsnap-course-html break-words [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_img]:h-auto [&_img]:max-w-full [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-6"
-            // Sanitised by DOMPurify (see sanitize.ts).
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        )}
-
-        {!hasBody && !lesson.video && (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            {texts.noContent}
-          </p>
-        )}
-
+          {!hasBody && !lesson.video && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              {texts.noContent}
+            </p>
+          )}
+        </div>
         {lesson.attachments.length > 0 && (
-          <section aria-labelledby={`files-${lesson.id}`} className="space-y-2">
-            <h3
-              id={`files-${lesson.id}`}
-              className="flex items-center gap-2 text-lg font-semibold"
-            >
-              <Paperclip className="size-4" aria-hidden />
-              {texts.attachments}
-            </h3>
-            <ul className="space-y-2">
-              {lesson.attachments.map((file) => (
-                <li key={file.id}>
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download={file.name}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 text-sm transition hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
-                  >
-                    <span className="min-w-0 break-words">
-                      {file.name}
-                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
-                        {formatBytes(file.size)}
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1 text-xs font-medium">
-                      {texts.download}
-                      <Download className="size-3.5" aria-hidden />
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <div {...panelProps("files")} className={panelClass("files")}>
+            {lesson.attachments.length > 0 && (
+              <section
+                aria-labelledby={`files-${lesson.id}`}
+                className="space-y-2"
+              >
+                <h3
+                  id={`files-${lesson.id}`}
+                  className="flex items-center gap-2 text-lg font-semibold"
+                >
+                  <Paperclip className="size-4" aria-hidden />
+                  {texts.attachments}
+                </h3>
+                <ul className="space-y-2">
+                  {lesson.attachments.map((file) => (
+                    <li key={file.id}>
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={file.name}
+                        className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 text-sm transition hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                      >
+                        <span className="min-w-0 break-words">
+                          {file.name}
+                          <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                            {formatBytes(file.size)}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1 text-xs font-medium">
+                          {texts.download}
+                          <Download className="size-3.5" aria-hidden />
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
-
-        <nav className="flex items-center justify-between gap-3 border-t pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={prev == null}
-            onClick={() => prev && onNavigate(prev)}
-          >
-            <ChevronLeft aria-hidden />
-            {texts.prevItem}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={next == null}
-            onClick={() => next && onNavigate(next)}
-          >
-            {texts.nextItem}
-            <ChevronRight aria-hidden />
-          </Button>
-        </nav>
       </div>
 
-      <div className={cn(CARD)}>
+      <div className={cn(CARD, panelClass("description"))}>
         <LessonRatingBox
           lessonId={lesson.id}
           initial={{
@@ -285,9 +422,45 @@ export function LessonPane({
         />
       </div>
 
-      <div className={cn(CARD)}>
+      <div
+        {...panelProps("questions")}
+        className={cn(CARD, panelClass("questions"))}
+      >
         <LessonQuestions lessonId={lesson.id} />
       </div>
+      <p
+        role="status"
+        aria-live="polite"
+        className="text-sm text-emerald-700 dark:text-emerald-400"
+      >
+        {announced ? texts.markedComplete : ""}
+      </p>
+      {(completed || ended) && next && nextItem && (
+        <section data-course-up-next className={cn(CARD, "space-y-3")}>
+          <h3 className="font-semibold break-words">
+            {fillTemplate(texts.upNext ?? `${texts.nextItem}: {title}`, {
+              title: nextItem.title,
+            })}
+          </h3>
+          {nextLocked && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-300">
+              {nextItem.lockReason
+                ? fillTemplate(texts.lockedByTest, {
+                    test: nextItem.lockReason.gatingTestTitle,
+                  })
+                : texts.locked}
+            </p>
+          )}
+          <Button
+            className={cn(ACCENT_BUTTON, "min-h-11")}
+            disabled={nextLocked}
+            onClick={() => !nextLocked && onNavigate(next)}
+          >
+            {texts.openNext ?? texts.nextItem}
+          </Button>
+        </section>
+      )}
+      {navigation(true)}
     </article>
   );
 }

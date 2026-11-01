@@ -366,7 +366,7 @@ function CubeIcon() {
 }
 
 const GRID_CLASS =
-  "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-5 p-0";
+  "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,var(--bitsnap-products-grid-min-width,9rem)),1fr))] gap-5 p-0";
 
 function SkeletonGrid({ count, label }: { count: number; label: string }) {
   const grid = useSlot("grid", GRID_CLASS);

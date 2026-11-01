@@ -1,13 +1,7 @@
+import { getLocale } from "../../components/checkout/locale";
+import { getPanelTexts } from "../texts";
+import { Button } from "../../ui/button";
 import { rpcProvider, useQuery } from "../../rpc-provider";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "../../ui/pagination";
 import { Skeleton } from "../../ui/skeleton";
 import { useState } from "react";
 
@@ -18,38 +12,27 @@ interface PanelOrderHistoryComponentProps {
 }
 
 const formatDate = (ts: number): string =>
-  new Date(ts * 1000).toLocaleDateString(undefined, {
+  new Date(ts * 1000).toLocaleDateString(getLocale(), {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
 
 const formatAmount = (amount: number, currency: string): string =>
-  new Intl.NumberFormat("en-US", {
+  new Intl.NumberFormat(getLocale(), {
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amount / 100);
 
-const statusLabel: Record<string, string> = {
-  draft: "Szkic",
-  unpaid: "Nieopłacona",
-  paid: "Opłacona",
-  overdue: "Zaległa",
-  cancelled: "Anulowana",
-  completed: "Zakończone",
-  processing: "Przetwarzane",
-  refunded: "Zwrócone",
-};
-
 const statusColor: Record<string, string> = {
-  draft: "text-neutral-400",
-  unpaid: "text-yellow-500",
-  paid: "text-green-600",
-  overdue: "text-red-500",
-  cancelled: "text-neutral-400 line-through",
-  completed: "text-green-600",
-  processing: "text-blue-500",
-  refunded: "text-purple-500",
+  draft: "text-neutral-600 dark:text-neutral-400",
+  unpaid: "text-amber-700 dark:text-amber-300",
+  paid: "text-green-700 dark:text-green-400",
+  overdue: "text-red-700 dark:text-red-400",
+  cancelled: "text-neutral-600 line-through dark:text-neutral-400",
+  completed: "text-green-700 dark:text-green-400",
+  processing: "text-blue-700 dark:text-blue-400",
+  refunded: "text-purple-700 dark:text-purple-400",
 };
 
 function PanelOrderHistory({
@@ -57,10 +40,21 @@ function PanelOrderHistory({
   projectID,
   accessToken,
 }: PanelOrderHistoryComponentProps) {
+  const texts = getPanelTexts();
+  const statusLabel: Record<string, string> = {
+    draft: texts.statusDraft,
+    unpaid: texts.statusUnpaid,
+    paid: texts.statusPaid,
+    overdue: texts.statusOverdue,
+    cancelled: texts.statusCancelled,
+    completed: texts.statusCompleted,
+    processing: texts.statusProcessing,
+    refunded: texts.statusRefunded,
+  };
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  const { data, isFetching } = useQuery(rpcProvider.publicApi.getOrders, {
+  const { data, isFetching, isError, refetch } = useQuery(rpcProvider.publicApi.getOrders, {
     projectId: projectID,
     accessToken,
     offset,
@@ -78,9 +72,9 @@ function PanelOrderHistory({
 
   return (
     <>
-      <h3 className="text-2xl">Historia zamówień</h3>
+      <h3 className="text-2xl">{texts.ordersHeading}</h3>
       <p className="text-sm text-neutral-500 dark:text-neutral-400">
-        Twoje zamówienia
+        {texts.ordersDescription}
       </p>
 
       {isFetching ? (
@@ -90,7 +84,7 @@ function PanelOrderHistory({
               key={i}
               className="rounded-xl bg-white p-4 shadow-sm dark:bg-neutral-800"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-24" />
                   <Skeleton className="h-3 w-32" />
@@ -106,8 +100,18 @@ function PanelOrderHistory({
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <div role="alert" className="mt-6 space-y-3">
+          <p>{texts.ordersError}</p>
+          <Button
+            onClick={() => void refetch()}
+            className="min-h-11 focus-visible:outline-2 focus-visible:outline-current"
+          >
+            {texts.retry}
+          </Button>
+        </div>
       ) : orders.length === 0 ? (
-        <div className="mt-6 text-sm text-neutral-400">Brak zamówień.</div>
+        <div className="mt-6 text-sm text-neutral-600 dark:text-neutral-400">{texts.ordersEmpty}</div>
       ) : (
         <div>
           <div className="mt-6 flex w-full flex-col gap-3">
@@ -115,16 +119,16 @@ function PanelOrderHistory({
               <button
                 key={order.id}
                 onClick={() => openOrderDetails(order.id)}
-                className="block rounded-xl bg-white p-4 text-left shadow-sm transition-colors hover:bg-neutral-50 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                className="block min-h-11 focus-visible:outline-2 focus-visible:outline-current rounded-xl bg-white p-4 text-left shadow-sm transition-colors hover:bg-neutral-50 dark:bg-neutral-800 dark:hover:bg-neutral-700"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Zamówienie #{order.id}</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 break-words">
+                    <p className="font-medium">{texts.orderLabel} #{order.id}</p>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      {order.customerName || "Klient"}
+                      {order.customerName || texts.customerLabel}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <p className="font-semibold">
                       {formatAmount(order.totalAmount, order.currency)}
                     </p>
@@ -136,9 +140,9 @@ function PanelOrderHistory({
                   </div>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400">
                   <span>
-                    Data:{" "}
+                    {texts.dateLabel}:{" "}
                     {order.createdAt
                       ? formatDate(Number(order.createdAt.seconds))
                       : "-"}
@@ -148,73 +152,41 @@ function PanelOrderHistory({
             ))}
           </div>
 
-          {totalPages > 1 && !isFetching && (
-            <div className="mt-4 flex justify-center">
-              <Pagination>
-                <PaginationContent>
-                  {currentPage > 1 && (
-                    <PaginationItem>
-                      <PaginationPrevious
-                        onClick={() => handlePageChange(offset - limit)}
-                      />
-                    </PaginationItem>
-                  )}
-
-                  {currentPage > 2 && (
-                    <PaginationItem>
-                      <PaginationLink onClick={() => handlePageChange(0)}>
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-                  )}
-
-                  {currentPage > 3 && (
-                    <PaginationItem>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  )}
-
-                  {[currentPage - 1, currentPage, currentPage + 1]
-                    .filter((page) => page > 0 && page <= totalPages)
-                    .map((page) => (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => handlePageChange((page - 1) * limit)}
-                          isActive={currentPage === page}
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
-
-                  {currentPage < totalPages - 2 && (
-                    <PaginationItem>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  )}
-
-                  {currentPage < totalPages && (
-                    <PaginationItem>
-                      <PaginationLink
-                        onClick={() =>
-                          handlePageChange((totalPages - 1) * limit)
-                        }
-                      >
-                        {totalPages}
-                      </PaginationLink>
-                    </PaginationItem>
-                  )}
-
-                  {currentPage < totalPages && (
-                    <PaginationItem>
-                      <PaginationNext
-                        onClick={() => handlePageChange(offset + limit)}
-                      />
-                    </PaginationItem>
-                  )}
-                </PaginationContent>
-              </Pagination>
-            </div>
+          {currentPage >= totalPages && (
+            <p className="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
+              {texts.ordersEnd}
+            </p>
+          )}
+          {totalPages > 1 && (
+            <nav
+              aria-label={texts.paginationLabel}
+              className="mt-4 flex flex-wrap items-center justify-center gap-2"
+            >
+              {currentPage > 1 && (
+                <Button variant="outline" className="min-h-11" onClick={() => handlePageChange(offset - limit)}>
+                  {texts.previousPage}
+                </Button>
+              )}
+              {Array.from(new Set([1, currentPage - 1, currentPage, currentPage + 1, totalPages]))
+                .filter(page => page > 0 && page <= totalPages)
+                .sort((a, b) => a - b)
+                .map(page => (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? "secondary" : "ghost"}
+                    className="min-h-11 min-w-11"
+                    aria-current={page === currentPage ? "page" : undefined}
+                    onClick={() => handlePageChange((page - 1) * limit)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+              {currentPage < totalPages && (
+                <Button variant="outline" className="min-h-11" onClick={() => handlePageChange(offset + limit)}>
+                  {texts.nextPage}
+                </Button>
+              )}
+            </nav>
           )}
         </div>
       )}

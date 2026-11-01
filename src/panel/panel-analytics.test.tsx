@@ -160,7 +160,6 @@ describe("panel analytics", () => {
         />
       </PanelProvider>,
     );
-    await React.act(async () => (container.querySelector('button[aria-label="Download Product"]') as HTMLElement).click());
     await settle();
     const link = container.querySelector<HTMLAnchorElement>("a[download]")!;
     link.addEventListener("click", (event) => event.preventDefault());
