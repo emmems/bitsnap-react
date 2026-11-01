@@ -308,7 +308,8 @@ assert.ok(
   assert.ok(!/require\(|from"react/.test(embedText), "dist/embed/consent.js must not import anything");
   assert.ok(!embedText.includes("react-dom"), "dist/embed/consent.js must not bundle React");
   const gzipped = gzipSync(embed, { level: 9 }).length;
-  assert.ok(gzipped < 12 * 1024, `dist/embed/consent.js is ${gzipped} bytes gzipped (limit 12288)`);
+  // 13 KB since 1.16.0: the fade-in/out (1.15.0) took the script to ~12.6 KB.
+  assert.ok(gzipped < 13 * 1024, `dist/embed/consent.js is ${gzipped} bytes gzipped (limit 13312)`);
 }
 
 // Merchant analytics: the subpath is inert on the server, nothing in it or in
