@@ -1,3 +1,4 @@
+import { CircleCheck } from "lucide-react";
 import { useId, type FormEvent, type ReactNode } from "react";
 import { cn } from "@/src/lib/utils";
 import { Button } from "../button";
@@ -27,6 +28,11 @@ export type EmailCodeLoginFormProps = {
 };
 
 const MUTED = "text-muted-foreground text-xs leading-5";
+/** Borders of the dark theme: the `input` token is nearly the card colour. */
+const DARK_FIELD =
+  "dark:border-foreground/30 dark:focus-visible:border-foreground/70 dark:focus-visible:ring-foreground/25 dark:aria-invalid:border-destructive-foreground dark:aria-invalid:ring-destructive-foreground/30";
+/** Failures about the address itself; a throttled or failed send is not. */
+const EMAIL_FAILURES = new Set(["invalidEmail", "emailNotFound", "deliveryUnavailable"]);
 const LINK =
   "inline-flex min-h-11 items-center px-1 text-sm underline underline-offset-4 hover:no-underline focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded-sm outline-none disabled:opacity-50 disabled:no-underline";
 
@@ -61,19 +67,34 @@ export function EmailCodeLoginForm({
 
   // Both live regions stay mounted (empty) so that a screen reader has
   // registered them before a message is put in; only their text changes.
+  // The area reserves two lines, so a longer message does not push the buttons.
+  const success = notice?.kind === "success";
   const noticeArea = (
-    <div id={noticeId} className="min-h-5 text-sm leading-5">
+    <div id={noticeId} className="min-h-10 text-sm leading-5">
       <p
         role="alert"
         className="font-medium text-red-700 dark:text-red-400"
       >
         {isError ? notice.text : null}
       </p>
-      <p role="status" className="text-foreground">
-        {notice != null && !isError ? notice.text : null}
+      <p
+        role="status"
+        className={cn(
+          "flex items-start gap-1.5",
+          success
+            ? "font-medium text-emerald-700 dark:text-emerald-400"
+            : "text-foreground",
+        )}
+      >
+        {success && <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />}
+        <span>{notice != null && !isError ? notice.text : null}</span>
       </p>
     </div>
   );
+  const emailInvalid =
+    isError &&
+    login.step === "email" &&
+    (notice.failure == null || EMAIL_FAILURES.has(notice.failure));
 
   const announcer = (
     <p className="sr-only" role="status" aria-live="polite">
@@ -96,11 +117,14 @@ export function EmailCodeLoginForm({
         spellCheck={false}
         autoFocus
         required
-        className="h-11 text-base"
+        className={cn(
+          "h-11 text-base disabled:opacity-100 disabled:text-foreground/70",
+          DARK_FIELD,
+        )}
         placeholder={emailPlaceholder ?? texts.emailPlaceholder}
         value={login.email}
         disabled={login.isBusy}
-        aria-invalid={isError && login.step === "email" ? true : undefined}
+        aria-invalid={emailInvalid ? true : undefined}
         aria-describedby={noticeId}
         onChange={(event) => login.setEmail(event.target.value)}
       />
@@ -167,15 +191,18 @@ export function EmailCodeLoginForm({
       {login.needsEmail ? (
         emailField
       ) : (
-        <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 text-sm leading-5 break-words">
+        <div className="flex flex-wrap items-center justify-between gap-x-2">
+          {/* The address moves to its own line before it is cut; the word
+              joiner keeps the full stop with it. */}
+          <p className="min-w-0 flex-[1_1_14rem] text-sm leading-5 break-words">
             {before}
-            <strong className="font-semibold break-all">{login.email}</strong>
+            <strong className="font-semibold">{login.email}</strong>
+            {"\u2060"}
             {after}
           </p>
           <button
             type="button"
-            className={cn(LINK, "shrink-0")}
+            className={cn(LINK, "-ml-1 shrink-0")}
             disabled={login.isBusy}
             onClick={login.changeEmail}
           >

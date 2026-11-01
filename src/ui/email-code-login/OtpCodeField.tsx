@@ -1,5 +1,5 @@
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import type { CSSProperties, Ref } from "react";
+import { useCallback, type CSSProperties, type Ref } from "react";
 import { cn } from "@/src/lib/utils";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "../input-otp";
 import { CODE_LENGTH } from "./useEmailCodeLogin";
@@ -30,9 +30,22 @@ export type OtpCodeFieldProps = {
 };
 
 /**
+ * The library stretches the hidden input over the slots with `width: 100%`.
+ * Where the CSS reset does not reach (a dialog portal outside the library's
+ * root), the browser's own 2px padding makes it 4px wider than the slots, and
+ * than the viewport on a phone. The library ignores `style`, so set it here.
+ */
+function resetFieldBox(node: HTMLInputElement | null) {
+  if (node != null) {
+    node.style.boxSizing = "border-box";
+    node.style.padding = "0";
+  }
+}
+
+/**
  * Six digit one-time-code input: digits only, numeric keypad, one-time-code
- * autofill, spaces and dashes stripped on paste. Slots are 44 px tall and
- * shrink on narrow screens instead of overflowing.
+ * autofill, spaces and dashes stripped on paste. The six slots are 44 px
+ * tall and share the full width, shrinking on narrow screens.
  */
 export function OtpCodeField({
   id,
@@ -49,15 +62,30 @@ export function OtpCodeField({
   className,
   ...aria
 }: OtpCodeFieldProps) {
+  const setInput = useCallback(
+    (node: HTMLInputElement | null) => {
+      resetFieldBox(node);
+      if (typeof inputRef === "function") inputRef(node);
+      else if (inputRef != null) inputRef.current = node;
+    },
+    [inputRef],
+  );
   const slotProps = {
-    className: cn("h-11 w-auto min-w-0 flex-1 text-base", slotClassName),
+    className: cn(
+      // Six separate boxes that share the width of the card.
+      "h-11 w-auto min-w-0 flex-1 rounded-md border first:rounded-md last:rounded-md text-base",
+      // Dark theme: the `input` and `ring` tokens are close to the card colour.
+      "dark:border-foreground/30 dark:data-[active=true]:border-foreground/70 dark:data-[active=true]:ring-foreground/25",
+      "dark:aria-invalid:border-destructive-foreground dark:data-[active=true]:aria-invalid:border-destructive-foreground dark:aria-invalid:ring-destructive-foreground/30 dark:data-[active=true]:aria-invalid:ring-destructive-foreground/30",
+      slotClassName,
+    ),
     style: slotStyle,
     "aria-invalid": invalid ? true : undefined,
   } as const;
 
   return (
     <InputOTP
-      ref={inputRef}
+      ref={setInput}
       id={id}
       name={name}
       maxLength={CODE_LENGTH}
@@ -73,9 +101,9 @@ export function OtpCodeField({
       aria-invalid={invalid ? true : undefined}
       aria-label={aria["aria-label"]}
       aria-describedby={aria["aria-describedby"]}
-      containerClassName={cn("w-full max-w-72", className)}
+      containerClassName={cn("w-full", className)}
     >
-      <InputOTPGroup className="w-full">
+      <InputOTPGroup className="w-full gap-1.5 sm:gap-2">
         {Array.from({ length: CODE_LENGTH }, (_, index) => (
           <InputOTPSlot key={index} index={index} {...slotProps} />
         ))}

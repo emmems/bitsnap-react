@@ -195,7 +195,7 @@ describe("PanelLogin", () => {
       [FailureMessage.INCORRECT_CODE, /Nieprawidłowy kod/],
       [FailureMessage.CODE_EXPIRED, /Kod wygasł/],
       [FailureMessage.TOO_MANY_ATTEMPTS, /Zbyt wiele błędnych prób/],
-      [FailureMessage.RATE_LIMITED, /Zbyt wiele prób\. Spróbuj ponownie za 60 s/],
+      [FailureMessage.RATE_LIMITED, /Zbyt wiele prób\. Spróbuj ponownie za 60\ss/],
       [FailureMessage.EMAIL_NOT_FOUND, /Nie znaleźliśmy konta z tym adresem e-mail\./],
     ];
     for (const [failure, expected] of cases) {

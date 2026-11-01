@@ -37,12 +37,15 @@ export function StepFrame({
   title,
   description,
   onBack,
+  lead,
   className,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   onBack?: () => void;
+  /** Shown above the header, for example the shop logo. */
+  lead?: ReactNode;
   className?: string;
   children?: ReactNode;
 }) {
@@ -54,6 +57,7 @@ export function StepFrame({
 
   return (
     <section className={cn("flex flex-col gap-5", className)}>
+      {lead}
       <div
         data-bitsnap-returns-slot="header"
         className={cn("flex flex-col gap-2", header.className)}

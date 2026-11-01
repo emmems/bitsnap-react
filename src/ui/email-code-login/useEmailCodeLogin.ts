@@ -63,6 +63,8 @@ export interface EmailCodeAdapter<T = void> {
 export type LoginNotice = {
   kind: "error" | "info" | "success";
   text: string;
+  /** The failure behind an error or info notice; unset for local messages. */
+  failure?: FailureKind;
 };
 
 /** Length of the code. */
@@ -79,6 +81,14 @@ export function isValidEmail(value: string): boolean {
 
 /** Customer facing message of a failure. */
 export function failureNotice(
+  texts: EmailCodeTexts,
+  kind: FailureKind,
+  retryIn?: number,
+): LoginNotice {
+  return { ...describeFailure(texts, kind, retryIn), failure: kind };
+}
+
+function describeFailure(
   texts: EmailCodeTexts,
   kind: FailureKind,
   retryIn?: number,

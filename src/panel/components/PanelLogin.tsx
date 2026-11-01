@@ -16,6 +16,10 @@ import {
   CardTitle,
 } from "../../ui/card";
 import { kindFromRpcError } from "../../ui/email-code-login/errors";
+import {
+  LoginBrandLogo,
+  type LoginLogoOptions,
+} from "../../ui/email-code-login/LoginBrandLogo";
 import { EmailCodeLoginForm } from "../../ui/email-code-login/EmailCodeLoginForm";
 import { pendingLoginKey } from "../../ui/email-code-login/pending";
 import {
@@ -54,7 +58,7 @@ if (typeof window !== "undefined") {
 /** Props of {@link PanelLogin}; `PanelLoginProps` of the package is a superset. */
 export type PanelLoginComponentProps = Pick<
   PanelLoginProps,
-  "analytics" | "texts" | "locale"
+  "analytics" | "texts" | "locale" | "showLogo" | "logoUrl" | "logoDarkUrl"
 >;
 
 type PanelLoginResult = { accessToken: string };
@@ -63,10 +67,12 @@ const PanelLoginForm = ({
   texts,
   projectID,
   host,
+  logo,
 }: {
   texts: PanelLoginTexts;
   projectID?: string;
   host?: string;
+  logo: LoginLogoOptions;
 }) => {
   const instrument = useInstrumentContext();
   const { mutateAsync: loginUserAsync } = useMutation(
@@ -147,8 +153,10 @@ const PanelLoginForm = ({
     onCodeStep && !login.needsEmail ? texts.codeDescription : texts.description;
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center">
+    // Top-aligned: a vertically centred card moved when the step changed height.
+    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-start pt-4 sm:pt-[12vh]">
       <Card>
+        <LoginBrandLogo projectId={projectID} className="px-4 sm:px-6" {...logo} />
         <CardHeader className="px-4 sm:px-6">
           <CardTitle role="heading" aria-level={1} className="text-2xl">
             {title}
@@ -172,6 +180,9 @@ const PanelLoginComponentWrapper = ({
   analytics,
   texts: textOverrides,
   locale,
+  showLogo,
+  logoUrl,
+  logoDarkUrl,
 }: PanelLoginComponentProps) => {
   const { theme, allowedReturnOrigins, projectID, host } = usePanelConfig();
   const instrument = useInstrument(projectID, analytics, "panel");
@@ -229,25 +240,16 @@ const PanelLoginComponentWrapper = ({
           style={styles}
           ref={parent}
         >
-          <header>
-            {theme?.logoDarkURL && (
-              <img
-                src={theme?.logoDarkURL}
-                className="hidden dark:inline"
-                alt="Company Logo"
-                draggable={false}
-              />
-            )}
-            {theme?.logoURL && (
-              <img
-                src={theme?.logoURL}
-                className="dark:hidden"
-                alt="Company Logo"
-                draggable={false}
-              />
-            )}
-          </header>
-          <PanelLoginForm texts={texts} projectID={projectID} host={host} />
+          <PanelLoginForm
+            texts={texts}
+            projectID={projectID}
+            host={host}
+            logo={{
+              showLogo,
+              logoUrl: logoUrl ?? theme?.logoURL,
+              logoDarkUrl: logoDarkUrl ?? theme?.logoDarkURL,
+            }}
+          />
         </div>
       </div>
     </InstrumentProvider>

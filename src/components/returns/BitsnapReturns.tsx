@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef } from "react";
 import { cn } from "@/src/lib/utils";
+import type { LoginLogoOptions } from "@/src/ui/email-code-login/LoginBrandLogo";
 import { useReturnsSlot } from "./appearance.context";
 import { ReturnsCodeStep, ReturnsEmailStep } from "./AuthSteps";
 import { SkeletonRows } from "./internal";
@@ -23,7 +24,13 @@ import {
 } from "./state-machine";
 import { useReturnsText } from "./texts.context";
 
-export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children">;
+/**
+ * Props of {@link BitsnapReturns}. `showLogo`, `logoUrl` and `logoDarkUrl` set
+ * the shop logo above the e-mail and code steps: by default the logo from the
+ * shop settings, or Bitsnap's when the shop has none.
+ */
+export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children"> &
+  LoginLogoOptions;
 
 function StepIndicator({ current }: { current: number }) {
   const text = useReturnsText();
@@ -41,7 +48,13 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 /** Default step router. All transitions come from the pure state machine. */
-function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
+function ReturnsRouter({
+  panelToken,
+  logo,
+}: {
+  panelToken: boolean;
+  logo: LoginLogoOptions;
+}) {
   const { status, challenge } = useReturnsContext("BitsnapReturns");
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
@@ -83,10 +96,14 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
     <div className="flex flex-col gap-4">
       {stepNumber != null && <StepIndicator current={stepNumber} />}
       {step.name === "email" && (
-        <ReturnsEmailStep onSubmitted={() => dispatch({ type: "CODE_SENT" })} />
+        <ReturnsEmailStep
+          {...logo}
+          onSubmitted={() => dispatch({ type: "CODE_SENT" })}
+        />
       )}
       {step.name === "code" && (
         <ReturnsCodeStep
+          {...logo}
           onVerified={() => dispatch({ type: "AUTHENTICATED" })}
           onBack={() => dispatch({ type: "BACK" })}
         />
@@ -157,10 +174,18 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
  * <BitsnapReturns projectID="…" appearance={brand} texts={{ emailStepTitle: "Return a product" }} />
  * ```
  */
-export function BitsnapReturns(props: BitsnapReturnsProps) {
+export function BitsnapReturns({
+  showLogo,
+  logoUrl,
+  logoDarkUrl,
+  ...props
+}: BitsnapReturnsProps) {
   return (
     <ReturnsProvider {...props}>
-      <ReturnsRouter panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""} />
+      <ReturnsRouter
+        panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""}
+        logo={{ showLogo, logoUrl, logoDarkUrl }}
+      />
     </ReturnsProvider>
   );
 }

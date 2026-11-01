@@ -179,6 +179,14 @@ export const getAvailableCountForProduct = PublicApiService.method.getAvailableC
 export const getThankYouPage = PublicApiService.method.getThankYouPage;
 
 /**
+ * Shop logo and name shown on the customer login screens (panel, returns,
+ * notifications). Unauthenticated; an unknown project gives an empty response.
+ *
+ * @generated from rpc public_api.v1.PublicApiService.GetLoginBranding
+ */
+export const getLoginBranding = PublicApiService.method.getLoginBranding;
+
+/**
  * Checkout requests
  *
  * @generated from rpc public_api.v1.PublicApiService.IsOneClickPaymentAvailable

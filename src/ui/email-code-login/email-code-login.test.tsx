@@ -124,13 +124,13 @@ async function toCodeStep(address = "jane@example.com") {
 
 describe("shared login helpers", () => {
   it("shows waits above a minute as minutes, never as raw seconds", () => {
-    assert.equal(formatWait(1), "1 s");
-    assert.equal(formatWait(45), "45 s");
-    assert.equal(formatWait(60), "60 s");
-    assert.equal(formatWait(61), "2 min");
-    assert.equal(formatWait(90), "2 min");
-    assert.equal(formatWait(600), "10 min");
-    assert.equal(formatWait(0), "1 s");
+    assert.equal(formatWait(1), "1\u00a0s");
+    assert.equal(formatWait(45), "45\u00a0s");
+    assert.equal(formatWait(60), "60\u00a0s");
+    assert.equal(formatWait(61), "2\u00a0min");
+    assert.equal(formatWait(90), "2\u00a0min");
+    assert.equal(formatWait(600), "10\u00a0min");
+    assert.equal(formatWait(0), "1\u00a0s");
   });
 
   it("strips spaces and dashes from a pasted code", () => {
@@ -154,8 +154,8 @@ describe("shared login helpers", () => {
     ] as const) {
       assert.notEqual(failureNotice(texts, kind).text, "", kind);
     }
-    assert.match(failureNotice(texts, "rateLimited", 150).text, /3 min/);
-    assert.match(failureNotice(texts, "rateLimited", 20).text, /20 s/);
+    assert.match(failureNotice(texts, "rateLimited", 150).text, /3\smin/);
+    assert.match(failureNotice(texts, "rateLimited", 20).text, /20\ss/);
     assert.equal(failureNotice(texts, "alreadySent", 30).kind, "info");
   });
 });
@@ -200,6 +200,25 @@ describe("e-mail step", () => {
     await submit(doc().querySelector("form")!);
     assert.equal(sendCalls.length, 0);
     assert.equal(alertText(), texts.invalidEmail);
+    assert.equal(emailInput().getAttribute("aria-invalid"), "true");
+  });
+
+  it("marks the e-mail field invalid only for failures about the address", async () => {
+    sendOutcome = { ok: false, kind: "rateLimited", retryIn: 150 };
+    await mount();
+    await toCodeStep();
+    assert.match(alertText(), /Zbyt wiele prób/);
+    assert.equal(emailInput().getAttribute("aria-invalid"), null);
+    sendOutcome = { ok: false, kind: "emailNotFound" };
+    await submit(doc().querySelector("form")!);
+    await settle();
+    assert.equal(emailInput().getAttribute("aria-invalid"), "true");
+  });
+
+  it("keeps two lines for the message and keeps the typed address readable while sending", async () => {
+    await mount();
+    assert.match(doc().querySelector("[id$=-notice]")?.className ?? "", /\bmin-h-10\b/);
+    assert.match(emailInput().className, /disabled:opacity-100/);
   });
 });
 
@@ -208,7 +227,7 @@ describe("code step", () => {
     await mount();
     await toCodeStep();
     assert.deepEqual(sendCalls, [{ email: "jane@example.com", resend: false }]);
-    assert.match(doc().body.textContent ?? "", /Wysłaliśmy kod na jane@example\.com\./);
+    assert.match(doc().body.textContent ?? "", /Wysłaliśmy kod na jane@example\.com\u2060?\./);
     assert.match(doc().body.textContent ?? "", /Nie widzisz e-maila\? Sprawdź folder spam\./);
     assert.match(doc().body.textContent ?? "", /Kod jest ważny 10 minut\./);
     const input = codeInput();
@@ -309,7 +328,7 @@ describe("code step", () => {
     await toCodeStep();
     await type(codeInput(), "111111");
     await settle();
-    assert.match(alertText(), /5 min/);
+    assert.match(alertText(), /5\smin/);
     assert.doesNotMatch(alertText(), /300/);
   });
 
@@ -344,7 +363,7 @@ describe("code step", () => {
     await mount();
     await toCodeStep();
     const resend = () => buttonWith(/Wyślij ponownie/)!;
-    assert.match(resend().textContent ?? "", /Wyślij ponownie za [01] s/);
+    assert.match(resend().textContent ?? "", /Wyślij ponownie za [01]\ss/);
     assert.equal(resend().disabled, true);
     await settle(1300);
     assert.equal(resend().textContent, texts.resend);
@@ -355,7 +374,8 @@ describe("code step", () => {
     await settle();
     assert.equal(sendCalls.at(-1)?.resend, true);
     assert.equal(statusText(), texts.resent);
-    assert.match(resend().textContent ?? "", /Wyślij ponownie za (59|60) s/);
+    assert.match(doc().querySelector('p[role="status"]:not(.sr-only)')?.className ?? "", /emerald/);
+    assert.match(resend().textContent ?? "", /Wyślij ponownie za (59|60)\ss/);
     assert.equal(resend().disabled, true);
   });
 
@@ -399,7 +419,7 @@ describe("pending step", () => {
     assert.match(doc().body.textContent ?? "", /jane@example\.com/);
     assert.ok(codeInput(), "on the code step");
     assert.equal(doc().activeElement, codeInput());
-    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (59|60) s/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (59|60)\ss/);
     await type(codeInput(), "123456");
     await settle();
     assert.equal(verifyCalls[0]?.challengeId, "ch-1", "the challenge survived");

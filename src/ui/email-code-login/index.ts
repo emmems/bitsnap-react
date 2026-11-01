@@ -1,4 +1,9 @@
 export { EmailCodeLoginForm, type EmailCodeLoginFormProps } from "./EmailCodeLoginForm";
+export {
+  LoginBrandLogo,
+  type LoginBrandLogoProps,
+  type LoginLogoOptions,
+} from "./LoginBrandLogo";
 export { OtpCodeField, stripCodeSeparators, type OtpCodeFieldProps } from "./OtpCodeField";
 export { useSecondsUntil } from "./countdown";
 export {

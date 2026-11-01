@@ -182,6 +182,12 @@ export interface NotificationsComponentPublicProps {
   projectLogoDark?: string;
 
   /**
+   * The login dialog shows the project logo (`projectLogo`, else the one of
+   * the shop settings, else Bitsnap's). `false` hides it.
+   */
+  showLoginLogo?: boolean;
+
+  /**
    * Array of notification groups that the user can subscribe to. If you will provide group, we will not show all possible public groups from dashboard.
    */
   groups?: PublicNotificationGroup[];

@@ -182,6 +182,7 @@ function NotificationsComponentPublic({
   projectName,
   projectLogo,
   projectLogoDark,
+  showLoginLogo,
   groups,
   isManaging = false,
   texts,
@@ -514,6 +515,10 @@ function NotificationsComponentPublic({
         onSuccess={handleLoginSuccess}
         texts={mergedTexts}
         onClose={handleCloseSettings}
+        projectName={projectName}
+        projectLogo={projectLogo}
+        projectLogoDark={projectLogoDark}
+        showLogo={showLoginLogo}
       />
     </main>
   );
@@ -528,6 +533,7 @@ function Wrapper({
   projectName,
   projectLogo,
   projectLogoDark,
+  showLoginLogo,
   groups,
   isManaging,
   texts,
@@ -547,6 +553,7 @@ function Wrapper({
         projectName={projectName}
         projectLogo={projectLogo}
         projectLogoDark={projectLogoDark}
+        showLoginLogo={showLoginLogo}
         groups={groups}
         isManaging={isManaging}
         texts={texts}

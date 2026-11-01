@@ -223,7 +223,7 @@ describe("notifications LoginScreen", () => {
     replies = [connectError("resource_exhausted", 429, "Rate limit exceeded")];
     await mount();
     await toCodeStep();
-    assert.match(alertText(), /Zbyt wiele prób\. Spróbuj ponownie za 60 s/);
+    assert.match(alertText(), /Zbyt wiele prób\. Spróbuj ponownie za 60\ss/);
     assert.ok(emailInput(), "stays on the e-mail step");
   });
 
@@ -233,7 +233,7 @@ describe("notifications LoginScreen", () => {
     await toCodeStep();
     assert.ok(emailInput(), "nothing was sent: no code step");
     assert.equal(codeInput(), null);
-    assert.match(alertText(), /Zbyt wiele prób\. Spróbuj ponownie za 2 min/);
+    assert.match(alertText(), /Zbyt wiele prób\. Spróbuj ponownie za 2\smin/);
   });
 
   it("continues to the code step when a resend was throttled (ok: true + retryIn)", async () => {
@@ -241,7 +241,7 @@ describe("notifications LoginScreen", () => {
     await mount();
     await toCodeStep();
     assert.ok(codeInput(), "a code was sent a moment ago: go and enter it");
-    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (89|90) s/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (89|90)\ss/);
     assert.equal(buttonWith(/Wyślij ponownie/)!.disabled, true);
   });
 
@@ -250,8 +250,8 @@ describe("notifications LoginScreen", () => {
     await mount();
     await toCodeStep();
     assert.ok(codeInput(), "an earlier code is still valid: go and enter it");
-    assert.match(doc().body.textContent ?? "", /45 s/);
-    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (44|45) s/);
+    assert.match(doc().body.textContent ?? "", /45\ss/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (44|45)\ss/);
     assert.equal(errors.length, 0, "not reported as an error");
   });
 
@@ -266,7 +266,7 @@ describe("notifications LoginScreen", () => {
     assert.equal(requests.length, 2);
     assert.equal(codeInput().value, "123", "typed code is kept");
     assert.doesNotMatch(doc().body.textContent ?? "", /Wysłaliśmy nowy kod/);
-    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (49|50) s/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (49|50)\ss/);
     assert.equal(errors.length, 0);
   });
 
@@ -295,6 +295,18 @@ describe("notifications LoginScreen", () => {
       assert.equal(codeInput(), null);
       await toCodeStep();
     }
+  });
+
+  it("labels the code field differently from the dialog title and announces the step once", async () => {
+    replies = [{ ok: true }];
+    await mount();
+    await toCodeStep();
+    const title = doc().querySelector('[data-slot="dialog-title"]')?.textContent;
+    const label = doc().querySelector("label")?.textContent;
+    assert.equal(title, DEFAULT_TEXTS.loginCodeLabel);
+    assert.notEqual(label, title);
+    const hidden = Array.from(doc().querySelectorAll(".sr-only")).map((el) => el.textContent);
+    assert.equal(hidden.filter((text) => text === "Krok 2 z 2: wpisz kod z e-maila.").length, 1);
   });
 
   it("tells the customer when the send does not get through", async () => {

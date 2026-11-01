@@ -5,6 +5,10 @@ import { Input } from "@/src/ui/input";
 import { Label } from "@/src/ui/label";
 import { Spinner } from "@/src/ui/spinner";
 import { cn } from "@/src/lib/utils";
+import {
+  LoginBrandLogo,
+  type LoginLogoOptions,
+} from "@/src/ui/email-code-login/LoginBrandLogo";
 import { OtpCodeField } from "@/src/ui/email-code-login/OtpCodeField";
 import { useSecondsUntil } from "@/src/ui/email-code-login/countdown";
 import { CODE_LENGTH } from "@/src/ui/email-code-login/useEmailCodeLogin";
@@ -21,7 +25,7 @@ import {
 import { useReturnsContext } from "./ReturnsProvider";
 import { useReturnsText } from "./texts.context";
 
-export type ReturnsEmailStepProps = {
+export type ReturnsEmailStepProps = LoginLogoOptions & {
   /** Called after the verification code was sent, with the trimmed email. */
   onSubmitted?: (email: string) => void;
   className?: string;
@@ -31,6 +35,7 @@ export type ReturnsEmailStepProps = {
 export function ReturnsEmailStep({
   onSubmitted,
   className,
+  ...logo
 }: ReturnsEmailStepProps) {
   const ctx = useReturnsContext("ReturnsEmailStep");
   const text = useReturnsText();
@@ -54,6 +59,7 @@ export function ReturnsEmailStep({
   return (
     <StepFrame
       className={className}
+      lead={<LoginBrandLogo projectId={ctx.projectID} {...logo} />}
       title={text("emailStepTitle")}
       description={text("emailStepDescription")}
     >
@@ -100,7 +106,7 @@ export function ReturnsEmailStep({
   );
 }
 
-export type ReturnsCodeStepProps = {
+export type ReturnsCodeStepProps = LoginLogoOptions & {
   /** Called once the code was accepted and the session exists. */
   onVerified?: () => void;
   /** Shows a back button, for example to change the email. */
@@ -117,6 +123,7 @@ export function ReturnsCodeStep({
   onVerified,
   onBack,
   className,
+  ...logo
 }: ReturnsCodeStepProps) {
   const ctx = useReturnsContext("ReturnsCodeStep");
   const text = useReturnsText();
@@ -192,6 +199,7 @@ export function ReturnsCodeStep({
     <StepFrame
       className={className}
       onBack={onBack != null ? handleBack : undefined}
+      lead={<LoginBrandLogo projectId={ctx.projectID} {...logo} />}
       title={text("codeStepTitle")}
       description={text("codeStepDescription", {
         email: session.challenge?.email ?? "",
@@ -226,7 +234,7 @@ export function ReturnsCodeStep({
             {text("codeValidity")} {text("codeSpamHint")}
           </p>
         </div>
-        <div className="min-h-5">
+        <div className="min-h-10">
           {incomplete && (
             <p role="alert" className="text-sm">
               {text("codeIncomplete")}

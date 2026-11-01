@@ -1,6 +1,7 @@
 import type { AnalyticsOption } from "../analytics/instrument";
 import type { ReturnsAppearance } from "../components/returns/appearance";
 import type { ReturnsTexts } from "../components/returns/texts";
+import type { LoginLogoOptions } from "../ui/email-code-login/LoginBrandLogo";
 import type { PanelLoginTexts } from "./login-texts";
 
 export interface GetThemeOutput {
@@ -54,7 +55,7 @@ export interface PanelProps {
   analytics?: AnalyticsOption;
 }
 
-export interface PanelLoginProps {
+export interface PanelLoginProps extends LoginLogoOptions {
   projectID: string;
   theme?: GetThemeOutput;
   /**

@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/src/ui/dialog";
 import { EmailCodeLoginForm } from "@/src/ui/email-code-login/EmailCodeLoginForm";
+import { LoginBrandLogo } from "@/src/ui/email-code-login/LoginBrandLogo";
 import { pendingLoginKey } from "@/src/ui/email-code-login/pending";
 import { useEmailCodeLogin } from "@/src/ui/email-code-login/useEmailCodeLogin";
 import {
@@ -56,6 +57,14 @@ interface LoginScreenProps {
    * Custom texts used throughout the component for i18n or personalisation.
    */
   texts: LoginScreenTexts;
+
+  /** Name and logos of the project, when the page already has them. */
+  projectName?: string;
+  projectLogo?: string;
+  projectLogoDark?: string;
+
+  /** `false` hides the logo above the login. Default `true`. */
+  showLogo?: boolean;
 }
 
 /**
@@ -68,13 +77,28 @@ function LoginDialogBody({
   onSuccess,
   onError,
   texts,
-}: Pick<LoginScreenProps, "slug" | "onSuccess" | "onError" | "texts">) {
+  projectName,
+  projectLogo,
+  projectLogoDark,
+  showLogo,
+}: Pick<
+  LoginScreenProps,
+  | "slug"
+  | "onSuccess"
+  | "onError"
+  | "texts"
+  | "projectName"
+  | "projectLogo"
+  | "projectLogoDark"
+  | "showLogo"
+>) {
   const [parentHeader] = useAutoAnimate();
   const { mutateAsync: verifyUserEmail } = useMutation(
     rpcProvider.notifications.verifyUserEmail,
   );
 
   const loginTexts = useMemo(() => notificationsLoginTexts(texts), [texts]);
+  const [before, after] = loginTexts.codeSentTo.split("{email}");
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
   const adapter = useMemo(() => {
@@ -119,6 +143,14 @@ function LoginDialogBody({
 
   return (
     <div className="flex h-full flex-col">
+      <LoginBrandLogo
+        projectId={slug}
+        name={projectName}
+        showLogo={showLogo}
+        logoUrl={projectLogo}
+        logoDarkUrl={projectLogoDark}
+        className="text-foreground mb-3"
+      />
       <div ref={parentHeader} className="mb-2 flex items-start gap-2">
         {onCodeStep && (
           <Button
@@ -137,8 +169,12 @@ function LoginDialogBody({
           {title}
         </DialogTitle>
       </div>
+      {/* The form announces "step 2 of 2" itself; the description of the
+          code step is the address, so nothing is read twice. */}
       <DialogDescription className={onCodeStep ? "sr-only" : "mb-4"}>
-        {onCodeStep ? loginTexts.stepCode : texts.loginDescription ?? ""}
+        {onCodeStep
+          ? `${before}${login.email}${after ?? ""}`
+          : texts.loginDescription ?? ""}
       </DialogDescription>
       <EmailCodeLoginForm login={login} texts={loginTexts} />
     </div>
@@ -153,6 +189,10 @@ export function LoginScreen({
   isOpen,
   onClose,
   texts,
+  projectName,
+  projectLogo,
+  projectLogoDark,
+  showLogo,
 }: LoginScreenProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -162,6 +202,10 @@ export function LoginScreen({
           onSuccess={onSuccess}
           onError={onError}
           texts={texts}
+          projectName={projectName}
+          projectLogo={projectLogo}
+          projectLogoDark={projectLogoDark}
+          showLogo={showLogo}
         />
       </DialogContent>
     </Dialog>

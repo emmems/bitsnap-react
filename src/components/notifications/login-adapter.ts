@@ -45,7 +45,6 @@ export function notificationsLoginTexts(
     invalidEmail: texts.loginInvalidEmailError,
     codeSentTo: sentTo != null ? `${sentTo} {email}.` : undefined,
     changeEmail: texts.loginChangeEmailButton,
-    codeLabel: texts.loginCodeLabel,
     verify: texts.loginVerifyButton,
     spamHint: texts.loginSpamHint,
     validity: texts.loginValidityHint,

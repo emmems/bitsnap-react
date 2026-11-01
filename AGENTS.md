@@ -77,6 +77,10 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
   the client before mounting `<PanelProvider><Panel /></PanelProvider>`.
   Mount `<PanelProvider><PanelLogin /></PanelProvider>` at that login URL.
   `PanelLogin` takes optional `locale` (`"en"`; Polish by default) and `texts`.
+- The e-mail-code logins (`PanelLogin`, `BitsnapReturns`, notifications) show
+  the shop logo from the shop settings above the form (Bitsnap's logo when the
+  shop has none). `showLogo={false}` hides it; `logoUrl` / `logoDarkUrl`
+  replace it (notifications: `showLoginLogo`, `projectLogo`).
 
 ## Avoid these mistakes
 

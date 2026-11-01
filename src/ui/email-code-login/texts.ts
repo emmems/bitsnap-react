@@ -77,7 +77,7 @@ export const EMAIL_CODE_TEXT_TABLES: LocaleTables<EmailCodeTextKey> = {
     spamHint: "Nie widzisz e-maila? Sprawdź folder spam.",
     validity: "Kod jest ważny 10 minut.",
     resend: "Wyślij ponownie",
-    resendIn: "Wyślij ponownie za {seconds} s",
+    resendIn: "Wyślij ponownie za {seconds}\u00a0s",
     resendNew: "Wyślij nowy kod",
     resent: "Wysłaliśmy nowy kod.",
     haveCodePrompt: "Masz już kod?",
@@ -169,7 +169,8 @@ export function isEnglish(locale: string): boolean {
  */
 export function formatWait(seconds: number): string {
   const total = Math.max(1, Math.ceil(seconds));
-  return total <= 60 ? `${total} s` : `${Math.ceil(total / 60)} min`;
+  // A no-break space keeps "2 min" and "45 s" on one line.
+  return total <= 60 ? `${total}\u00a0s` : `${Math.ceil(total / 60)}\u00a0min`;
 }
 
 /** Replaces `{name}` placeholders. Unknown placeholders stay as they are. */
