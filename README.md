@@ -869,6 +869,50 @@ file host (`files.bitsnap.pl`) and the decoder host, `worker-src blob:` and
 `Access-Control-Allow-Origin: *` for model paths; the product request follows
 the same rules as the product list (see below).
 
+## Paid chat and channels (`ChatThread`, `Channel`, `bitsnap-react/chat`)
+
+Buyer side of the Bitsnap chat: a private thread with the creator for a
+service product with a reply pack, and community channels. The customer panel
+shows them on the **Wiadomości** screen; the widgets work on any page.
+
+```tsx
+import { BitsnapCheckout, ChatThread, Channel } from "bitsnap-react";
+import "bitsnap-react/dist/index.css";
+
+<div style={{ height: 600 }}>
+  <ChatThread projectID="PROJECT_ID" productId="prodv2_..." token={buyerToken} />
+</div>
+<Channel projectID="PROJECT_ID" channelId="CHANNEL_ID" token={buyerToken} />
+<BitsnapCheckout projectID="PROJECT_ID" /> {/* for "Kup pakiet" */}
+```
+
+- `ChatThread` and `Channel` from `bitsnap-react` load the chat on demand.
+  `bitsnap-react/chat` exports the same components eagerly plus
+  `createChatClient`, `useConversation`, `PanelMessages` and the texts.
+- **Credential.** `token` is a `bcht_` buyer token your server gets from
+  `POST /api/v1/chat/buyer-token` (API key, server side only). Without it the
+  widget uses this browser's customer panel session (after `PanelLogin`).
+- **Project.** `projectID` is the shop's project id: the cart uses it and it is
+  sent as `X-Bitsnap-Project`. Pass `chatProjectID` when the chat service
+  needs another id (it accepts the numeric project id).
+- **URLs.** `apiUrl` defaults to `https://chat.bitsnap.pl` (the panel takes
+  `chat_api_url` from the products answer). Live updates use a short-lived NATS
+  token (`POST /v1/realtime/token`) over WebSocket; `@nats-io/nats-core` is
+  imported only when a conversation opens. When the socket fails the widget
+  polls every `pollIntervalMs` (8 s) and tries the socket again a minute later.
+- **Lock.** No replies left: the buyer can still write and the lock offers
+  "Kup pakiet". Expired pack: the conversation is read only. No pack or no
+  channel grant: only the lock. The default action adds `buyProductId` (or the
+  locked product) to the page cart and opens it; pass `onBuy` for your own
+  checkout.
+- **Sending.** A message shows as pending from the `202` until the live
+  `message.created`; refusals show their reason (links, banned words, media,
+  cooldown with the wait, blocked, muted) with "Popraw" or "Wyślij ponownie".
+- Report (`spam`, `abuse`, `illegal`, `other` + note), mute notifications of a
+  thread, and deleted messages as a placeholder.
+- Texts: `texts` over Polish and English tables (`getChatTexts`), language from
+  `locale`.
+
 # Examples
 
 1. `BitsnapCheckout` Component:
@@ -1355,6 +1399,7 @@ The panel provides the following screens:
 | Notifications | `/panel?state=notifications` | Notification preferences           |
 | Plans         | `/panel?state=plans`         | Subscription management            |
 | Returns       | `/panel?state=returns`       | Return products, track returns     |
+| Messages      | `/panel?state=messages`      | Chats and channels (CHAT and COMMUNITY products) |
 
 ## Features Detail
 

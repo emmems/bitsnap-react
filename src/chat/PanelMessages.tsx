@@ -294,7 +294,7 @@ function Inbox({ projects, loads, clients, products, texts, locale, selection, o
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="flex items-baseline gap-2">
                 <span className={cn("truncate", thread.unread > 0 ? "font-semibold" : "font-medium")}>
-                  {product?.productName || thread.title || texts.chatFallbackTitle}
+                  {product?.productName || texts.chatFallbackTitle}
                 </span>
                 {last && (
                   <time dateTime={last.createdAt} className="ml-auto shrink-0 text-xs text-neutral-500 dark:text-neutral-400">

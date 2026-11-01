@@ -212,6 +212,27 @@ Rules:
 - Express buttons (Apple Pay, Google Pay) are separate online flows.
 - Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
 
+## Chat (`ChatThread`, `Channel`, panel "Wiadomości")
+
+Buyer side of `bitsnap-messaging`. Code in `src/chat/`; the subpath
+`bitsnap-react/chat` is loaded on demand by the panel and by the lazy
+`ChatThread` / `Channel` of the main entry.
+
+- `client.ts`: HTTP calls with `Authorization: Bearer <panel session or bcht_
+  token>` and `X-Bitsnap-Project`. `GET /v1/me`, `POST /v1/threads
+  {product_id}`, messages (newest first, `before` = message id), send (202
+  pending, `client_id` = the optimistic id), delete, mute, reports, receipts,
+  realtime token. Errors are `ChatError` (`code`, `status`, `retryAfter`, `data`).
+- `realtime.ts`: realtime token, then a dynamic `import("@nats-io/nats-core")`
+  and a subscribe-only WebSocket on the conversation's subject (taken from the
+  token's `subjects`); polling while that fails. Never import NATS statically.
+- `useConversation.ts`: resolve the thread (open it for a pack without one),
+  load, merge live events by id, optimistic send, lock state.
+- Panel: the nav shows "Wiadomości" when the products answer has CHAT or
+  COMMUNITY products or `chat_api_url` (`src/panel/chat-visibility.ts`); URL
+  params `state=messages&chatProject=&thread=` or `&channel=`.
+- Tests mock `fetch` by path: `src/chat/*.test.ts(x)`.
+
 ## Course view (`PanelCourse`)
 
 The customer panel opens a purchased course inside the panel (no redirect to
