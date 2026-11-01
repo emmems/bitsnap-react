@@ -83,7 +83,12 @@ export type ChatClient = {
     note?: string;
   }): Promise<void>;
   markRead(threadId: string, messageId: string): Promise<void>;
-  realtimeToken(): Promise<ChatRealtimeToken>;
+  /**
+   * A NATS token for every conversation the caller may read. The answer is
+   * kept until a minute and a half before it expires (the service mints one
+   * per caller every 10 s); `fresh` asks for a new one.
+   */
+  realtimeToken(options?: { fresh?: boolean }): Promise<ChatRealtimeToken>;
 };
 
 export function createChatClient(options: ChatClientOptions): ChatClient {
@@ -125,6 +130,7 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
   }
 
   const id = encodeURIComponent;
+  let cachedToken: ChatRealtimeToken | undefined;
 
   return {
     baseUrl,
@@ -193,16 +199,23 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
         message_id: messageId,
       });
     },
-    async realtimeToken() {
+    async realtimeToken(opts = {}) {
+      if (
+        !opts.fresh &&
+        cachedToken &&
+        Date.parse(cachedToken.expiresAt) - Date.now() > 90_000
+      ) {
+        return cachedToken;
+      }
       const { json } = await call("POST", "/v1/realtime/token");
       const res = isRecord(json) ? json : {};
-      return {
+      return (cachedToken = {
         jwt: str(res.jwt),
         expiresAt: str(res.expires_at),
         servers: arr(res.servers).filter((s): s is string => typeof s === "string"),
         subjects: arr(res.subjects).filter((s): s is string => typeof s === "string"),
         truncated: res.truncated === true,
-      };
+      });
     },
   };
 }

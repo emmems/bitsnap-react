@@ -146,6 +146,21 @@ describe("chat client requests", () => {
     assert.deepEqual(token.servers, ["wss://nats.test"]);
     assert.deepEqual(token.subjects, ["chat.project.18.thread.t1"]);
   });
+
+  it("keeps the realtime token until shortly before it expires", async () => {
+    let expiresAt = new Date(Date.now() + 600_000).toISOString();
+    const { calls, fetchFn } = fake(() => json(200, { jwt: "eyJ", expires_at: expiresAt, servers: [], subjects: [] }));
+    const client = createChatClient({ projectId: "18", token: "t", fetch: fetchFn });
+    await client.realtimeToken();
+    await client.realtimeToken();
+    assert.equal(calls.length, 1, "the second conversation reuses the token");
+    await client.realtimeToken({ fresh: true });
+    assert.equal(calls.length, 2);
+    expiresAt = new Date(Date.now() + 30_000).toISOString();
+    await client.realtimeToken({ fresh: true });
+    await client.realtimeToken();
+    assert.equal(calls.length, 4, "a token about to expire is not reused");
+  });
 });
 
 describe("chat client errors", () => {

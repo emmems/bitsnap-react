@@ -142,6 +142,30 @@ describe("chat realtime", () => {
     assert.equal(loaded, false, "the NATS client is not loaded without a token");
   });
 
+  it("asks for a fresh token when a kept one lacks the subject", async () => {
+    const { nats, state } = fakeNats();
+    const asked: Array<boolean | undefined> = [];
+    stops.push(
+      startLive({
+        client: {
+          realtimeToken: async (options?: { fresh?: boolean }) => {
+            asked.push(options?.fresh);
+            return options?.fresh ? token(["chat.project.18.thread.t1"]) : token(["chat.project.18.thread.old"]);
+          },
+        } as unknown as ChatClient,
+        kind: "thread",
+        id: "t1",
+        onEvent: () => {},
+        onMode: () => {},
+        poll: async () => {},
+        loadNats: async () => nats,
+      }),
+    );
+    await sleep(10);
+    assert.deepEqual(asked, [undefined, true]);
+    assert.equal(state.subject, "chat.project.18.thread.t1");
+  });
+
   it("polls when the subject is not in the token", async () => {
     const { nats } = fakeNats();
     const modes: ChatLiveMode[] = [];

@@ -104,7 +104,7 @@ export function startLive(options: LiveOptions): () => void {
     refreshTimer = setTimeout(async () => {
       if (stopped) return;
       try {
-        const next = await options.client.realtimeToken();
+        const next = await options.client.realtimeToken({ fresh: true });
         jwt = next.jwt;
         scheduleRefresh(next.expiresAt);
       } catch {
@@ -121,8 +121,13 @@ export function startLive(options: LiveOptions): () => void {
     }
     options.onMode("connecting");
     try {
-      const token = await options.client.realtimeToken();
-      const subject = token.subjects.find((s) => s.endsWith(suffix));
+      let token = await options.client.realtimeToken();
+      let subject = token.subjects.find((s) => s.endsWith(suffix));
+      if (!subject) {
+        // A kept token may predate this conversation.
+        token = await options.client.realtimeToken({ fresh: true });
+        subject = token.subjects.find((s) => s.endsWith(suffix));
+      }
       if (!subject || !token.jwt) throw new Error("subject not granted");
       jwt = token.jwt;
       const nats = await load();
