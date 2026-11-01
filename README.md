@@ -22,6 +22,59 @@ It uses modern React patterns and libraries like:
 - Protocol Buffers for data serialization
 - Tailwind CSS for styling
 
+## Express checkout: InPost Pay and Revolut Pay (unreleased)
+
+The cart-aware express buttons are additive: a shop that does not enable the
+providers sees no change, older SDK versions keep working with the new backend,
+and this SDK hides a button when an older backend does not implement the express
+API (404/501) or the provider is not available.
+
+```tsx
+"use client";
+
+import { InPostPayButton, RevolutPayButton, setProjectID } from "bitsnap-react";
+
+setProjectID(projectID);
+
+// A product page: the first click adds the product to the Bitsnap cart.
+<InPostPayButton projectID={projectID} productId={variant.id} quantity={1} locale="pl" />
+
+// A cart page, including the SDK's own cart:
+<RevolutPayButton projectID={projectID} locale="pl" />;
+```
+
+Inside `<BitsnapCheckout>` both buttons render in the express area of the cart
+drawer when the backend reports them available. `items` lets a custom cart
+layout pass its lines instead of using the Bitsnap cart. Provider scripts load
+lazily in the browser only; server rendering outputs no clickable button.
+
+The browser cart is uploaded to a durable, server-priced cart before a provider
+starts. Updates carry the revision they saw. A stale tab is reconciled with a
+three-way merge against the last confirmed lines: disjoint edits are combined,
+and a line both sides changed differently is reported as a cart conflict
+instead of being overwritten. The cart token stays in `localStorage` scoped to
+the project, host and environment. Cancel and failure keep the cart. Only a
+server-confirmed payment removes the purchased lines, so products added while
+paying survive; the next attempt starts a new cart from what is left.
+
+Delivery is quoted through the public pre-order API and sent with both the
+availability call and the provider start, so a deliverable cart is never
+mounted with zero shipping. If the quote is unavailable the express buttons stay
+hidden and the regular checkout remains the fallback. Revolut Pay express does
+not collect a shipping address, so its button is hidden for a cart that needs
+delivery.
+
+Revolut Pay is confirmed by `revolut/status` (webhook-authoritative), never by
+the widget's `success` event. InPost Pay runs the official widget with the
+documented `merchantClientId`, basket binding key and basket events; its
+`orderCreated` event is only a hint to ask `inpost/status`, and the cart is
+cleared only after the signed server-side order state confirms it.
+
+New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
+`expressCancelled`, `expressLoadFailed`, `expressCartUnavailable`,
+`expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
+defaults, overridable through `texts`).
+
 ## 1.18.0
 
 Customer panel changes after 1.17.0 (`BitsnapPanel` / `PanelPage`, course,

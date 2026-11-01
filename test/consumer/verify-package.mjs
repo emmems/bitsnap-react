@@ -103,6 +103,8 @@ const legacyExports = [
   "BitsnapCheckout",
   "ApplePayButton",
   "GooglePayButton",
+  "InPostPayButton",
+  "RevolutPayButton",
   "NotificationsComponent",
   "setProjectID",
   "getLocale",
@@ -624,5 +626,45 @@ assert.ok(
   !css.includes(".bitsnap-react [data-bitsnap-returns"),
   "returns appearance rules must not be rewritten into descendant selectors",
 );
+
+// Express checkout: the two provider buttons are public, render nothing
+// clickable on the server and load provider scripts only in the browser.
+{
+  const require = createRequire(import.meta.url);
+  const { renderToString } = require("react-dom/server");
+  const { createElement } = require("react");
+
+  assert.equal(
+    renderToString(createElement(built.InPostPayButton, { projectID: "p" })),
+    "",
+    "InPostPayButton renders on the server",
+  );
+  const revolutHtml = renderToString(
+    createElement(built.RevolutPayButton, { projectID: "p" }),
+  );
+  assert.ok(
+    !/<button/i.test(revolutHtml),
+    "RevolutPayButton renders a clickable button before the SDK loads",
+  );
+
+  const expressBundle = readWithChunks("index.mjs");
+  assert.ok(
+    !/from"@inpost-pay\/widget"/.test(expressBundle.text),
+    "the InPost widget is imported statically into the main entry",
+  );
+  assert.ok(
+    /import\("@inpost-pay\/widget"\)/.test(expressBundle.text),
+    "the InPost widget is not loaded lazily",
+  );
+
+  const expressDeclaration = readFileSync(join(dist, "index.d.ts"), "utf8");
+  for (const name of ["InPostPayButtonProps", "RevolutPayButtonProps"]) {
+    assert.match(
+      expressDeclaration,
+      new RegExp(name),
+      `dist/index.d.ts lacks ${name}`,
+    );
+  }
+}
 
 console.log("packaging checks passed");

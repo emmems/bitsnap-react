@@ -26,6 +26,8 @@ import {
   type PaymentMethod,
   type PaymentMethodChoice as Choice,
 } from "./payment-method";
+import { InPostPayButtonInner } from "../express/InPostPayButton";
+import { RevolutPayButtonInner } from "../express/RevolutPayButton";
 
 const CartComponentContent = ({
   className,
@@ -604,6 +606,22 @@ const CartComponentContent = ({
                     isDeliverable: el.details?.isDeliverable ?? false,
                     metadata: el.metadata,
                   }))}
+                />
+              </div>
+            )}
+            {products != null && products.length > 0 && (
+              <div
+                data-bitsnap-checkout-slot="paymentButtons"
+                className={cn("w-full px-2", paymentButtons.className)}
+                style={paymentButtons.style}
+              >
+                <InPostPayButtonInner
+                  projectID={getProjectID() ?? ""}
+                  locale={currentLocale}
+                />
+                <RevolutPayButtonInner
+                  projectID={getProjectID() ?? ""}
+                  locale={currentLocale}
                 />
               </div>
             )}

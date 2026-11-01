@@ -98,6 +98,26 @@ export type CheckoutTexts = {
   paymentMethodCodDescription: string;
   /** Error shown when the shop refused cash on delivery for the order. */
   paymentMethodCodUnavailable: string;
+  /** Status while the provider confirms a payment started from an express button. */
+  expressPending: string;
+  /** Status after the provider confirmed the payment. */
+  expressConfirmed: string;
+  /** Status when the provider reports a failed payment. */
+  expressFailed: string;
+  /** Status when the buyer cancelled the provider's payment flow. */
+  expressCancelled: string;
+  /** Shown while the payment is still unconfirmed after a page return. */
+  expressPendingLong: string;
+  /** Error shown when the provider's button could not be loaded. */
+  expressLoadFailed: string;
+  /** Error shown when the cart cannot be paid with this provider right now. */
+  expressCartUnavailable: string;
+  /** Error shown when another tab/provider changed the same cart line. */
+  expressCartConflict: string;
+  /** Shown when the server total changed between mounting and paying. */
+  expressPriceChanged: string;
+  /** Error shown when a product could not be added before the InPost binding. */
+  expressProductUnavailable: string;
 };
 
 export type CheckoutTextKey = keyof CheckoutTexts;
@@ -159,6 +179,22 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
       "You pay the courier in cash or by card when you receive the parcel.",
     paymentMethodCodUnavailable:
       "Cash on delivery is not available for this order. Choose another way to pay.",
+    expressPending: "Confirming your payment…",
+    expressConfirmed: "Payment confirmed. Thank you!",
+    expressFailed: "The payment failed. Your cart is unchanged.",
+    expressCancelled: "Payment cancelled. Your cart is unchanged.",
+    expressPendingLong:
+      "We are still confirming your payment. We will check again when you come back to this page.",
+    expressLoadFailed:
+      "Could not load this payment button. Try again later or use the regular checkout.",
+    expressCartUnavailable:
+      "This cart cannot be paid with this method right now. Try again later.",
+    expressCartConflict:
+      "Your cart changed in another tab or in the provider's app. Review the quantities and try again.",
+    expressPriceChanged:
+      "Your cart total changed. Check the new total and try again.",
+    expressProductUnavailable:
+      "This product cannot be paid for right now. Try again later.",
   },
   pl: {
     cart: "Koszyk",
@@ -216,6 +252,22 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
       "Zapłacisz kurierowi gotówką lub kartą, gdy odbierzesz przesyłkę.",
     paymentMethodCodUnavailable:
       "Płatność przy odbiorze nie jest dostępna dla tego zamówienia. Wybierz inną formę płatności.",
+    expressPending: "Potwierdzamy płatność…",
+    expressConfirmed: "Płatność potwierdzona. Dziękujemy!",
+    expressFailed: "Płatność się nie udała. Koszyk pozostał bez zmian.",
+    expressCancelled: "Płatność została anulowana. Koszyk pozostał bez zmian.",
+    expressPendingLong:
+      "Nadal potwierdzamy Twoją płatność. Sprawdzimy ponownie, gdy wrócisz na tę stronę.",
+    expressLoadFailed:
+      "Nie udało się wczytać przycisku płatności. Spróbuj ponownie później lub skorzystaj ze zwykłego koszyka.",
+    expressCartUnavailable:
+      "Tego koszyka nie można teraz opłacić tą metodą. Spróbuj ponownie później.",
+    expressCartConflict:
+      "Koszyk zmienił się w innej karcie lub w aplikacji przewoźnika. Sprawdź ilości i spróbuj ponownie.",
+    expressPriceChanged:
+      "Suma koszyka się zmieniła. Sprawdź nową sumę i spróbuj ponownie.",
+    expressProductUnavailable:
+      "Nie można teraz zapłacić za ten produkt. Spróbuj ponownie później.",
   },
 };
 

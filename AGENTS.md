@@ -65,6 +65,23 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
 
 ## Other components
 
+- `InPostPayButton` and `RevolutPayButton` are express checkout buttons for the
+  cart-aware express API. Inside `<BitsnapCheckout>` they render in the express
+  area automatically; on custom pages mount them directly. They render nothing
+  unless the backend reports the provider as available, and they only load the
+  provider script in the browser (never during server rendering).
+  - `InPostPayButton` takes the SDK cart by default, or `items` for a custom
+    cart, or `productId` + `quantity` on a product page (the first click adds
+    the product to the Bitsnap cart and binds it). `bindingPlace` maps to the
+    official widget `binding_place` (`PRODUCT_CARD`, `BASKET_SUMMARY`,
+    `CHECKOUT_PAGE`, ...).
+  - `RevolutPayButton` mounts the official Revolut Pay button; the order is
+    created by Bitsnap (`revolut/start`) and the cart is cleaned only after
+    `revolut/status` reports `completed` (webhook-confirmed), never on the
+    browser `success` event.
+  - Both accept optional `projectID` (otherwise call `setProjectID` first),
+    `locale`, `texts`, `appearance`, `host`, `items`, `className`, `style` and
+    `analytics`.
 - `ApplePayButton` requires `items` with `id`, `name`, `price` (minor units) and
   `quantity`. It has no `projectID` prop. Call `setProjectID(projectID)` on the
   client before mounting. Use an effect and a ready flag for standalone buttons.
@@ -84,6 +101,19 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
 
 ## Avoid these mistakes
 
+- The express buttons are hidden unless the backend's `availability` says the
+  provider is available. Do not render your own InPost/Revolut button or call
+  `inpost/start` / `revolut/start` from a click handler as a substitute: the
+  SDK also owns the durable cart token, revision reconciliation and the
+  server-confirmed payment cleanup.
+- `RevolutPayButton`'s browser `success` event is not a payment. Only the
+  `revolut/status` answer (`completed`, settled by the verified webhook) clears
+  the purchased cart lines; do not show "paid" from the widget event.
+- Do not clear the cart on cancel, failure or a closed popup. New products
+  added while paying must survive the cleanup.
+- InPost Pay runs one page-wide widget: mount one InPost button per page. A
+  second project's button is refused instead of silently reusing the first
+  shop's merchant client id.
 - Neither checkout UI component has a test API key prop. For test purchases, use
   `Bitsnap.createCheckout(projectID, { items, apiKey, testMode: true })` from
   `bitsnap-js` on the server. Do not pass keys to React's `createCheckout`.
@@ -232,6 +262,61 @@ Buyer side of `bitsnap-messaging`. Code in `src/chat/`; the subpath
   COMMUNITY products or `chat_api_url` (`src/panel/chat-visibility.ts`); URL
   params `state=messages&chatProject=&thread=` or `&channel=`.
 - Tests mock `fetch` by path: `src/chat/*.test.ts(x)`.
+
+## Express checkout (`InPostPayButton`, `RevolutPayButton`)
+
+The cart-aware express API lives at
+`{host}/api/integrations/{projectID}/public-commerce/express/*`:
+`availability`, `cart`, `cart-snapshot`, `inpost/start`, `inpost/status`,
+`revolut/start`, `revolut/status`. A guest cart is authorized by the
+`x-bitsnap-cart-token` header; the id alone grants nothing and the token is
+never put in a URL or body.
+
+- `src/express/contracts.ts` mirrors the server contract;
+  `client.ts` sends requests and turns an old backend (404/501/HTML),
+  a network error or an unknown shape into a typed failure, never a throw.
+- `cart-record.ts` keeps the token in localStorage under
+  `bitsnap-express-cart:<host>:<project>`, with the environment, the last
+  confirmed revision and the last synced lines. A record of another project,
+  host or environment is dropped, not reused.
+- `cart-session.ts` owns the cart lifecycle: upload with `expectedRevision`,
+  three-way merge on `revision-conflict` (disjoint edits combine; a same-line
+  quantity conflict is surfaced and never written as a guess), start a new cart
+  on `cart-locked`/`not-found`/`forbidden`, detect edits during a request, adopt
+  the canonical snapshot on provider events (with products added in the
+  meantime preserved), and clear the record after a confirmed purchase so the
+  next express attempt uploads what is left.
+- `delivery-quote.ts` asks the public pre-order API for delivery methods and
+  remembers the quote. Availability and provider start send the same
+  `delivery`/`deliveryMethod` body; a missing quote hides the buttons. Revolut
+  Pay express has no shipping address, so its button stays hidden for a cart
+  that needs delivery; use the regular checkout there.
+- `revolut-sdk.ts` lazy-loads the official embed script per mode (prod/sandbox)
+  and `revolut.ts` holds the public config reader, the `createOrder` token rule
+  and the bounded status polling. `revolut/status` is the only source of
+  `completed`. Before `createOrder` returns a token the SDK revalidates the
+  server total; a changed total remounts the button instead of paying the stale
+  amount.
+- `inpost-widget.ts` lazy-imports `@inpost-pay/widget` (browser only; its
+  bundle touches `self`), reads the canonical `widgetApiBaseUrl` /
+  `widgetScriptUrl` (legacy `apiBaseUrl` still accepted) and forces the
+  environment's sandbox/production API, so a test widget never calls production.
+  It renders the documented `<inpost-izi-button>` element and refuses a second
+  project's page-wide widget while one is mounted.
+- InPost `orderCreated` is only a hint: the button calls `inpost/status`, keeps
+  the cart on pending/error, and clears purchased lines only after the signed
+  server-side order state is `completed`. A remount asks again for a pending
+  attempt.
+- `components/express/*` are the React buttons. The standalone wrappers add the
+  instrumentation, texts and appearance providers; `CartComponentContent` uses
+  the inner variants inside the checkout's `paymentButtons` slot. Standalone
+  buttons subscribe to local cart writes (and cross-tab storage events), so
+  their availability follows quantity, remove, country and coupon edits.
+- Tests: `src/express/*.test.ts` (client, records, session merge/conflicts,
+  delivery quote through the components, polling, loaders),
+  `src/components/express/*.test.tsx` (widget lifecycle, confirmed cleanup,
+  conflict/pending retention, price remount, duplicate clicks, remount, SSR) and
+  `test/consumer/express-usage.tsx` (public types).
 
 ## Course view (`PanelCourse`)
 
