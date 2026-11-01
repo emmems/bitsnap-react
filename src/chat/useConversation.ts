@@ -398,11 +398,11 @@ export function useConversation(
     setState((s) => ({ ...s, messages: s.messages.map((m) => (m.id === id ? patch(m) : m)) }));
 
   const send = useCallback(
-    async (body: string) => {
+    async (body: string, reuseId?: string) => {
       const text = body.trim();
       const { threadId, me } = stateRef.current;
       if (!client || !threadId || !text) return;
-      const id = newMessageId();
+      const id = reuseId ?? newMessageId();
       const optimistic: ConversationMessage = {
         id,
         threadId,
@@ -456,8 +456,13 @@ export function useConversation(
     async (id: string) => {
       const message = stateRef.current.messages.find((m) => m.id === id);
       if (!message) return;
+      // A send whose outcome is unknown (network error, 5xx, no
+      // confirmation) may have been queued: it goes again under the same
+      // id, so the service stores and bills it once. Only a refused send
+      // gets a new id.
+      const uncertain = message.local?.state !== "rejected";
       discard(id);
-      await send(message.body);
+      await send(message.body, uncertain ? id : undefined);
     },
     [discard, send],
   );
