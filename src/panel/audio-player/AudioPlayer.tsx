@@ -1,5 +1,5 @@
 import Hls from "hls.js";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -29,8 +29,10 @@ import {
 } from "./media.session.coordinator";
 
 import "./audio-player.css";
+import { useAudioTexts, formatTime } from "./texts";
+import { playerStorage, SPEED_KEY, SPEEDS } from "./storage";
 
-type ChapterWithPublicUrl = {
+export type ChapterWithPublicUrl = {
   id: string;
   multimediaId?: string;
   name: string;
@@ -52,6 +54,7 @@ export type AudioPlayerMethods = {
 };
 
 type AudioPlayerProps = {
+  locale?: string;
   chapters: ChapterWithPublicUrl[];
   styles: CSSProperties;
   updateCurrentTime?: (currentTime: number) => void;
@@ -77,6 +80,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
   (
     {
       chapters,
+      locale,
       styles,
       updateCurrentTime,
       setCurrentTimeHandler,
@@ -91,6 +95,59 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     },
     ref,
   ) => {
+    const t = useAudioTexts(locale);
+    const [speed, setSpeed] = useState(1);
+    const speedRef = useRef(1);
+    const [chapterID, setChapterID] = useState<string>();
+    const [sleepMode, setSleepMode] = useState("off");
+    const [sleepRemaining, setSleepRemaining] = useState(0);
+    const sleepRef = useRef<{ mode: string; deadline: number }>({
+      mode: "off",
+      deadline: 0,
+    });
+
+    function cancelSleep() {
+      sleepRef.current = { mode: "off", deadline: 0 };
+      setSleepMode("off");
+      setSleepRemaining(0);
+    }
+    function changeSleep(mode: string) {
+      const seconds = Number(mode) * 60;
+      sleepRef.current = {
+        mode,
+        deadline: Number.isFinite(seconds) ? Date.now() + seconds * 1000 : 0,
+      };
+      setSleepMode(mode);
+      setSleepRemaining(Number.isFinite(seconds) ? seconds : 0);
+    }
+    function changeSpeed(rate: number) {
+      if (!SPEEDS.includes(rate)) return;
+      setSpeed(rate);
+      speedRef.current = rate;
+      playerStorage.set(SPEED_KEY, String(rate));
+      if (videoRef.current) videoRef.current.playbackRate = rate;
+      updatePlayerDetails();
+    }
+    useEffect(() => {
+      const saved = Number(playerStorage.get(SPEED_KEY));
+      if (SPEEDS.includes(saved)) changeSpeed(saved);
+      const timer = setInterval(() => {
+        const { mode, deadline } = sleepRef.current;
+        if (mode === "off" || mode === "chapter") return;
+        const remaining = Math.max(
+          0,
+          Math.ceil((deadline - Date.now()) / 1000),
+        );
+        setSleepRemaining(remaining);
+        if (remaining === 0) {
+          playWhenReadyRef.current = false;
+          pause();
+          cancelSleep();
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }, []);
+
     enum PlayState {
       Playing,
       Paused,
@@ -150,17 +207,21 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     };
 
     function saveLastPlayedTime(timeInSeconds: number) {
-      if (!Number.isFinite(timeInSeconds) || timeInSeconds < 10) {
+      if (
+        !resumedRef.current ||
+        !Number.isFinite(timeInSeconds) ||
+        timeInSeconds < 0
+      ) {
         return;
       }
-      localStorage.setItem(
+      playerStorage.set(
         `__player__${uniqueProductID}_${currentChapterRef.current?.id}`,
         `${Math.floor(timeInSeconds)}`,
       );
     }
 
     function getLastPlayedTime(): number | undefined {
-      const time = localStorage.getItem(
+      const time = playerStorage.get(
         `__player__${uniqueProductID}_${currentChapterRef.current?.id}`,
       );
 
@@ -181,7 +242,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     }
 
     function getLastSelectedChapterID(): string | undefined {
-      const lastSelectedChapterID = localStorage.getItem(
+      const lastSelectedChapterID = playerStorage.get(
         `__player__${uniqueProductID}_last_chapter`,
       );
       if (lastSelectedChapterID == null) {
@@ -191,14 +252,11 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     }
 
     function setLastSelectedChapterID(chapterID: string) {
-      localStorage.setItem(
-        `__player__${uniqueProductID}_last_chapter`,
-        chapterID,
-      );
+      playerStorage.set(`__player__${uniqueProductID}_last_chapter`, chapterID);
     }
 
     function deleteMemoryChapter(chapterID: string) {
-      localStorage.removeItem(`__player__${uniqueProductID}_${chapterID}`);
+      playerStorage.remove(`__player__${uniqueProductID}_${chapterID}`);
     }
 
     function syncMediaSessionMetadata(chapter: ChapterWithPublicUrl | null) {
@@ -258,7 +316,9 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       if (video == null || !Number.isFinite(toSecond)) {
         return;
       }
-      const knownDuration = Number.isFinite(video.duration) ? video.duration : 0;
+      const knownDuration = Number.isFinite(video.duration)
+        ? video.duration
+        : 0;
       const target =
         knownDuration > 0
           ? Math.min(Math.max(toSecond, 0), knownDuration)
@@ -332,10 +392,20 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       options?: { play?: boolean },
     ) {
       const shouldPlay = options?.play === true;
+      if (
+        currentChapterRef.current &&
+        videoRef.current &&
+        !videoRef.current.ended
+      ) {
+        saveLastPlayedTime(videoRef.current.currentTime);
+      }
       resumedRef.current = false;
       pendingSeekRef.current = null;
       playWhenReadyRef.current = shouldPlay;
       currentChapterRef.current = chapter;
+      setChapterID(chapter.id);
+      setCurrentTime(0);
+      setDuration(chapter.duration);
       loadSource(chapter.publicUrl);
       syncMediaSessionMetadata(chapter);
       callbacksRef.current.onChapterChange?.(chapter);
@@ -369,7 +439,6 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       if (currentChapterIndex === -1) {
         return;
       }
-      deleteMemoryChapter(current.id);
       const nextChapterIndex = currentChapterIndex + 1;
       if (nextChapterIndex >= list.length) {
         finishPlayback(current);
@@ -385,10 +454,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         return;
       }
       const video = videoRef.current;
-      if (
-        video != null &&
-        video.currentTime > PREVIOUS_TRACK_RESTART_SECONDS
-      ) {
+      if (video != null && video.currentTime > PREVIOUS_TRACK_RESTART_SECONDS) {
         seekTo(0);
         return;
       }
@@ -417,6 +483,17 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       if (current == null) {
         return;
       }
+      playerStorage.set(
+        `__player__${uniqueProductID}_${current.id}_completed`,
+        "true",
+      );
+      deleteMemoryChapter(current.id);
+      if (sleepRef.current.mode === "chapter") {
+        playWhenReadyRef.current = false;
+        pause();
+        cancelSleep();
+        return;
+      }
       playNextChapter();
       updatePlayerDetails();
     }
@@ -427,6 +504,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         return;
       }
       setIsLoading(false);
+      video.playbackRate = speedRef.current;
       if (!resumedRef.current) {
         resumedRef.current = true;
         const pending = pendingSeekRef.current;
@@ -459,7 +537,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       const video = videoRef.current;
       const position = video?.currentTime ?? 0;
       clearError();
-      resumedRef.current = position > 0;
+      resumedRef.current = false;
       pendingSeekRef.current = position > 0 ? position : null;
       setCurrentTime(position);
       if (hlsRef.current != null) {
@@ -569,6 +647,10 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       video.addEventListener("loadeddata", handleLoadedData);
       video.addEventListener("ended", handleEnded);
       video.addEventListener("error", handleMediaElementError);
+      video.addEventListener("timeupdate", updatePlayerDetails);
+      video.addEventListener("play", updatePlayerDetails);
+      video.addEventListener("pause", updatePlayerDetails);
+      video.addEventListener("ratechange", updatePlayerDetails);
 
       updatePlayerDetails();
       timerRef.current = setInterval(updatePlayerDetails, 500);
@@ -577,10 +659,15 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         video.removeEventListener("loadeddata", handleLoadedData);
         video.removeEventListener("ended", handleEnded);
         video.removeEventListener("error", handleMediaElementError);
+        video.removeEventListener("timeupdate", updatePlayerDetails);
+        video.removeEventListener("play", updatePlayerDetails);
+        video.removeEventListener("pause", updatePlayerDetails);
+        video.removeEventListener("ratechange", updatePlayerDetails);
         if (timerRef.current != null) {
           clearInterval(timerRef.current);
           timerRef.current = undefined;
         }
+        if (!video.ended) saveLastPlayedTime(video.currentTime);
         setCurrentTime(undefined);
         video.pause();
         destroyHls();
@@ -621,9 +708,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         loadChapters(chapters);
         return;
       }
-      const replacement = chapters.find(
-        (chapter) => chapter.id === current.id,
-      );
+      const replacement = chapters.find((chapter) => chapter.id === current.id);
       if (replacement != null && replacement.publicUrl === current.publicUrl) {
         // Same stream, different array: keep playing.
         return;
@@ -635,7 +720,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         const position = video?.currentTime ?? 0;
         const wasPlaying = video != null && !video.paused;
         currentChapterRef.current = replacement;
-        resumedRef.current = true;
+        resumedRef.current = false;
         pendingSeekRef.current = position > 0 ? position : null;
         playWhenReadyRef.current = wasPlaying;
         loadSource(replacement.publicUrl);
@@ -659,36 +744,46 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       }
     }, [playState]);
 
-    const calculateTime = (secs: number) => {
-      const hours = Math.floor(secs / 3600);
-      const minutes = Math.floor(secs / 60) % 60;
-      const seconds = Math.floor(secs % 60);
-      const returnedHours =
-        hours > 0 ? (hours < 10 ? `0${hours}:` : `${hours}:`) : "";
-      const returnedSeconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
-      if (isNaN(seconds) || isNaN(minutes) || isNaN(hours)) {
-        return "";
-      }
-      return `${returnedHours}${minutes}:${returnedSeconds}`;
-    };
-
-    const showRangeProgress = (rangeInput: HTMLInputElement) => {
-      const barProgress =
-        (parseFloat(rangeInput.value) / parseFloat(rangeInput.max)) * 100;
-      audioPlayerContainerRef.current.style.setProperty(
-        "--seek-before-width",
-        barProgress + "%",
+    const currentIndex = chapters.findIndex(
+      (chapter) => chapter.id === chapterID,
+    );
+    const knownDuration =
+      Number.isFinite(duration) && duration! > 0
+        ? duration!
+        : (chapters[currentIndex]?.duration ?? 0);
+    const position = Math.min(
+      Math.max(currentTime ?? 0, 0),
+      knownDuration || Infinity,
+    );
+    const wholeBookKnown =
+      chapters.length > 0 &&
+      chapters.every(
+        (chapter) => Number.isFinite(chapter.duration) && chapter.duration! > 0,
       );
-
-      const selectedTime = (duration! * barProgress) / 100;
-      seekTo(selectedTime);
-    };
+    const remaining =
+      Math.max(
+        0,
+        knownDuration -
+          position +
+          (wholeBookKnown
+            ? chapters
+                .slice(currentIndex + 1)
+                .reduce((sum, chapter) => sum + chapter.duration!, 0)
+            : 0),
+      ) / speed;
+    const minutesLeft = Math.ceil(remaining / 60);
+    const leftText = `${Math.floor(minutesLeft / 60) > 0 ? `${Math.floor(minutesLeft / 60)} h ` : ""}${minutesLeft % 60} min`;
 
     return (
       <div
         id="audio-player-container"
-        className="flex flex-col"
-        style={styles}
+        className="bitsnap-audio-player flex min-w-0 flex-col gap-3 text-neutral-900 dark:text-neutral-100"
+        style={
+          {
+            ...styles,
+            "--seek-before-width": `${knownDuration > 0 ? (position / knownDuration) * 100 : 0}%`,
+          } as CSSProperties
+        }
         ref={audioPlayerContainerRef}
         data-player-error={playerError?.kind}
       >
@@ -697,51 +792,146 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           className="hidden"
           poster={imageURL}
           title={title}
-        ></video>
-
+        />
+        <div className="flex min-w-0 items-center gap-3">
+          {imageURL && (
+            <img
+              src={imageURL}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded object-contain"
+            />
+          )}
+          <div className="min-w-0 break-words">
+            <p className="font-semibold">
+              {chapters[currentIndex]?.name ?? title}
+            </p>
+            {author && (
+              <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                {author}
+              </p>
+            )}
+          </div>
+        </div>
+        {playerError && (
+          <div
+            role="alert"
+            className="rounded-lg bg-red-50 p-3 text-red-800 dark:bg-red-950 dark:text-red-200"
+          >
+            <p>{t.error}</p>
+            <Button variant="outline" onClick={retry}>
+              {t.retry}
+            </Button>
+          </div>
+        )}
         <input
           type="range"
           min="0"
-          max={
-            duration != null && Number.isFinite(duration)
-              ? Math.floor(duration).toString()
-              : "100"
-          }
-          value={currentTime ?? 0}
-          onChange={(e) => showRangeProgress(e.target as HTMLInputElement)}
-          className="w-full"
+          max={knownDuration || 100}
+          value={position}
+          disabled={!knownDuration}
+          aria-label={t.progress}
+          aria-valuetext={`${formatTime(position)} ${t.of} ${formatTime(knownDuration)}`}
+          onChange={(event) => seekTo(Number(event.target.value))}
         />
-
-        <section className="flex w-full items-center justify-between text-sm font-medium">
-          <span id="current-time">{calculateTime(currentTime!)}</span>
-          <span id="duration">{calculateTime(duration!)}</span>
+        <section className="flex w-full justify-between text-sm tabular-nums">
+          <span id="current-time">{formatTime(position)}</span>
+          <span id="duration">{formatTime(knownDuration)}</span>
         </section>
-        <div className="mt-6 flex items-center justify-center gap-x-12">
+        {knownDuration > 0 && (
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+            {t.left === "left"
+              ? `${leftText} ${t.left}`
+              : `${t.left} ${leftText}`}{" "}
+            · {wholeBookKnown ? t.book : t.chapter} ({speed}×)
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            onClick={playPreviousChapter}
+            disabled={currentIndex < 0}
+            aria-label={t.previous}
+          >
+            <SkipBack className="h-5 w-5" />
+          </Button>
           <Button
             variant="outline"
             onClick={() => seekBy(-SEEK_STEP_SECONDS)}
-            aria-label={`Rewind ${SEEK_STEP_SECONDS} Seconds`}
+            aria-label={t.rewind}
           >
-            -{SEEK_STEP_SECONDS}
+            −{SEEK_STEP_SECONDS}
           </Button>
           <Button
             variant="outline"
             onClick={togglePlayState}
-            aria-label="Play Or Pause"
+            aria-label={playState === PlayState.Paused ? t.play : t.pause}
           >
-            {playState === PlayState.Paused && <Play className="h-5 w-5" />}
-            {playState === PlayState.Playing && <Pause className="h-5 w-5" />}
+            {playState === PlayState.Paused ? (
+              <Play className="h-5 w-5" />
+            ) : (
+              <Pause className="h-5 w-5" />
+            )}
           </Button>
           <Button
             variant="outline"
             onClick={() => seekBy(SEEK_STEP_SECONDS)}
-            aria-label={`Fast Forward ${SEEK_STEP_SECONDS} Seconds`}
+            aria-label={t.forward}
           >
             +{SEEK_STEP_SECONDS}
           </Button>
+          <Button
+            variant="outline"
+            onClick={playNextChapter}
+            disabled={currentIndex < 0 || currentIndex >= chapters.length - 1}
+            aria-label={t.next}
+          >
+            <SkipForward className="h-5 w-5" />
+          </Button>
         </div>
+        <div className="flex flex-wrap gap-3">
+          <label className="flex flex-1 items-center gap-2 text-sm">
+            {t.speed}
+            <select
+              aria-label={t.speed}
+              value={speed}
+              onChange={(event) => changeSpeed(Number(event.target.value))}
+            >
+              {SPEEDS.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}×
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-1 items-center gap-2 text-sm">
+            {t.sleep}
+            <select
+              aria-label={t.sleep}
+              value={sleepMode}
+              onChange={(event) => changeSleep(event.target.value)}
+            >
+              <option value="off">{t.off}</option>
+              {[15, 30, 45, 60].map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes} min
+                </option>
+              ))}
+              <option value="chapter">{t.end}</option>
+            </select>
+          </label>
+        </div>
+        {sleepMode !== "off" && (
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span role="timer">
+              {sleepMode === "chapter" ? t.end : formatTime(sleepRemaining)}
+            </span>
+            <Button variant="outline" onClick={cancelSleep}>
+              {t.cancel}
+            </Button>
+          </div>
+        )}
         {isLoading && (
-          <div className="mt-2 flex w-full justify-center">
+          <div role="status" className="flex justify-center">
             <LoadingIndicator />
           </div>
         )}

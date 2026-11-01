@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, before, beforeEach, describe, it } from "node:test";
 import { JSDOM } from "jsdom";
-import type {
-  AudioPlayerError,
-  AudioPlayerMethods,
-} from "./AudioPlayer.tsx";
+import type { AudioPlayerError, AudioPlayerMethods } from "./AudioPlayer.tsx";
 import type { HlsConstructor, HlsErrorData } from "./hls-engine.ts";
 
 const dom = new JSDOM("<!doctype html><div id=root></div>", {
@@ -167,7 +165,11 @@ afterEach(async () => {
 
 async function renderPlayer(props: {
   chapters?: ReturnType<typeof chapter>[];
-  onChapterChange?: (chapter: { id: string; name: string; publicUrl: string }) => void;
+  onChapterChange?: (chapter: {
+    id: string;
+    name: string;
+    publicUrl: string;
+  }) => void;
   onError?: (error: AudioPlayerError) => void;
   onExpiredUrl?: () => void;
   onFinished?: () => void;
@@ -241,7 +243,10 @@ describe("hls error handling", () => {
       return true;
     }
     static Events = { ERROR: "hlsError" };
-    static ErrorTypes = { NETWORK_ERROR: "networkError", MEDIA_ERROR: "mediaError" };
+    static ErrorTypes = {
+      NETWORK_ERROR: "networkError",
+      MEDIA_ERROR: "mediaError",
+    };
 
     media: HTMLMediaElement | undefined;
     loaded: string[] = [];
@@ -335,9 +340,12 @@ describe("hls error handling", () => {
   });
 
   it("ignores non-fatal errors and reports unknown fatal ones", () => {
-    assert.deepEqual(decideHlsError({ fatal: false }, { network: false, media: false }), {
-      action: "ignore",
-    });
+    assert.deepEqual(
+      decideHlsError({ fatal: false }, { network: false, media: false }),
+      {
+        action: "ignore",
+      },
+    );
     const { source: hlsSource, errors, emit } = source();
     hlsSource.load("https://stream.test/one.m3u8");
     emit({ fatal: true, type: "otherError" });
@@ -398,10 +406,12 @@ describe("audio player", () => {
     await dispatch(player.video, "loadeddata");
 
     const playButton = [...player.container.querySelectorAll("button")].find(
-      (button) => button.getAttribute("aria-label") === "Play Or Pause",
+      (button) => button.getAttribute("aria-label") === "Odtwórz",
     )!;
     await act(async () => {
-      playButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      playButton.dispatchEvent(
+        new dom.window.MouseEvent("click", { bubbles: true }),
+      );
     });
 
     assert.equal(playCalls.length, 1);
@@ -436,6 +446,9 @@ describe("audio player", () => {
     assert.equal(player.video.src, "https://stream.test/one.m3u8?sig=new");
     assert.equal(loadCalls.length, 2);
     assert.equal(playCalls.length, 0);
+    player.video.currentTime = 0; // The media element resets its position while loading.
+    await dispatch(player.video, "loadeddata");
+    assert.equal(player.video.currentTime, 42);
   });
 
   it("handles a seekto of 0", async () => {
@@ -490,7 +503,10 @@ describe("audio player", () => {
   it("reports a media element error and can retry", async () => {
     const errors: AudioPlayerError[] = [];
     const playerRef = React.createRef<AudioPlayerMethods>();
-    const player = await renderPlayer({ onError: (error) => errors.push(error), ref: playerRef });
+    const player = await renderPlayer({
+      onError: (error) => errors.push(error),
+      ref: playerRef,
+    });
     giveMediaProperties(player.video);
     await dispatch(player.video, "loadeddata");
 
@@ -540,7 +556,11 @@ describe("audio player", () => {
     assert.equal(metadata.album, "The Book");
     assert.equal(metadata.artist, "Jane Doe");
     assert.deepEqual(metadata.artwork, [
-      { src: "https://cdn.test/cover.JPG?width=512", sizes: "512x512", type: "image/jpeg" },
+      {
+        src: "https://cdn.test/cover.JPG?width=512",
+        sizes: "512x512",
+        type: "image/jpeg",
+      },
     ]);
   });
 });
@@ -569,12 +589,212 @@ describe("media session position", () => {
 
   it("omits the artwork type when the extension is unknown", () => {
     assert.deepEqual(
-      mediaSessionCoordinator.mediaSessionArtworkFromUrl("https://cdn.test/cover"),
+      mediaSessionCoordinator.mediaSessionArtworkFromUrl(
+        "https://cdn.test/cover",
+      ),
       { src: "https://cdn.test/cover", sizes: "512x512" },
     );
     assert.deepEqual(
-      mediaSessionCoordinator.mediaSessionArtworkFromUrl("https://cdn.test/cover.webp"),
-      { src: "https://cdn.test/cover.webp", sizes: "512x512", type: "image/webp" },
+      mediaSessionCoordinator.mediaSessionArtworkFromUrl(
+        "https://cdn.test/cover.webp",
+      ),
+      {
+        src: "https://cdn.test/cover.webp",
+        sizes: "512x512",
+        type: "image/webp",
+      },
     );
+  });
+});
+
+async function clickLabel(label: string) {
+  const button = [...container!.querySelectorAll("button")].find(
+    (item) =>
+      item.getAttribute("aria-label") === label || item.textContent === label,
+  );
+  assert.ok(button, `Missing button: ${label}`);
+  await act(async () =>
+    button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })),
+  );
+}
+async function choose(label: string, value: string) {
+  const select = container!.querySelector(
+    `select[aria-label="${label}"]`,
+  ) as HTMLSelectElement;
+  assert.ok(select);
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  });
+}
+
+describe("audiobook controls", () => {
+  it("renders player and chapters safely on the server", async () => {
+    const { renderToString } = await import("react-dom/server");
+    const ChapterList = (await import("./ChapterList")).default;
+    const html = renderToString(
+      React.createElement(AudioPlayer, {
+        chapters,
+        styles: {},
+        uniqueProductID: "ssr",
+        locale: "en",
+      }),
+    );
+    assert.ok(html.includes("Playback progress"));
+    assert.ok(html.includes("Previous chapter"));
+    assert.ok(
+      renderToString(
+        React.createElement(ChapterList, {
+          chapters,
+          productID: "ssr",
+          onSelect: () => {},
+          locale: "en",
+        }),
+      ).includes("Chapters"),
+    );
+  });
+
+  it("shows a localized error and retries from the inline button", async () => {
+    const ref = React.createRef<AudioPlayerMethods>();
+    let reported: AudioPlayerError | undefined;
+    const player = await renderPlayer({
+      ref,
+      onError: (error) => {
+        reported = error;
+      },
+    });
+    await dispatch(player.video, "error");
+    assert.ok(
+      player.container
+        .querySelector('[role="alert"]')
+        ?.textContent?.includes("Nie udało"),
+    );
+    assert.deepEqual(ref.current?.getError(), reported);
+    const before = loadCalls.length;
+    await clickLabel("Spróbuj ponownie");
+    assert.equal(ref.current?.getError(), null);
+    assert.equal(player.container.querySelector('[role="alert"]'), null);
+    assert.ok(loadCalls.length > before);
+  });
+
+  it("applies speed, updates MediaSession and restores the device preference", async () => {
+    const player = await renderPlayer({});
+    giveMediaProperties(player.video);
+    await choose("Prędkość", "1.5");
+    assert.equal(player.video.playbackRate, 1.5);
+    assert.equal(localStorage.getItem("__player__speed"), "1.5");
+    assert.equal(positionStates.at(-1)?.playbackRate, 1.5);
+    await act(async () => root!.unmount());
+    root = createRoot(container!);
+    const restored = await renderPlayer({});
+    assert.equal(restored.video.playbackRate, 1.5);
+    assert.equal(
+      (
+        container!.querySelector(
+          'select[aria-label="Prędkość"]',
+        ) as HTMLSelectElement
+      ).value,
+      "1.5",
+    );
+    await dispatch(restored.video, "loadeddata");
+    assert.equal(restored.video.playbackRate, 1.5);
+  });
+
+  it("pauses when the sleep deadline expires and supports cancel", async (context) => {
+    context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+    await renderPlayer({});
+    await choose("Wyłącznik czasowy", "15");
+    assert.equal(
+      container!.querySelector('[role="timer"]')?.textContent,
+      "15:00",
+    );
+    const before = pauseCalls.length;
+    await act(async () => context.mock.timers.tick(15 * 60 * 1000));
+    assert.ok(pauseCalls.length > before);
+    assert.equal(container!.querySelector('[role="timer"]'), null);
+    await choose("Wyłącznik czasowy", "30");
+    await clickLabel("Anuluj wyłącznik");
+    assert.equal(container!.querySelector('[role="timer"]'), null);
+    context.mock.timers.reset();
+  });
+
+  it("pauses at the chapter end without advancing", async () => {
+    const changed: string[] = [];
+    const player = await renderPlayer({
+      onChapterChange: (chapter) => changed.push(chapter.id),
+    });
+    await choose("Wyłącznik czasowy", "chapter");
+    const before = pauseCalls.length;
+    await dispatch(player.video, "ended");
+    assert.ok(pauseCalls.length > before);
+    assert.deepEqual(changed, ["one"]);
+    assert.equal(container!.querySelector('[role="timer"]'), null);
+  });
+
+  it("navigates chapters with previous and next buttons", async () => {
+    const changed: string[] = [];
+    const player = await renderPlayer({
+      onChapterChange: (chapter) => changed.push(chapter.id),
+    });
+    await clickLabel("Następny rozdział");
+    await dispatch(player.video, "loadeddata");
+    await clickLabel("Poprzedni rozdział");
+    assert.deepEqual(changed, ["one", "two", "one"]);
+  });
+
+  it("updates scrubber fill and its spoken position during playback", async () => {
+    const player = await renderPlayer({});
+    giveMediaProperties(player.video, 2710);
+    player.video.currentTime = 724;
+    await dispatch(player.video, "timeupdate");
+    const range = player.container.querySelector('input[type="range"]')!;
+    assert.equal(range.getAttribute("aria-label"), "Postęp odtwarzania");
+    assert.equal(range.getAttribute("aria-valuetext"), "12:04 z 45:10");
+    assert.ok(player.container.getAttribute("style")?.includes("26.715"));
+  });
+
+  it("scopes every range selector to the player", () => {
+    const css = readFileSync("src/panel/audio-player/audio-player.css", "utf8");
+    const selectors = css.match(/[^{}]+(?=\{)/g) ?? [];
+    for (const group of selectors)
+      for (const selector of group.split(",")) {
+        if (selector.includes('input[type="range"]'))
+          assert.ok(
+            selector.trim().startsWith(".bitsnap-audio-player "),
+            selector,
+          );
+      }
+  });
+
+  it("marks the current chapter, played rows and offers the saved position", async () => {
+    const ChapterList = (await import("./ChapterList")).default;
+    localStorage.setItem("__player__book_last_chapter", "two");
+    localStorage.setItem("__player__book_two", "724");
+    let selected = "";
+    await act(async () =>
+      root!.render(
+        React.createElement(ChapterList, {
+          chapters: chapters.map((chapter) => ({
+            ...chapter,
+            downloadableUrl: chapter.publicUrl,
+          })),
+          productID: "book",
+          currentID: "two",
+          downloadable: true,
+          onSelect: (chapter) => {
+            selected = chapter.id;
+          },
+        }),
+      ),
+    );
+    assert.ok(
+      container!
+        .querySelector('[aria-current="true"]')
+        ?.textContent?.includes("Chapter two"),
+    );
+    assert.ok(container!.querySelector('[aria-label="Odsłuchane"]'));
+    assert.ok(container!.querySelector('a[aria-label="Pobierz rozdział 2"]'));
+    await clickLabel("Kontynuuj: Rozdział 2, 12:04");
+    assert.equal(selected, "two");
   });
 });

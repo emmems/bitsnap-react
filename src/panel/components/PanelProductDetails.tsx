@@ -7,13 +7,13 @@ import {
   type UserProduct,
 } from "../../gen/proto/public/v1/public_api_pb";
 import { useInstrumentContext } from "../../analytics/instrument";
-import { cn } from "../../lib/utils";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { Button } from "../../ui/button";
 import AudioPlayer, {
   type AudioPlayerMethods,
 } from "../audio-player/AudioPlayer";
 import LoadingIndicator from "../LoadingIndicator";
+import ChapterList from "../audio-player/ChapterList";
 
 import { getProductTexts } from "./products/texts";
 
@@ -313,6 +313,14 @@ const PanelProductDetails = ({
                           <AudioPlayer
                             ref={audioPlayerRef}
                             chapters={chapters}
+                            author={
+                              typeof audioResponse?.author === "string"
+                                ? audioResponse.author
+                                : undefined
+                            }
+                            onExpiredUrl={() => {
+                              void handleAudioURLsDownload();
+                            }}
                             title={
                               (audioResponse as { name?: string })?.name ??
                               product.productName ??
@@ -372,73 +380,17 @@ const PanelProductDetails = ({
 
           <div className="flex items-center justify-center rounded-xl bg-white p-3 drop-shadow-xl dark:bg-neutral-900 dark:drop-shadow-none">
             {productType === UserProductType.AUDIO && (
-              <div className="max-h-96 w-full overflow-y-auto">
-                {isAudioLoading ? (
-                  <div className="jusitfy-center flex flex-col items-center gap-2">
-                    <LoadingIndicator />
-                    <p>Ładowanie rozdziałów...</p>
-                  </div>
-                ) : (
-                  <div>
-                    <h2 className="mb-3 text-xl font-semibold">Rozdziały</h2>
-                    {chapters == null ? (
-                      <p>Brak rozdziałów do wyświetlenia.</p>
-                    ) : (
-                      <ul className="flex w-full flex-col gap-2">
-                        {chapters.map((chapter, index) => (
-                          <li
-                            key={index}
-                            className="flex items-center justify-between"
-                          >
-                            <button
-                              className={cn(
-                                "w-full rounded-lg p-2 text-left transition hover:bg-neutral-200 active:bg-neutral-200 dark:hover:bg-neutral-700 dark:active:bg-neutral-700",
-                                selectedChapter?.id == chapter.id
-                                  ? "bg-neutral-200 dark:bg-neutral-700"
-                                  : "bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300",
-                              )}
-                              onClick={() => {
-                                audioPlayerRef.current.selectChapter(chapter);
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium">
-                                  {chapter.name}
-                                </p>
-                                {chapter.duration && (
-                                  <span className="text-xs text-neutral-500">
-                                    {Math.floor(chapter.duration / 60)}:
-                                    {String(
-                                      Math.floor(chapter.duration % 60),
-                                    ).padStart(2, "0")}
-                                  </span>
-                                )}
-                              </div>
-                              {chapter.description && (
-                                <p className="mt-3 text-xs">
-                                  {chapter.description}
-                                </p>
-                              )}
-                            </button>
-
-                            {audioResponse &&
-                              (audioResponse as { isDownloadable?: boolean })
-                                .isDownloadable &&
-                              chapter.downloadableUrl && (
-                                <a
-                                  href={chapter.downloadableUrl}
-                                  onClick={trackDownload}
-                                >
-                                  <Download width={14} height={14} />
-                                </a>
-                              )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ChapterList
+                chapters={chapters}
+                currentID={selectedChapter?.id}
+                productID={product.productId}
+                loading={isAudioLoading}
+                downloadable={audioResponse?.isDownloadable === true}
+                onDownload={trackDownload}
+                onSelect={(chapter) =>
+                  audioPlayerRef.current?.selectChapter(chapter)
+                }
+              />
             )}
           </div>
         </div>
