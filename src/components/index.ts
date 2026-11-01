@@ -93,6 +93,16 @@ export {
   type Props as GooglePayButtonProps,
 } from "./checkout/GooglePay";
 export {
+  default as InPostPayButton,
+  type InPostPayButtonProps,
+} from "./express/InPostPayButton";
+export {
+  default as RevolutPayButton,
+  type RevolutPayButtonProps,
+  type RevolutPaymentOutcome,
+} from "./express/RevolutPayButton";
+export type { ExpressItem } from "../express/react";
+export {
   default as NotificationsComponent,
   type Props as NotificationsComponentProps,
 } from "./notifications/NotificationsComponentPublic";

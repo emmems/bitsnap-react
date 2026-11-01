@@ -14,6 +14,7 @@ import {
 import { PublicApiClient } from "src/public.api.client";
 import zod from "zod";
 import { getCartInstrument, type Instrument } from "@/src/analytics/instrument";
+import type { ExpressCartUpload } from "@/src/express/contracts";
 import { withClientParam } from "@/src/lib/client-header";
 import { HOST, setCustomHost } from "./constants";
 import { sendAnalyticEvent } from "./frontent.analytics";
@@ -464,6 +465,137 @@ export type Checkout = zod.infer<typeof checkoutSchema>;
 
 const checkoutKey = "checkout";
 
+/**
+ * One line of the local cart, in the shape the express API needs. `productID`
+ * may be a variant id; `id` is the local line handle.
+ */
+export type LocalCartLine = {
+  id: string;
+  productID: string;
+  quantity: number;
+  priceVersion?: string;
+  metadata?: { [key: string]: string | undefined };
+  url?: string;
+};
+
+/** The local cart lines (empty on the server or with a broken cart). */
+export function readLocalCartLines(): LocalCartLine[] {
+  if (typeof localStorage == "undefined") {
+    return [];
+  }
+  return (getCheckout().products ?? []).map((line) => ({ ...line }));
+}
+
+/** Stable signature of the local cart content: one `productID:quantity` per line, sorted. */
+export function readLocalCartSignature(): string {
+  return readLocalCartLines()
+    .map((line) => `${line.productID}:${line.quantity}`)
+    .sort()
+    .join(",");
+}
+
+/**
+ * The express cart upload of the local cart, or `undefined` when it is empty.
+ * Prices are deliberately absent: the server prices every line itself.
+ */
+export function buildLocalCartUpload(
+  locale: string,
+): ExpressCartUpload | undefined {
+  const checkout = getCheckout();
+  if (checkout.products == null || checkout.products.length === 0) {
+    return undefined;
+  }
+  return {
+    items: checkout.products.map((line) => ({
+      id: line.productID,
+      quantity: line.quantity,
+      ...(line.priceVersion != null ? { priceVersion: line.priceVersion } : {}),
+    })),
+    ...(checkout.country != null ? { countries: [checkout.country] } : {}),
+    ...(checkout.couponCode != null ? { couponCode: checkout.couponCode } : {}),
+    ...(checkout.selectedDeliveryMethod != null
+      ? { deliveryMethod: checkout.selectedDeliveryMethod }
+      : {}),
+    locale,
+  };
+}
+
+/**
+ * Replaces the local cart content with the canonical server snapshot (for
+ * example after InPost changed quantities in its app). Metadata, product page
+ * URLs and price versions of matching lines are kept.
+ */
+export function replaceLocalCartLines(
+  lines: { productId: string; quantity: number }[],
+): void {
+  const checkout = getCheckout();
+  const previous = new Map<string, LocalCartLine[]>();
+  for (const line of checkout.products ?? []) {
+    const list = previous.get(line.productID) ?? [];
+    list.push(line);
+    previous.set(line.productID, list);
+  }
+  checkout.products = lines.map((line) => {
+    const match = previous.get(line.productId)?.shift();
+    return {
+      id: Math.random().toString(36).substring(7),
+      productID: line.productId,
+      quantity: line.quantity,
+      ...(match?.priceVersion != null
+        ? { priceVersion: match.priceVersion }
+        : {}),
+      ...(match?.metadata != null ? { metadata: match.metadata } : {}),
+      ...(match?.url != null ? { url: match.url } : {}),
+    };
+  });
+  saveCheckout(checkout);
+  updateNumberOfProductsInCart();
+}
+
+/**
+ * Removes only the lines that were purchased. Quantities and products added
+ * while the payment was underway stay in the cart. Express snapshots identify
+ * a line by its product/variant id, not by the local line handle.
+ */
+export function removeLocalCartLines(
+  lines: { id: string; quantity: number }[],
+): void {
+  const ordered = new Map<string, number>();
+  for (const line of lines) {
+    ordered.set(line.id, (ordered.get(line.id) ?? 0) + line.quantity);
+  }
+  const checkout = getCheckout();
+  const kept = (checkout.products ?? []).flatMap((line) => {
+    const purchased = ordered.get(line.productID);
+    if (purchased == null) {
+      return [line];
+    }
+    if (line.quantity <= purchased) {
+      return [];
+    }
+    return [{ ...line, quantity: line.quantity - purchased }];
+  });
+  saveCheckout({ ...checkout, products: kept });
+  updateNumberOfProductsInCart();
+}
+
+/** Adds new lines to the local cart without touching the existing ones. */
+export function appendLocalCartLines(
+  lines: { id: string; quantity: number }[],
+): void {
+  const checkout = getCheckout();
+  checkout.products = checkout.products ?? [];
+  for (const line of lines) {
+    checkout.products.push({
+      id: Math.random().toString(36).substring(7),
+      productID: line.id,
+      quantity: line.quantity,
+    });
+  }
+  saveCheckout(checkout);
+  updateNumberOfProductsInCart();
+}
+
 function getCheckout(): Checkout {
   try {
     const value = localStorage.getItem(checkoutKey);
@@ -569,6 +701,52 @@ function removeProductFromCheckout(ids: string[]) {
 
 function saveCheckout(model: Checkout) {
   localStorage.setItem(checkoutKey, JSON.stringify(model));
+  notifyLocalCartChanged();
+}
+
+/**
+ * Listeners of every local cart write. The express buttons use this to re-ask
+ * availability after a cart edit made outside their own component (quantity,
+ * remove, country, coupon, a purchase cleanup).
+ */
+const localCartListeners = new Set<() => void>();
+let localCartVersion = 0;
+let storageListenerAttached = false;
+
+function handleLocalCartStorage(event: StorageEvent): void {
+  if (event.key === checkoutKey) {
+    notifyLocalCartChanged();
+  }
+}
+
+export function subscribeToLocalCart(listener: () => void): () => void {
+  localCartListeners.add(listener);
+  if (!storageListenerAttached && typeof window !== "undefined") {
+    window.addEventListener("storage", handleLocalCartStorage);
+    storageListenerAttached = true;
+  }
+  return () => {
+    localCartListeners.delete(listener);
+    if (localCartListeners.size === 0 && storageListenerAttached) {
+      window.removeEventListener("storage", handleLocalCartStorage);
+      storageListenerAttached = false;
+    }
+  };
+}
+
+export function localCartVersionSnapshot(): number {
+  return localCartVersion;
+}
+
+function notifyLocalCartChanged(): void {
+  localCartVersion += 1;
+  for (const listener of localCartListeners) {
+    try {
+      listener();
+    } catch {
+      // a listener must not break the cart write
+    }
+  }
 }
 
 /** The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when it is empty. */
