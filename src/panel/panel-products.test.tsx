@@ -227,3 +227,76 @@ describe("decidePanelProducts", () => {
     assert.equal(decidePanelProducts({ products: { status: "ok", count: 3 }, modelFiles: { status: "loading" } }).kind, "list");
   });
 });
+
+// Navigation and account quick wins share this panel DOM harness.
+async function mountPanelView(view: React.ReactNode) {
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { TransportProvider } = await import("@connectrpc/connect-query");
+  const { getRpcTransport } = await import("../rpc-provider");
+  const container = page.win.document.createElement("div");
+  page.win.document.body.appendChild(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await React.act(async () => root.render(
+    <TransportProvider transport={getRpcTransport("https://bitsnap.pl")}>
+      <QueryClientProvider client={client}>{view}</QueryClientProvider>
+    </TransportProvider>,
+  ));
+  await settle();
+  return container;
+}
+
+describe("panel navigation and orders quick wins", () => {
+  it("renders four shared navigation items with lucide icons and an active page", async () => {
+    const Header = (await import("./components/PanelProductHeader")).default;
+    const selected: string[] = [];
+    const container = await mountPanelView(<Header activeScreen="orders" setActiveScreen={screen => selected.push(screen)} setParams={() => {}} styles={{}} logout={() => {}} />);
+    const nav = container.querySelector("nav")!;
+    const buttons = Array.from(nav.querySelectorAll("button"));
+    assert.deepEqual(buttons.map(button => button.textContent), ["Biblioteka", "Zamówienia", "Zwroty", "Konto"]);
+    assert.equal(nav.querySelectorAll("svg.lucide").length, 4);
+    assert.equal(nav.querySelector("img"), null);
+    assert.equal(nav.querySelector('[aria-current="page"]')?.textContent, "Zamówienia");
+    await React.act(async () => buttons[0].click());
+    assert.deepEqual(selected, ["products"]);
+  });
+
+  it("formats order currency in pl-PL and shows translated status and end hint", async () => {
+    const { setLocale } = await import("../components/checkout/locale");
+    setLocale("pl-PL");
+    const { GetOrdersResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    globalThis.fetch = (async () => proto(GetOrdersResponseSchema, { orders: [{ id: "ord1", totalAmount: 4900, currency: "pln", status: "paid" }], totalCount: 1 })) as typeof fetch;
+    const Orders = (await import("./components/PanelOrderHistory")).default;
+    const container = await mountPanelView(<Orders projectID={TEST_KEY} accessToken="token" openOrderDetails={() => {}} />);
+    assert.match(container.textContent ?? "", /49,00\s*zł/);
+    assert.match(container.textContent ?? "", /Opłacone/);
+    assert.match(container.textContent ?? "", /To już wszystkie Twoje zamówienia/);
+  });
+
+  it("shows an order failure and retries successfully instead of claiming there are no orders", async () => {
+    const { GetOrdersResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    let attempts = 0;
+    globalThis.fetch = (async () => {
+      attempts++;
+      return attempts === 1 ? new Response(null, { status: 503 }) : proto(GetOrdersResponseSchema, { orders: [], totalCount: 0 });
+    }) as typeof fetch;
+    const Orders = (await import("./components/PanelOrderHistory")).default;
+    const container = await mountPanelView(<Orders projectID={TEST_KEY} accessToken="token" openOrderDetails={() => {}} />);
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się pobrać zamówień/);
+    assert.doesNotMatch(container.textContent ?? "", /Brak zamówień/);
+    await React.act(async () => container.querySelector<HTMLButtonElement>('[role="alert"] button')!.click());
+    await settle();
+    assert.equal(attempts, 2);
+    assert.match(container.textContent ?? "", /Brak zamówień/);
+  });
+
+  it("renders plans and notifications as unavailable without loading or unsaved controls", async () => {
+    const Plans = (await import("./components/PanelPlans")).default;
+    const Notifications = (await import("./components/PanelNotifications")).default;
+    const container = await mountPanelView(<><Plans projectID={TEST_KEY} /><Notifications /></>);
+    assert.doesNotMatch(container.textContent ?? "", /Ładowanie/);
+    assert.match(container.textContent ?? "", /Plany nie są obecnie dostępne/);
+    assert.equal(container.querySelector('[role="switch"]'), null);
+  });
+});
