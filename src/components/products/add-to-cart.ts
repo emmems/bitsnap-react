@@ -3,6 +3,12 @@ import { DEFAULT_HOST, HOST, setCustomHost } from "../checkout/constants";
 import { planCartTarget } from "./cart-target";
 import type { PublicListProduct } from "./fetch";
 
+/** What adding needs; a `PublicListProduct` fits, so does the 3D viewer's product. */
+export type CartableProduct = Pick<
+  PublicListProduct,
+  "id" | "cartItemId" | "name" | "price" | "currency"
+>;
+
 export type AddToCartTarget = {
   projectID: string;
   /** Backend origin the cart talks to. Omitted or empty keeps the current one. */
@@ -18,7 +24,7 @@ export type AddToCartTarget = {
 /** `add_to_cart` for a product of the list (quantity 1, price in minor units). */
 export function trackProductAdded(
   instrument: Instrument,
-  product: PublicListProduct,
+  product: CartableProduct,
 ) {
   const variant =
     product.cartItemId != null && product.cartItemId !== product.id
@@ -45,7 +51,7 @@ export function trackProductAdded(
  * list in that case).
  */
 export async function addProductToCart(
-  product: PublicListProduct,
+  product: CartableProduct,
   target: AddToCartTarget,
 ): Promise<void> {
   const [{ Bitsnap }, { getProjectID, setProjectID }] = await Promise.all([

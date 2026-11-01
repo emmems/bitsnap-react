@@ -70,6 +70,9 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
   client before mounting. Use an effect and a ready flag for standalone buttons.
   Configure Apple Pay and test on an eligible device over HTTPS.
 - `BitsnapReturns` takes `projectID` and optional `locale`, `appearance`, `texts`.
+- `Product3DViewer` (`bitsnap-react/viewer3d`, ESM only) takes `projectID`,
+  `productId`, optional `variantId`; it needs `three`, `@react-three/fiber` and
+  `@react-three/drei` installed. Never import it from the main entry.
 - For the panel, configure `setProjectID` and `setLoginURL("/panel/login")` on
   the client before mounting `<PanelProvider><Panel /></PanelProvider>`.
   Mount `<PanelProvider><PanelLogin /></PanelProvider>` at that login URL.

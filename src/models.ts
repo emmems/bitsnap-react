@@ -142,6 +142,11 @@ export namespace BitsnapModels {
     available: z.boolean(),
     /** `true` when the product can be added to the cart straight from the list. */
     addToCart: z.boolean(),
+    /**
+     * `true` when the product or one of its variants has a ready 3D model
+     * (the card shows a "3D" badge). Older backends omit it.
+     */
+    has3d: z.boolean().optional(),
   });
   export type PublicListProduct = z.infer<typeof PublicListProductSchema>;
 

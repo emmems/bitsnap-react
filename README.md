@@ -645,7 +645,9 @@ import { ProductList, useProducts } from "bitsnap-react/catalog";
 Prices are in minor units (grosze, cents), as everywhere else in the library.
 Cards show "od {price}" when the variants differ in price, a struck-through
 regular price for discounts and an "unavailable" state for products out of
-stock.
+stock. Products with a ready 3D model (`has3d`, sent by Bitsnap servers with
+3D support) get a small "3D" badge in the top right corner (slot
+`model3dBadge`, texts `model3d` / `model3dLabel`).
 
 ### Add to cart
 
@@ -698,7 +700,7 @@ Tokens: `fontFamily`, `fontSize`, `background`, `surface`, `foreground`,
 `badgeForeground`, `radius`. Slots (`PRODUCT_LIST_SLOT_NAMES`, also exposed as
 `data-bitsnap-products-slot`): `root`, `grid`, `card`, `cardLink`, `image`,
 `imagePlaceholder`, `body`, `name`, `description`, `price`, `comparePrice`,
-`badge`, `actions`, `addToCartButton`, `selectButton`, `message`, `pagination`,
+`badge`, `model3dBadge`, `actions`, `addToCartButton`, `selectButton`, `message`, `pagination`,
 `paginationButton`, `pageIndicator`, `emptyState`, `error`, `retryButton`,
 `skeleton`. All rules are scoped to `[data-bitsnap-products]`.
 
@@ -725,6 +727,73 @@ from the browser. The domain of the embedding site must be known to the project:
 add it to the project's site, success or cancel URLs, or to the allowed domains
 in the Bitsnap dashboard. Otherwise the browser blocks the response. On a Bitsnap
 custom domain nothing has to be configured.
+
+## 3D product viewer (`bitsnap-react/viewer3d`)
+
+An interactive 3D model of a product: slow auto-rotation (about one turn per
+34 s, paused while the buyer drags and when off screen or in a background tab,
+off with `prefers-reduced-motion`), models over 10 MB load only after a click
+("Pokaż model 3D (24 MB)"), full screen with a buy bar, a gesture hint shown once
+per browser, phones keep scrolling the page until the buyer taps the model.
+
+The subpath is **ESM only** and needs three optional peer dependencies:
+
+```bash
+npm install three @react-three/fiber @react-three/drei
+```
+
+```tsx
+import { Product3DViewer } from "bitsnap-react/viewer3d";
+
+<Product3DViewer
+  projectID="your-project-id"
+  productId="prodv2_..."
+  variantId={selectedVariantId} // optional; switching swaps the model in place
+/>;
+```
+
+The viewer reads `GET {host}/api/integrations/{projectID}/public-commerce/products?ids={productId}&include=model3d`
+(the endpoint the cart already uses) and renders `fallback` (nothing by
+default) while loading, when the product or the chosen variant has no ready
+model, and on servers without 3D support. three and React Three Fiber load
+with `import()` only once the model may be shown, never during the server
+render; the main `bitsnap-react` and `bitsnap-react/catalog` entries never
+reach them, so pages without the viewer do not grow.
+
+| Prop            | Description                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `productId`     | Bitsnap product ID (or a variant ID).                                                                        |
+| `variantId`     | The variant the page shows. A variant without its own model shows the product's.                             |
+| `projectID`     | Defaults to `setProjectID`.                                                                                  |
+| `host`          | Backend origin. Defaults to `https://bitsnap.pl` / `setCustomHost`. On a custom domain pass the domain.     |
+| `locale`        | `pl-PL` (default) or `en*`.                                                                                  |
+| `decoderPath`   | Draco decoder folder. Default: three's decoder on jsDelivr for the installed `three` revision (see below).   |
+| `renderBuyBar`  | `({ product, variant, close }) => ReactNode`: the bar of the full screen view. Default: name, price, "Dodaj do koszyka" (Bitsnap cart, loaded on click). |
+| `productUrl`    | Product page stored with the cart item by the default bar. Defaults to the current page.                    |
+| `fallback`      | Rendered when there is nothing to show.                                                                      |
+| `reportHref`    | "Zgłoś ten model" link (DSA notice form); the viewer adds `url` with the page address.                       |
+| `startSignal`   | Bump the number to start loading now, a big model included (for your own "View in 3D" button).              |
+| `hideNotes`     | Hide the disclaimer, report link and model facts under the viewer.                                           |
+| `texts`         | Overrides of any string (`Viewer3DCopy`).                                                                    |
+| `appearance`    | `{ background, foreground, muted, border, accent, radius }`, or set `--bitsnap-viewer3d-*` in your CSS.      |
+
+`useProduct3DModel(productId, variantId?, { projectID, host, locale })` returns
+`{ status: "loading" | "ready" | "none" | "error", model, product, variant, retry }`
+for your own layout, and `Model3DViewer` renders a model you already have
+(`model`, `productName`, plus the props above).
+
+**Draco decoder.** Compressed models need the Draco decoder. By default the
+viewer loads three's own decoder files from
+`https://cdn.jsdelivr.net/npm/three@0.<REVISION>.0/examples/jsm/libs/draco/gltf/`,
+matching the `three` you installed (jsDelivr allows any origin). To self-host,
+copy `node_modules/three/examples/jsm/libs/draco/gltf/` to your site and pass
+`decoderPath="/draco/"`. A Content-Security-Policy needs `connect-src` for the
+file host (`files.bitsnap.pl`) and the decoder host, `worker-src blob:` and
+`'wasm-unsafe-eval'` (Meshopt).
+
+**CORS.** Model files are served from `files.bitsnap.pl` with
+`Access-Control-Allow-Origin: *` for model paths; the product request follows
+the same rules as the product list (see below).
 
 # Examples
 
@@ -1208,6 +1277,11 @@ The panel provides the following screens:
 - Shows product cards with image, name, and description
 - Click to view product details
 - Supports audio, file, and ticket products
+- "Pliki 3D": purchased 3D model files (download on click with a short-lived
+  link, licence, "the seller removed this file"); hidden on servers without 3D
+  delivery
+- An empty list shows an empty state; only an expired session signs the buyer
+  out
 
 ### Product Details
 

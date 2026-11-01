@@ -235,6 +235,10 @@ function ProductCard({
     "badge",
     "absolute left-3 top-3 px-2 py-0.5 text-xs font-medium",
   );
+  const model3dBadge = useSlot(
+    "model3dBadge",
+    "absolute right-3 top-3 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold",
+  );
   const actions = useSlot("actions", "p-4 pt-0");
   const selectButton = useSlot("selectButton", LINK_BUTTON_CLASS);
 
@@ -317,6 +321,13 @@ function ProductCard({
           {badgeText}
         </span>
       ) : null}
+      {product.has3d === true ? (
+        <span {...model3dBadge} title={texts.model3dLabel}>
+          <CubeIcon />
+          <span aria-hidden="true">{texts.model3d}</span>
+          <span className="sr-only">{texts.model3dLabel}</span>
+        </span>
+      ) : null}
       <div {...actions}>
         {!product.available ? (
           <button type="button" {...selectButton} disabled>
@@ -331,6 +342,26 @@ function ProductCard({
         )}
       </div>
     </li>
+  );
+}
+
+function CubeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="M12 22V12" />
+    </svg>
   );
 }
 
