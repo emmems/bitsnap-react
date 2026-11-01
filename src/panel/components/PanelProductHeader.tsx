@@ -15,6 +15,8 @@ interface PanelProductHeaderComponentProps {
   logout: () => void;
   email?: string | null;
   projectID?: string;
+  /** Shows "Wiadomości": the buyer has chat products or a chat URL. */
+  showMessages?: boolean;
 }
 
 export default function PanelProductHeaderComponent({
@@ -25,6 +27,7 @@ export default function PanelProductHeaderComponent({
   logout,
   email,
   projectID,
+  showMessages = false,
 }: PanelProductHeaderComponentProps) {
   const texts = getPanelTexts();
   const { data: branding } = useLoginBranding(projectID ?? "", Boolean(projectID));
@@ -35,7 +38,7 @@ export default function PanelProductHeaderComponent({
         {branding?.name && <span title={branding.name} className="truncate text-sm font-medium md:line-clamp-2 md:whitespace-normal">{branding.name}</span>}
       </div>
       <nav aria-label={texts.navigationLabel} className="fixed inset-x-0 bottom-0 z-10 flex h-[calc(56px+env(safe-area-inset-bottom))] items-start justify-around border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] md:static md:h-auto md:flex-1 md:flex-col md:justify-start md:gap-2 md:border-0 md:bg-transparent md:pb-0 dark:border-neutral-800 dark:bg-neutral-900">
-        {panelNavItems.map(({ screen, label, icon: Icon }) => {
+        {panelNavItems.filter(({ screen }) => screen !== "messages" || showMessages).map(({ screen, label, icon: Icon }) => {
           const active = navScreen(activeScreen) === screen;
           return (
             <button

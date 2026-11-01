@@ -14,7 +14,14 @@ import {
 } from "../../gen/proto/public/v1/public_api_pb";
 import { rpcProvider, useQuery } from "../../rpc-provider";
 import { Button } from "../../ui/button";
-import { BookOpen, Files, Headphones, Ticket } from "lucide-react";
+import {
+  BookOpen,
+  Files,
+  Headphones,
+  MessageCircle,
+  Ticket,
+  Users,
+} from "lucide-react";
 import { getProductTexts } from "./products/texts";
 
 import { renderText } from "@/src/lib/render.text";
@@ -38,6 +45,8 @@ interface PanelProductGridComponentProps {
   params: PanelSearchParamsType;
   setParams: (params: PanelSearchParamsType) => void;
   openCourse: (accessId: string) => void;
+  /** Opens "Wiadomości" (CHAT and COMMUNITY products). */
+  openMessages?: () => void;
 }
 
 const PanelProductGridComponent = ({
@@ -49,6 +58,7 @@ const PanelProductGridComponent = ({
   params,
   setParams,
   openCourse,
+  openMessages,
 }: PanelProductGridComponentProps) => {
   const { host } = usePanelConfig();
   const {
@@ -142,6 +152,7 @@ const PanelProductGridComponent = ({
       params={params}
       setParams={setParams}
       openCourse={openCourse}
+      openMessages={openMessages}
       filesSection={filesSection}
     />
   );
@@ -236,6 +247,15 @@ interface ProductsComponentProps {
   params: PanelSearchParamsType;
   setParams: (params: PanelSearchParamsType) => void;
   openCourse: (accessId: string) => void;
+  openMessages?: () => void;
+}
+
+/** CHAT and COMMUNITY products open "Wiadomości", not the product details. */
+export function opensMessages(product: UserProduct): boolean {
+  return (
+    product.productType === UserProductType.CHAT ||
+    product.productType === UserProductType.COMMUNITY
+  );
 }
 
 const ProductsComponent = ({
@@ -247,6 +267,7 @@ const ProductsComponent = ({
   params,
   setParams,
   openCourse,
+  openMessages,
 }: ProductsComponentProps) => {
   const t = getProductTexts();
   const [selectedProduct, setSelectedProduct] = useState(() =>
@@ -269,9 +290,20 @@ const ProductsComponent = ({
       selectedProduct?.productType === UserProductType.COURSE
     )
       openCourse(selectedProduct.accessId);
-  }, [activeScreen, selectedProduct, openCourse]);
+    else if (
+      activeScreen === "products" &&
+      selectedProduct &&
+      opensMessages(selectedProduct) &&
+      openMessages
+    )
+      openMessages();
+  }, [activeScreen, selectedProduct, openCourse, openMessages]);
 
   function handleSelectedProduct(product: UserProduct) {
+    if (opensMessages(product) && openMessages) {
+      openMessages();
+      return;
+    }
     // A course opens in its own screen, not in the product details.
     if (product.productType === UserProductType.COURSE) {
       openCourse(product.accessId);
@@ -313,6 +345,10 @@ const ProductsComponent = ({
               ? ([t.audio, t.listen, Headphones] as const)
               : product.productType === UserProductType.COURSE
                 ? ([t.course, t.openCourse, BookOpen] as const)
+                : product.productType === UserProductType.CHAT
+                  ? ([t.chat, t.openMessages, MessageCircle] as const)
+                  : product.productType === UserProductType.COMMUNITY
+                    ? ([t.community, t.openMessages, Users] as const)
                 : product.productType === UserProductType.TICKET
                   ? ([t.ticket, t.showTicket, Ticket] as const)
                   : ([t.files, t.downloadFiles, Files] as const);

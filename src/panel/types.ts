@@ -22,7 +22,8 @@ export type PanelScreen =
   | "order-details"
   | "returns"
   | "return-details"
-  | "course";
+  | "course"
+  | "messages";
 
 export type PanelSearchParamsType = {
   product?: string;
@@ -33,6 +34,12 @@ export type PanelSearchParamsType = {
   course?: string;
   /** `state: "course"`: id of the open lesson or test. */
   item?: string;
+  /** `state: "messages"`: project of the open conversation. */
+  chatProject?: string;
+  /** `state: "messages"`: id of the open pack thread. */
+  thread?: string;
+  /** `state: "messages"`: id of the open channel. */
+  channel?: string;
 };
 
 export interface PanelProps {

@@ -6,6 +6,7 @@ export type PanelTexts = {
   returnsNavLabel: string;
   openCourse: string;
   libraryNavLabel: string;
+  messagesNavLabel: string;
   ordersNavLabel: string;
   accountNavLabel: string;
   navigationLabel: string;
@@ -47,6 +48,7 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "returnsNavLabel": "Zwroty",
     "openCourse": "Otwórz kurs",
     "libraryNavLabel": "Biblioteka",
+    "messagesNavLabel": "Wiadomości",
     "ordersNavLabel": "Zamówienia",
     "accountNavLabel": "Konto",
     "navigationLabel": "Panel klienta",
@@ -86,6 +88,7 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "returnsNavLabel": "Returns",
     "openCourse": "Open the course",
     "libraryNavLabel": "Library",
+    "messagesNavLabel": "Messages",
     "ordersNavLabel": "Orders",
     "accountNavLabel": "Account",
     "navigationLabel": "Customer panel",

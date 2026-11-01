@@ -21,6 +21,8 @@ import PanelProductGridComponent from "./PanelProductGrid";
 import PanelProductHeaderComponent from "./PanelProductHeader";
 import PanelProfileComponent from "./PanelProfile";
 import LazyPanelCourse from "./LazyPanelCourse";
+import LazyPanelMessages from "./LazyPanelMessages";
+import { usePanelChat } from "../chat-visibility";
 import PublicOrderPage from "./PublicOrderPage";
 import { clearPanelSession, getPanelEmail, getPanelSession } from "../session-storage";
 
@@ -33,7 +35,8 @@ export type PanelScreen =
   | "order-details"
   | "returns"
   | "return-details"
-  | "course";
+  | "course"
+  | "messages";
 
 export type PanelSearchParamsType = {
   product?: string;
@@ -44,6 +47,12 @@ export type PanelSearchParamsType = {
   course?: string;
   /** `state: "course"`: id of the open lesson or test. */
   item?: string;
+  /** `state: "messages"`: project of the open conversation. */
+  chatProject?: string;
+  /** `state: "messages"`: id of the open pack thread. */
+  thread?: string;
+  /** `state: "messages"`: id of the open channel. */
+  channel?: string;
 };
 
 const PanelPage = ({
@@ -86,6 +95,7 @@ const PanelPage = ({
       "returns",
       "return-details",
       "course",
+      "messages",
     ].includes(value as string);
 
   const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
@@ -95,6 +105,9 @@ const PanelPage = ({
     returnId: undefined,
     course: undefined,
     item: undefined,
+    chatProject: undefined,
+    thread: undefined,
+    channel: undefined,
   });
 
   const [activeScreen, setActiveScreen] = useState<PanelScreen>(
@@ -125,6 +138,9 @@ const PanelPage = ({
       returnId: undefined,
       course: undefined,
       item: undefined,
+      chatProject: undefined,
+      thread: undefined,
+      channel: undefined,
       ...next,
     });
 
@@ -148,11 +164,29 @@ const PanelPage = ({
     setActiveScreen("products");
   };
 
+  const handleOpenMessages = () => {
+    setParams({
+      state: "messages",
+      product: undefined,
+      chatProject: undefined,
+      thread: undefined,
+      channel: undefined,
+    });
+    setActiveScreen("messages");
+  };
+
+  const chat = usePanelChat(accessToken);
+
   // The browser's back and forward buttons move between the lessons of a
-  // course and in and out of it.
+  // course and in and out of it, and between conversations.
   useEffect(() => {
     if (!isScreen(params.state)) return;
-    if (params.state === "course" || activeScreen === "course") {
+    if (
+      params.state === "course" ||
+      activeScreen === "course" ||
+      params.state === "messages" ||
+      activeScreen === "messages"
+    ) {
       setActiveScreen(params.state);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,6 +245,7 @@ useEffect(() => {
         logout={logout}
         email={email}
         projectID={projectID}
+        showMessages={chat.visible || activeScreen === "messages"}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto w-full p-5 pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-5">
@@ -224,6 +259,29 @@ useEffect(() => {
             params={params as PanelSearchParamsType}
             setParams={setParams}
             openCourse={handleOpenCourse}
+            openMessages={handleOpenMessages}
+          />
+        )}
+
+        {activeScreen === "messages" && accessToken && (
+          <LazyPanelMessages
+            accessToken={accessToken}
+            products={chat.products}
+            chatApiUrl={chat.chatApiUrl}
+            projectID={projectID}
+            host={host}
+            selection={{
+              chatProject: params.chatProject,
+              thread: params.thread,
+              channel: params.channel,
+            }}
+            onSelect={(selection) =>
+              setParams({
+                chatProject: selection.chatProject,
+                thread: selection.thread,
+                channel: selection.channel,
+              })
+            }
           />
         )}
 
