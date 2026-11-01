@@ -25,7 +25,10 @@ describe("resolveProductListAppearance", () => {
 
   it("ships complete presets with a variable for every color token", () => {
     for (const theme of ["light", "dark"] as const) {
-      const preset = PRODUCT_LIST_THEME_PRESETS[theme] as Record<string, string>;
+      const preset = PRODUCT_LIST_THEME_PRESETS[theme] as Record<
+        string,
+        string
+      >;
       for (const token of Object.keys(PRODUCT_LIST_TOKEN_VARIABLES)) {
         if (token === "fontFamily" || token === "fontSize") {
           continue;
@@ -77,4 +80,17 @@ describe("resolveProductListAppearance", () => {
     assert.equal(getProductListSlotAppearance(resolved, "grid"), undefined);
     assert.ok(PRODUCT_LIST_SLOT_NAMES.includes("addToCartButton"));
   });
+});
+
+it("uses compact catalogue tracks and lets merchants choose one column", () => {
+  assert.equal(resolveProductListAppearance().tokens.gridMinWidth, "9rem");
+  const single = resolveProductListAppearance({
+    tokens: { gridMinWidth: "100%" },
+  });
+  assert.equal(
+    (single.boundaryStyle as Record<string, string>)[
+      "--bitsnap-products-grid-min-width"
+    ],
+    "100%",
+  );
 });

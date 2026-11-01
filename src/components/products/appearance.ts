@@ -21,6 +21,8 @@ export type ProductListTheme = "light" | "dark";
 export type ProductListAppearanceTokens = {
   /** Font family of the list. The library never loads fonts. */
   fontFamily?: string;
+  /** Minimum grid track width. Use "100%" for one column. */
+  gridMinWidth?: string;
   /** Base font size. */
   fontSize?: string;
   /** List background. */
@@ -114,6 +116,7 @@ export type ResolvedProductListAppearance = {
 /** CSS custom property used for each token. */
 export const PRODUCT_LIST_TOKEN_VARIABLES = {
   fontFamily: "--bitsnap-products-font-family",
+  gridMinWidth: "--bitsnap-products-grid-min-width",
   fontSize: "--bitsnap-products-font-size",
   background: "--bitsnap-products-background",
   surface: "--bitsnap-products-surface",
@@ -157,6 +160,7 @@ export const PRODUCT_LIST_THEME_PRESETS: Record<
     badgeBackground: "#f4f4f5",
     badgeForeground: "#3f3f46",
     radius: "8px",
+    gridMinWidth: "9rem",
   },
   dark: {
     background: "#18181b",
@@ -173,6 +177,7 @@ export const PRODUCT_LIST_THEME_PRESETS: Record<
     badgeBackground: "#3f3f46",
     badgeForeground: "#e4e4e7",
     radius: "8px",
+    gridMinWidth: "9rem",
   },
 };
 

@@ -187,7 +187,7 @@ export default function PanelModelFiles({
             {t.subtitle}
           </p>
         </header>
-        <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+        <ul className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {models.map((model) => {
             const title = model.variantName
               ? `${model.productName} – ${model.variantName}`
@@ -195,7 +195,7 @@ export default function PanelModelFiles({
             return (
               <li
                 key={`${model.orderId}:${model.lineId}`}
-                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"
+                className="flex min-w-0 flex-col gap-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700"
                 data-state={ModelFileState[model.state]}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -203,7 +203,7 @@ export default function PanelModelFiles({
                     {model.thumbnailUrl ? (
                       <img
                         src={model.thumbnailUrl}
-                        alt=""
+                        alt={title}
                         className="size-full object-contain"
                         loading="lazy"
                       />
@@ -212,7 +212,7 @@ export default function PanelModelFiles({
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-neutral-900 dark:text-neutral-50">
+                    <p className="break-words font-medium text-neutral-900 dark:text-neutral-50">
                       {title}
                     </p>
                     <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
@@ -295,7 +295,7 @@ export default function PanelModelFiles({
                           aria-label={`${t.download}: ${file.fileName}`}
                           data-model-download=""
                           style={buttonStyle}
-                          className="inline-flex h-10 items-center justify-center rounded-lg bg-neutral-900 px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60 dark:bg-neutral-50 dark:text-neutral-900"
+                          className="min-h-11 inline-flex h-10 items-center justify-center rounded-lg bg-neutral-900 px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60 dark:bg-neutral-50 dark:text-neutral-900"
                         >
                           {busy ? t.preparing : t.download}
                         </button>

@@ -30,6 +30,17 @@ export type CourseTexts = {
   completed: string;
   continueCourse: string;
   noItem: string;
+  // Optional additions preserve compatibility with existing complete text objects.
+  lessonsTab?: string;
+  descriptionTab?: string;
+  filesTab?: string;
+  questionsTab?: string;
+  upNext?: string;
+  openNext?: string;
+  courseCompleted?: string;
+  lessonNavigation?: string;
+  mobilePrev?: string;
+  mobileNext?: string;
   // Lesson
   markComplete: string;
   markedComplete: string;
@@ -114,6 +125,16 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     completed: "Ukończono",
     continueCourse: "Kontynuuj kurs",
     noItem: "Wybierz lekcję z listy.",
+    lessonsTab: "Lekcje",
+    descriptionTab: "Opis",
+    filesTab: "Pliki",
+    questionsTab: "Pytania",
+    upNext: "Następna lekcja: {title}",
+    openNext: "Przejdź dalej",
+    courseCompleted: "Kurs ukończony",
+    lessonNavigation: "Nawigacja lekcji",
+    mobilePrev: "Wstecz",
+    mobileNext: "Dalej",
     markComplete: "Oznacz jako ukończoną",
     markedComplete: "Lekcja ukończona",
     prevItem: "Poprzednia",
@@ -187,6 +208,16 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     completed: "Completed",
     continueCourse: "Continue the course",
     noItem: "Pick a lesson from the list.",
+    lessonsTab: "Lessons",
+    descriptionTab: "Description",
+    filesTab: "Files",
+    questionsTab: "Questions",
+    upNext: "Next lesson: {title}",
+    openNext: "Continue",
+    courseCompleted: "Course completed",
+    lessonNavigation: "Lesson navigation",
+    mobilePrev: "Previous",
+    mobileNext: "Next",
     markComplete: "Mark as completed",
     markedComplete: "Lesson completed",
     prevItem: "Previous",

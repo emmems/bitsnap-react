@@ -5,11 +5,11 @@ import {
   PlayCircle,
   FileText,
 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { useCourseView } from "./context";
 import { fillTemplate, formatDuration } from "./logic";
 import type { Course, CourseItem } from "./types";
-
 
 type CourseOutlineProps = {
   course: Course;
@@ -58,7 +58,9 @@ function OutlineItem({
 }) {
   const { texts } = useCourseView();
   const lockText = item.lockReason
-    ? fillTemplate(texts.lockedByTest, { test: item.lockReason.gatingTestTitle })
+    ? fillTemplate(texts.lockedByTest, {
+        test: item.lockReason.gatingTestTitle,
+      })
     : texts.locked;
   const state = item.locked
     ? lockText
@@ -79,11 +81,12 @@ function OutlineItem({
           if (!item.locked) onSelect(item);
         }}
         className={cn(
-          "flex w-full items-start gap-3 rounded-lg p-2 text-left text-sm outline-none transition focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          "flex min-h-11 w-full items-start gap-3 rounded-lg p-2 text-left text-sm outline-none transition focus-visible:ring-[3px] focus-visible:ring-ring/50",
           selected
             ? "bg-neutral-200 dark:bg-neutral-700"
             : "hover:bg-neutral-100 dark:hover:bg-neutral-800",
-          item.locked && "cursor-not-allowed opacity-60 hover:bg-transparent dark:hover:bg-transparent",
+          item.locked &&
+            "cursor-not-allowed opacity-60 hover:bg-transparent dark:hover:bg-transparent",
         )}
       >
         {variant === "playlist" && item.kind === "lesson" && (
@@ -139,6 +142,24 @@ export function CourseOutline({
   className,
 }: CourseOutlineProps) {
   const { texts } = useCourseView();
+  const outlineId = useId();
+  const rootRef = useRef<HTMLElement>(null);
+  const currentSection = course.sections.find((section) =>
+    section.items.some((item) => item.id === selectedId),
+  )?.id;
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(currentSection ? [currentSection] : []),
+  );
+  useEffect(() => {
+    if (currentSection)
+      setOpenSections((current) => new Set([...current, currentSection]));
+  }, [currentSection]);
+  useEffect(() => {
+    const selected =
+      rootRef.current?.querySelector<HTMLElement>("[aria-current]");
+    if (selected && !selected.closest("[hidden]"))
+      selected.scrollIntoView?.({ block: "nearest" });
+  }, [selectedId, openSections]);
 
   const renderItems = (items: CourseItem[]) => (
     <ul className="flex flex-col gap-1">
@@ -155,28 +176,53 @@ export function CourseOutline({
   );
 
   return (
-    <nav aria-label={texts.contents} className={cn("space-y-4", className)}>
+    <nav
+      ref={rootRef}
+      aria-label={texts.contents}
+      className={cn("space-y-4", className)}
+    >
       {course.sections.map((section) => {
         const lessons = section.items.filter((i) => i.kind === "lesson");
         const done = lessons.filter((i) => i.completed).length;
         return (
           <section key={section.id} data-section-id={section.id}>
-            <h3 className="mb-1 flex items-baseline justify-between gap-2 px-2 text-sm font-semibold">
-              <span className="break-words">{section.title}</span>
-              {lessons.length > 0 && (
-                <span className="shrink-0 text-xs font-normal text-neutral-500 dark:text-neutral-400">
-                  {done}/{lessons.length}
-                </span>
-              )}
+            <h3 className="mb-1 text-sm font-semibold">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-left focus-visible:outline focus-visible:outline-2"
+                aria-expanded={openSections.has(section.id)}
+                aria-controls={`${outlineId}-${section.id}`}
+                onClick={() =>
+                  setOpenSections((current) => {
+                    const next = new Set(current);
+                    if (next.has(section.id)) next.delete(section.id);
+                    else next.add(section.id);
+                    return next;
+                  })
+                }
+              >
+                <span className="break-words">{section.title}</span>
+                {lessons.length > 0 && (
+                  <span className="shrink-0 text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                    {done}/{lessons.length}
+                  </span>
+                )}
+              </button>
             </h3>
-            {renderItems(section.items)}
+            <div
+              id={`${outlineId}-${section.id}`}
+              hidden={!openSections.has(section.id)}
+            >
+              {renderItems(section.items)}
+            </div>
           </section>
         );
       })}
       {course.finalItems.length > 0 && (
-        <section data-section-id="final">{renderItems(course.finalItems)}</section>
+        <section data-section-id="final">
+          {renderItems(course.finalItems)}
+        </section>
       )}
     </nav>
   );
 }
-

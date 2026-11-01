@@ -1,5 +1,13 @@
 import { ChevronLeft, List, Play } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   InstrumentProvider,
   useInstrument,
@@ -108,7 +116,9 @@ function LockedPane({ item }: { item: FlatItem }) {
       <h2 className="text-2xl font-semibold break-words">{item.title}</h2>
       <p className="text-sm text-neutral-600 dark:text-neutral-300">
         {item.lockReason
-          ? fillTemplate(texts.lockedPage, { test: item.lockReason.gatingTestTitle })
+          ? fillTemplate(texts.lockedPage, {
+              test: item.lockReason.gatingTestTitle,
+            })
           : texts.locked}
       </p>
     </div>
@@ -125,6 +135,7 @@ type LessonContainerProps = {
   onProgressSaved: (lessonId: string, saved: ProgressSaved) => void;
   onEnded: () => void;
   onLocked: () => void;
+  mobileOutline: ReactNode;
 };
 
 function LessonContainer({
@@ -137,6 +148,7 @@ function LessonContainer({
   onProgressSaved,
   onEnded,
   onLocked,
+  mobileOutline,
 }: LessonContainerProps) {
   const { dataSource, texts } = useCourseView();
   const lesson = useAsyncResource<Lesson>(
@@ -178,6 +190,11 @@ function LessonContainer({
       key={lesson.data.id}
       lesson={lesson.data}
       position={position}
+      mobileOutline={mobileOutline}
+      nextItem={findItem(
+        course,
+        (lesson.data.next ?? toRef(adjacent.next))?.id,
+      )}
       courseType={course.type}
       prev={lesson.data.prev ?? toRef(adjacent.prev)}
       next={lesson.data.next ?? toRef(adjacent.next)}
@@ -210,6 +227,7 @@ function CourseView({
   const { texts, preview } = useCourseView();
   const track = useCourseTrack();
   const rootRef = useRef<HTMLDivElement>(null);
+  const contentsId = useId();
   const [contentsOpen, setContentsOpen] = useState(false);
   const [autoplay, setAutoplay] = useAutoplayPreference();
   const [playOnOpen, setPlayOnOpen] = useState<string>();
@@ -265,7 +283,9 @@ function CourseView({
         onNavigate={(ref) => open(ref.id)}
         onProgressSaved={(lessonId, saved) =>
           onCourseChange((current) => ({
-            ...(saved.completed ? markLessonCompleted(current, lessonId) : current),
+            ...(saved.completed
+              ? markLessonCompleted(current, lessonId)
+              : current),
             completedLessons: saved.completedLessons,
             progressPercent: saved.progressPercent,
           }))
@@ -276,6 +296,7 @@ function CourseView({
           if (target) open(target.id, true);
         }}
         onLocked={onCourseRefresh}
+        mobileOutline={outline}
       />
     );
   }
@@ -312,13 +333,25 @@ function CourseView({
             </h1>
           </div>
           {showResume && (
-            <Button size="sm" variant="outline" onClick={() => open(course.resumeItemId)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => open(course.resumeItemId)}
+            >
               <Play aria-hidden />
               {texts.continueCourse}
             </Button>
           )}
         </div>
         <div className="max-w-xl space-y-1">
+          {course.progressPercent >= 100 && (
+            <p
+              role="status"
+              className="font-semibold text-emerald-700 dark:text-emerald-400"
+            >
+              {texts.courseCompleted ?? texts.completed}
+            </p>
+          )}
           <ProgressBar
             percent={course.progressPercent}
             label={fillTemplate(texts.progressPercent, {
@@ -331,7 +364,9 @@ function CourseView({
               total: course.totalLessons,
             })}
             {" · "}
-            {fillTemplate(texts.progressPercent, { percent: course.progressPercent })}
+            {fillTemplate(texts.progressPercent, {
+              percent: course.progressPercent,
+            })}
           </p>
         </div>
       </header>
@@ -349,6 +384,8 @@ function CourseView({
             <Button
               variant="outline"
               size="sm"
+              className="min-h-11"
+              aria-controls={contentsId}
               aria-expanded={contentsOpen}
               onClick={() => setContentsOpen((value) => !value)}
             >
@@ -360,6 +397,7 @@ function CourseView({
 
         {!isVideo && (
           <aside
+            id={contentsId}
             className={cn(
               CARD,
               "p-3 sm:p-3 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto",
@@ -378,7 +416,7 @@ function CourseView({
           <aside
             className={cn(
               CARD,
-              "p-3 sm:p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto",
+              "hidden p-3 sm:p-3 lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto",
             )}
           >
             {outline}

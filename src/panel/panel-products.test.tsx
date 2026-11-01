@@ -114,7 +114,7 @@ afterEach(async () => {
 
 const settle = (ms = 60) => React.act(async () => void (await new Promise((r) => setTimeout(r, ms))));
 
-async function mountGrid() {
+async function mountGrid(options: { product?: string; setParams?: (params: import("./types").PanelSearchParamsType) => void; openCourse?: (id: string) => void } = {}) {
   const container = page.win.document.createElement("div");
   page.win.document.body.appendChild(container);
   const root = createRoot(container);
@@ -128,9 +128,9 @@ async function mountGrid() {
           loginURL="/panel/login"
           styles={{}}
           activeScreen="products"
-          params={{ state: "products" }}
-          setParams={() => {}}
-          openCourse={() => {}}
+          params={{ state: "products", product: options.product }}
+          setParams={options.setParams ?? (() => {})}
+          openCourse={options.openCourse ?? (() => {})}
         />
       </PanelProvider>,
     ),
@@ -298,5 +298,59 @@ describe("panel navigation and orders quick wins", () => {
     assert.doesNotMatch(container.textContent ?? "", /Ładowanie/);
     assert.match(container.textContent ?? "", /Plany nie są obecnie dostępne/);
     assert.equal(container.querySelector('[role="switch"]'), null);
+  });
+});
+
+describe("library cards and product links", () => {
+  it("uses a native focusable card button with product alt text and stable ID navigation", async () => {
+    const selected: Array<import("./types").PanelSearchParamsType> = [];
+    const container = await mountGrid({ setParams: params => selected.push(params) });
+    const card = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Ebook 0"))!;
+    assert.ok(card);
+    assert.equal(card.type, "button");
+    assert.equal(card.tabIndex, 0);
+    card.focus();
+    assert.equal(page.win.document.activeElement, card);
+    assert.match(card.className, /focus-visible:outline/);
+    assert.equal(card.querySelector("button, a"), null);
+    assert.equal(card.querySelector("img")?.alt, "Ebook 0");
+    assert.match(card.textContent ?? "", /Pliki.*Pobierz pliki/);
+    assert.match(card.parentElement!.className, /grid-cols-2/);
+    // Native buttons supply Enter/Space activation in browsers; jsdom click invokes that same handler.
+    await React.act(async () => card.click());
+    assert.equal(selected[0].product, "acc-0");
+  });
+
+  it("accepts old protobuf JSON links and rejects malformed or unowned products", async () => {
+    const { resolvePanelProduct } = await import("./components/PanelProductGrid");
+    const { UserProductSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    const { toJsonString } = await import("@bufbuild/protobuf");
+    const product = create(UserProductSchema, { accessId: "owned", productId: "prod", productName: "Book" });
+    assert.equal(resolvePanelProduct("owned", [product]), product);
+    assert.equal(resolvePanelProduct("prod", [product]), product);
+    assert.equal(resolvePanelProduct(toJsonString(UserProductSchema, product), [product]), product);
+    assert.equal(resolvePanelProduct("{invalid", [product]), undefined);
+    assert.equal(resolvePanelProduct('{"accessId":"other"}', [product]), undefined);
+  });
+
+  it("labels each type and opens courses directly", async () => {
+    products = () => proto(UserPanelGetProductsResponseSchema, { result: { case: "success", value: { products: [
+      { accessId: "audio", productName: "Book", productType: UserProductType.AUDIO },
+      { accessId: "course", productName: "Lessons", productType: UserProductType.COURSE },
+      { accessId: "ticket", productName: "Event", productType: UserProductType.TICKET },
+    ] } } });
+    const opened: string[] = [];
+    const container = await mountGrid({ openCourse: id => opened.push(id) });
+    assert.match(container.textContent ?? "", /Audio.*Słuchaj/);
+    assert.match(container.textContent ?? "", /Kurs.*Otwórz kurs/);
+    assert.match(container.textContent ?? "", /Bilet.*Pokaż bilet/);
+    const course = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Lessons"))!;
+    await React.act(async () => course.click());
+    assert.deepEqual(opened, ["course"]);
+  });
+
+  it("derives filenames from URL paths without query credentials", async () => {
+    const { downloadFileName } = await import("./components/PanelProductDetails");
+    assert.equal(downloadFileName("https://files.test/My%20book.pdf?signature=private"), "My book.pdf");
   });
 });
