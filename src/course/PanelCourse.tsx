@@ -345,7 +345,7 @@ function CourseView({
             </Button>
           )}
         </div>
-        <div className="max-w-xl space-y-1">
+        <div className="max-w-xl space-y-1 md:max-w-none">
           {course.progressPercent >= 100 && (
             <p
               role="status"

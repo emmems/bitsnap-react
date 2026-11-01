@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { cn } from "../../lib/utils";
 import { Button } from "../../ui/button";
 import LoadingIndicator from "../LoadingIndicator";
 import {
@@ -61,6 +62,8 @@ type AudioPlayerProps = {
 
   title?: string;
   imageURL?: string;
+  /** Hide the repeated visual heading when the desktop details show the cover beside it. */
+  coverShownBeside?: boolean;
   /** Book author, used as the lock-screen artist. */
   author?: string;
 
@@ -86,6 +89,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       setCurrentTimeHandler,
       title,
       imageURL,
+      coverShownBeside,
       author,
       uniqueProductID,
       onChapterChange,
@@ -811,7 +815,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           poster={imageURL}
           title={title}
         />
-        <div className="flex min-w-0 items-center gap-3">
+        <div className={cn("flex min-w-0 items-center gap-3", coverShownBeside && "lg:hidden")}>
           {imageURL && (
             <img
               src={imageURL}
@@ -906,8 +910,8 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
             <SkipForward className="h-5 w-5" />
           </Button>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <label className="flex flex-1 items-center gap-2 text-sm">
+        <div className="flex flex-wrap gap-3 md:grid md:grid-cols-2">
+          <label className="flex flex-1 items-center gap-2 text-sm md:flex-col md:items-start md:whitespace-nowrap">
             {t.speed}
             <select
               aria-label={t.speed}
@@ -921,7 +925,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
               ))}
             </select>
           </label>
-          <label className="flex flex-1 items-center gap-2 text-sm">
+          <label className="flex flex-1 items-center gap-2 text-sm md:flex-col md:items-start md:whitespace-nowrap">
             {t.sleep}
             <select
               aria-label={t.sleep}

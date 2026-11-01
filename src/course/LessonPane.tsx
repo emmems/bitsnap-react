@@ -226,7 +226,7 @@ export function LessonPane({
         <ChevronLeft aria-hidden />
         {mobile ? (texts.mobilePrev ?? texts.prevItem) : texts.prevItem}
       </Button>
-      {mobile && completionButton}
+      {completionButton}
       <Button
         variant="outline"
         size="sm"
@@ -332,7 +332,6 @@ export function LessonPane({
           >
             {lesson.title}
           </h2>
-          <div className="hidden lg:block">{completionButton}</div>
         </header>
         {courseType === "video" && lesson.video && (
           <label className="flex min-h-11 w-fit cursor-pointer items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">

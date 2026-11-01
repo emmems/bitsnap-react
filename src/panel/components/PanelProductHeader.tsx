@@ -30,9 +30,9 @@ export default function PanelProductHeaderComponent({
   const { data: branding } = useLoginBranding(projectID ?? "", Boolean(projectID));
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-neutral-200 bg-white px-4 md:h-dvh md:w-56 md:flex-col md:items-stretch md:border-r md:border-b-0 md:py-5 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex min-w-0 items-center gap-3 md:mb-6">
+      <div className="flex min-w-0 items-center gap-3 md:mb-6 md:flex-col md:items-start">
         <LoginBrandLogo projectId={projectID} logoUrl={theme?.logoURL} logoDarkUrl={theme?.logoDarkURL} name={branding?.name} className="shrink-0" />
-        {branding?.name && <span className="truncate text-sm font-medium">{branding.name}</span>}
+        {branding?.name && <span title={branding.name} className="truncate text-sm font-medium md:line-clamp-2 md:whitespace-normal">{branding.name}</span>}
       </div>
       <nav aria-label={texts.navigationLabel} className="fixed inset-x-0 bottom-0 z-10 flex h-[calc(56px+env(safe-area-inset-bottom))] items-start justify-around border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] md:static md:h-auto md:flex-1 md:flex-col md:justify-start md:gap-2 md:border-0 md:bg-transparent md:pb-0 dark:border-neutral-800 dark:bg-neutral-900">
         {panelNavItems.map(({ screen, label, icon: Icon }) => {
@@ -54,7 +54,7 @@ export default function PanelProductHeaderComponent({
         })}
       </nav>
       <div className="hidden border-t border-neutral-200 pt-4 md:block dark:border-neutral-800">
-        {email && <p className="mb-3 break-words text-sm text-neutral-600 dark:text-neutral-400">{email}</p>}
+        {email && <p title={email} className="mb-3 truncate text-sm text-neutral-600 dark:text-neutral-400">{email}</p>}
         <button type="button" onClick={logout} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-current dark:text-red-400 dark:hover:bg-neutral-800">
           <LogOut className="h-4 w-4" aria-hidden="true" />{texts.logout}
         </button>

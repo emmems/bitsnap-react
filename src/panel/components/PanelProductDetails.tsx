@@ -219,7 +219,7 @@ const PanelProductDetails = ({
       </div>
 
       <main className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <header className="flex min-w-0 flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900 lg:row-span-2">
+        <header className="flex min-w-0 flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900 lg:row-span-2 lg:self-start">
           <img
             src={product.productImageUrl}
             alt={product.productName}
@@ -312,6 +312,7 @@ const PanelProductDetails = ({
                         <>
                           <AudioPlayer
                             ref={audioPlayerRef}
+                            coverShownBeside
                             chapters={chapters}
                             author={
                               typeof audioResponse?.author === "string"
