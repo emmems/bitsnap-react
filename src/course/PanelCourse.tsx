@@ -302,6 +302,8 @@ function CourseView({
   }
 
   const isVideo = course.type === "video";
+  const showMobileContents =
+    !isVideo || item == null || item.locked || item.kind === "test";
   const showResume =
     course.resumeItemId !== "" &&
     course.resumeItemId !== currentId &&
@@ -379,7 +381,7 @@ function CourseView({
             : "lg:grid-cols-[320px_minmax(0,1fr)]",
         )}
       >
-        {!isVideo && (
+        {showMobileContents && (
           <div className="lg:hidden">
             <Button
               variant="outline"
@@ -395,13 +397,15 @@ function CourseView({
           </div>
         )}
 
-        {!isVideo && (
+        {showMobileContents && (
           <aside
             id={contentsId}
             className={cn(
               CARD,
-              "p-3 sm:p-3 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto",
+              isVideo && "lg:hidden",
+              "p-3 sm:p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto",
               contentsOpen ? "block" : "hidden",
+              !isVideo && "lg:block",
             )}
           >
             {outline}

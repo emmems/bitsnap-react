@@ -180,6 +180,8 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     const resumedRef = useRef(false);
     /** Position to restore instead of the remembered one (URL refresh, retry). */
     const pendingSeekRef = useRef<number | null>(null);
+    /** Chapter URL that already asked the owner for a fresh signed URL. */
+    const expiredUrlRef = useRef<string | null>(null);
     const chaptersRef = useRef(chapters);
     const chaptersSignatureRef = useRef<string | null>(null);
 
@@ -505,6 +507,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       }
       setIsLoading(false);
       video.playbackRate = speedRef.current;
+      expiredUrlRef.current = null;
       if (!resumedRef.current) {
         resumedRef.current = true;
         const pending = pendingSeekRef.current;
@@ -525,7 +528,22 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     }
 
     function handleMediaElementError() {
-      reportError(playerErrorFromMediaError(videoRef.current?.error));
+      const mediaError = videoRef.current?.error;
+      const src = currentChapterRef.current?.publicUrl;
+      // Safari plays HLS itself and reports an expired signed URL as a network
+      // error (2) or an unsupported source (4). Ask for a fresh URL once per
+      // URL; an error that repeats after that refresh is a real error.
+      const refreshable = mediaError?.code === 2 || mediaError?.code === 4;
+      if (
+        refreshable &&
+        hlsRef.current == null &&
+        src != null &&
+        expiredUrlRef.current !== src
+      ) {
+        expiredUrlRef.current = src;
+        callbacksRef.current.onExpiredUrl?.();
+      }
+      reportError(playerErrorFromMediaError(mediaError));
     }
 
     function retry() {

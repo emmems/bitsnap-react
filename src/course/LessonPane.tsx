@@ -212,7 +212,7 @@ export function LessonPane({
       data-lesson-navigation={mobile ? "mobile" : "desktop"}
       className={
         mobile
-          ? "fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 border-t border-neutral-200 bg-white px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:border-neutral-700 dark:bg-neutral-900 lg:hidden"
+          ? "fixed inset-x-0 bottom-[var(--course-mobile-bottom,0px)] z-40 flex items-center justify-between gap-2 border-t border-neutral-200 bg-white px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:border-neutral-700 dark:bg-neutral-900 lg:hidden"
           : "hidden items-center justify-between gap-3 lg:flex"
       }
     >
@@ -243,7 +243,7 @@ export function LessonPane({
   return (
     <article
       data-lesson-id={lesson.id}
-      className="min-w-0 space-y-5 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0"
+      className="min-w-0 space-y-5 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--course-mobile-bottom,0px))] lg:pb-0"
       aria-labelledby={`lesson-${lesson.id}`}
     >
       {lesson.video && (

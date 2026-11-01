@@ -18,10 +18,12 @@ dom.window.HTMLMediaElement.prototype.load = () => {};
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let PanelCourse: typeof import("./PanelCourse.tsx").PanelCourse;
+let LazyPanelCourse: typeof import("../panel/components/LazyPanelCourse.tsx").default;
 let sampleCourse: typeof import("./fixtures.ts").sampleCourse;
 
 before(async () => {
   React = await import("react");
+  LazyPanelCourse = (await import("../panel/components/LazyPanelCourse.tsx")).default;
   createRoot = (await import("react-dom/client")).createRoot;
   PanelCourse = (await import("./PanelCourse.tsx")).PanelCourse;
   sampleCourse = (await import("./fixtures.ts")).sampleCourse;
@@ -86,6 +88,8 @@ describe("course lesson controls", () => {
   async function mount(
     options: {
       locked?: boolean;
+      panel?: boolean;
+      itemId?: string;
       completed?: boolean;
       video?: boolean;
       autoplay?: boolean;
@@ -133,6 +137,8 @@ describe("course lesson controls", () => {
     const source = {
       ...dataSource,
       getCourse: async () => course,
+      getTest: () => new Promise(() => {}),
+      listSubmissions: async () => [],
       getLesson: async () => lesson,
       listQuestions: async () => [],
       saveProgress: async (input: unknown) => {
@@ -140,12 +146,13 @@ describe("course lesson controls", () => {
         return { completed: true, completedLessons: 4, progressPercent: 100 };
       },
     } as CourseDataSource;
+    const Component = options.panel ? LazyPanelCourse : PanelCourse;
     await React.act(async () =>
       root.render(
-        <PanelCourse
+        <Component
           dataSource={source}
           initialCourse={course}
-          itemId="l2"
+          itemId={options.itemId ?? "l2"}
           onItemChange={(id) => navigated.push(id)}
           locale="en"
         />,
@@ -160,6 +167,49 @@ describe("course lesson controls", () => {
     };
     return { container, root, saved, navigated, click, unmount };
   }
+
+  it("offsets panel lesson controls and content above mobile panel navigation only", async () => {
+    for (const panel of [false, true]) {
+      const view = await mount({ panel });
+      try {
+        const bar = view.container.querySelector('[data-lesson-navigation="mobile"]')!;
+        const article = view.container.querySelector("article")!;
+        assert.ok(bar.classList.contains("bottom-[var(--course-mobile-bottom,0px)]"));
+        assert.ok(article.classList.contains("pb-[calc(5rem+env(safe-area-inset-bottom)+var(--course-mobile-bottom,0px))]"));
+        assert.ok(article.classList.contains("lg:pb-0"));
+        const wrapper = view.container.querySelector('[class*="--course-mobile-bottom:calc"]');
+        assert.equal(Boolean(wrapper), panel);
+        if (wrapper) {
+          assert.ok(wrapper.classList.contains("[--course-mobile-bottom:calc(56px+env(safe-area-inset-bottom))]"));
+          assert.ok(wrapper.classList.contains("md:[--course-mobile-bottom:0px]"));
+        }
+      } finally {
+        await view.unmount();
+      }
+    }
+  });
+
+  it("offers a mobile contents toggle on video tests and locked items", async () => {
+    for (const itemId of ["t1", "l3"]) {
+      const view = await mount({ itemId, locked: true });
+      try {
+        const toggle = view.container.querySelector<HTMLButtonElement>('button[aria-controls][aria-expanded]');
+        assert.ok(toggle);
+        assert.equal(toggle.getAttribute("aria-expanded"), "false");
+        const outline = dom.window.document.getElementById(toggle.getAttribute("aria-controls")!)!;
+        assert.ok(outline.classList.contains("hidden"));
+        await view.click(toggle);
+        assert.equal(toggle.getAttribute("aria-expanded"), "true");
+        assert.ok(!outline.classList.contains("hidden"));
+        assert.ok(outline.classList.contains("lg:hidden"));
+        await view.click(outline.querySelector('[data-item-id="l1"]'));
+        assert.deepEqual(view.navigated, ["l1"]);
+        assert.equal(toggle.getAttribute("aria-expanded"), "false");
+      } finally {
+        await view.unmount();
+      }
+    }
+  });
 
   it("renders mobile tabs, switches panels, and supports arrow keys", async () => {
     const view = await mount();

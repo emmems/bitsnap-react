@@ -20,7 +20,9 @@ export default function LazyPanelCourse(props: PanelCourseProps) {
         </div>
       }
     >
-      <PanelCourse {...props} />
+      <div className="[--course-mobile-bottom:calc(56px+env(safe-area-inset-bottom))] md:[--course-mobile-bottom:0px]">
+        <PanelCourse {...props} />
+      </div>
     </Suspense>
   );
 }

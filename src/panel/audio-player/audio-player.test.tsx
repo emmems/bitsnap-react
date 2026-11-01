@@ -528,6 +528,37 @@ describe("audio player", () => {
     assert.equal(playerRef.current!.getError(), null);
   });
 
+  it("asks for a fresh URL once when native playback finds one expired", async () => {
+    const originalCanPlayType =
+      dom.window.HTMLMediaElement.prototype.canPlayType;
+    dom.window.HTMLMediaElement.prototype.canPlayType = () => "maybe";
+    try {
+      const errors: AudioPlayerError[] = [];
+      let refreshes = 0;
+      const player = await renderPlayer({
+        onError: (error) => errors.push(error),
+        onExpiredUrl: () => (refreshes += 1),
+      });
+      giveMediaProperties(player.video);
+      await dispatch(player.video, "loadeddata");
+
+      Object.defineProperty(player.video, "error", {
+        value: { code: 2 },
+        configurable: true,
+      });
+      await dispatch(player.video, "error");
+      assert.equal(refreshes, 1);
+
+      const errorsAfterFirst = errors.length;
+      await dispatch(player.video, "error");
+      assert.equal(refreshes, 1);
+      assert.ok(errors.length > errorsAfterFirst);
+      assert.deepEqual(errors.at(-1), { kind: "network" });
+    } finally {
+      dom.window.HTMLMediaElement.prototype.canPlayType = originalCanPlayType;
+    }
+  });
+
   it("marks playback finished when the last chapter ends", async () => {
     let finished = 0;
     const player = await renderPlayer({ onFinished: () => (finished += 1) });
