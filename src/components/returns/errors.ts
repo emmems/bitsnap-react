@@ -1,3 +1,5 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { kindFromRpcError } from "@/src/ui/email-code-login/errors";
 import type { ReturnsTextKey } from "./texts";
 
 /** Backend error code that means the returns session is gone. */
@@ -50,6 +52,20 @@ export function isSessionExpiredError(error: unknown): boolean {
 /** Maps any failure to the text key of a customer facing message. */
 export function mapReturnsError(error: unknown): ReturnsTextKey {
   const code = getReturnsErrorCode(error);
+  const mapped = code != null ? ERROR_TEXT_KEYS[code] : undefined;
+  if (mapped != null) {
+    return mapped;
+  }
 
-  return (code != null ? ERROR_TEXT_KEYS[code] : undefined) ?? "errorGeneric";
+  // No backend code: a throttled request, or one that never reached the server.
+  if (error != null && typeof error === "object") {
+    if (ConnectError.from(error).code === Code.ResourceExhausted) {
+      return "errorRateLimited";
+    }
+    if (kindFromRpcError(error) === "network") {
+      return "errorNetwork";
+    }
+  }
+
+  return "errorGeneric";
 }

@@ -27,6 +27,12 @@ import {
   type AnalyticsOption,
 } from "@/src/analytics/instrument";
 import { cn } from "@/src/lib/utils";
+import {
+  clearPendingLogin,
+  pendingLoginKey,
+  readPendingLogin,
+  savePendingLogin,
+} from "@/src/ui/email-code-login/pending";
 import { getRpcTransport, getTransportHost } from "@/src/rpc-provider";
 import type { Transport } from "@connectrpc/connect";
 import type { ReturnsAppearance } from "./appearance";
@@ -84,7 +90,13 @@ export type ReturnsContextValue = {
   /** Failure of the last panel token exchange, if any. */
   exchangeError: unknown;
   challenge: ReturnsChallenge | undefined;
+  /**
+   * Stores (or, with `undefined`, drops) the pending verification. It is kept
+   * in `sessionStorage` too, so a reload returns to the code step.
+   */
   setChallenge: (challenge: ReturnsChallenge | undefined) => void;
+  /** Email of the last verification, kept after the challenge is dropped. */
+  lastEmail: string | undefined;
   /** Stores a freshly issued session in state and `sessionStorage`. */
   authenticate: (session: StoredReturnsSession) => void;
   /** Drops the session, the pending challenge and cached customer data. */
@@ -188,8 +200,28 @@ function SessionProvider({
     expiresAt?: number;
   }>({ status: "hydrating" });
   const [exchangeError, setExchangeError] = useState<unknown>();
-  const [challenge, setChallenge] = useState<ReturnsChallenge>();
+  const [challenge, setChallengeState] = useState<ReturnsChallenge>();
+  const [lastEmail, setLastEmail] = useState<string>();
+  const pendingKey = pendingLoginKey("returns", projectID);
   const previousPanelToken = useRef<string | undefined>(undefined);
+
+  const setChallenge = useCallback(
+    (next: ReturnsChallenge | undefined) => {
+      setChallengeState(next);
+      if (next == null) {
+        clearPendingLogin(pendingKey);
+        return;
+      }
+      setLastEmail(next.email);
+      savePendingLogin(pendingKey, {
+        email: next.email,
+        challengeId: next.challengeId,
+        resendAt: next.resendAvailableAt,
+        sentAt: Date.now(),
+      });
+    },
+    [pendingKey],
+  );
 
   const dropCachedData = useCallback(() => {
     // Query inputs carry the session token, so cached customer data must not
@@ -202,7 +234,7 @@ function SessionProvider({
     setChallenge(undefined);
     setSession({ status: "anonymous" });
     dropCachedData();
-  }, [projectID, dropCachedData]);
+  }, [projectID, dropCachedData, setChallenge]);
 
   const authenticate = useCallback(
     (next: StoredReturnsSession) => {
@@ -215,7 +247,7 @@ function SessionProvider({
         expiresAt: next.expiresAt,
       });
     },
-    [projectID],
+    [projectID, setChallenge],
   );
 
   // Hydrates from `sessionStorage`, or exchanges the panel token. Runs after
@@ -234,6 +266,16 @@ function SessionProvider({
       }
 
       const stored = readStoredSession(storage, projectID);
+      // A verification that was pending before a reload or an app switch.
+      const pending = stored == null ? readPendingLogin(pendingKey) : undefined;
+      if (pending?.challengeId != null) {
+        setChallengeState({
+          challengeId: pending.challengeId,
+          email: pending.email,
+          resendAvailableAt: pending.resendAt,
+        });
+        setLastEmail(pending.email);
+      }
       setSession(
         stored != null
           ? {
@@ -309,6 +351,7 @@ function SessionProvider({
       exchangeError,
       challenge,
       setChallenge,
+      lastEmail,
       authenticate,
       clearSession,
     }),
@@ -319,6 +362,8 @@ function SessionProvider({
       session.token,
       exchangeError,
       challenge,
+      setChallenge,
+      lastEmail,
       authenticate,
       clearSession,
     ],

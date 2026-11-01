@@ -21,6 +21,15 @@ export const SECONDARY_BUTTON_CLASS =
 export const INPUT_CLASS =
   "bg-[var(--bitsnap-returns-input-background,#ffffff)] dark:bg-[var(--bitsnap-returns-input-background,#ffffff)] border-[color:var(--bitsnap-returns-border,#e4e4e7)] text-[color:var(--bitsnap-returns-foreground,#18181b)] placeholder:text-[color:var(--bitsnap-returns-muted-foreground,#71717a)] focus-visible:border-[color:var(--bitsnap-returns-focus-ring,#71717a)] focus-visible:ring-[color:var(--bitsnap-returns-focus-ring,#71717a)]/50";
 
+/**
+ * Slots of the one-time-code field: the input colors plus the focused slot's
+ * border and ring, which `InputOTPSlot` draws from `data-active`.
+ */
+export const OTP_SLOT_CLASS = cn(
+  INPUT_CLASS,
+  "data-[active=true]:border-[color:var(--bitsnap-returns-focus-ring,#71717a)] data-[active=true]:ring-[color:var(--bitsnap-returns-focus-ring,#71717a)]/50",
+);
+
 export type SlotProps = { className?: string; style?: CSSProperties };
 
 /** Frame shared by every step: back button, title and description. */
@@ -28,12 +37,15 @@ export function StepFrame({
   title,
   description,
   onBack,
+  lead,
   className,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   onBack?: () => void;
+  /** Shown above the header, for example the shop logo. */
+  lead?: ReactNode;
   className?: string;
   children?: ReactNode;
 }) {
@@ -45,6 +57,7 @@ export function StepFrame({
 
   return (
     <section className={cn("flex flex-col gap-5", className)}>
+      {lead}
       <div
         data-bitsnap-returns-slot="header"
         className={cn("flex flex-col gap-2", header.className)}

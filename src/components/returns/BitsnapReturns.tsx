@@ -1,5 +1,9 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { cn } from "@/src/lib/utils";
+import {
+  LoginBrandLogo,
+  type LoginLogoOptions,
+} from "@/src/ui/email-code-login/LoginBrandLogo";
 import { useReturnsSlot } from "./appearance.context";
 import { ReturnsCodeStep, ReturnsEmailStep } from "./AuthSteps";
 import { SkeletonRows } from "./internal";
@@ -21,9 +25,15 @@ import {
   RETURNS_STEP_COUNT,
   returnsStepNumber,
 } from "./state-machine";
-import { useReturnsText } from "./texts.context";
+import { useReturnsLocale, useReturnsText } from "./texts.context";
 
-export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children">;
+/**
+ * Props of {@link BitsnapReturns}. `showLogo`, `logoUrl` and `logoDarkUrl` set
+ * the shop logo above the e-mail and code steps: by default the logo from the
+ * shop settings, or Bitsnap's when the shop has none.
+ */
+export type BitsnapReturnsProps = Omit<ReturnsProviderProps, "children"> &
+  LoginLogoOptions;
 
 function StepIndicator({ current }: { current: number }) {
   const text = useReturnsText();
@@ -41,8 +51,15 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 /** Default step router. All transitions come from the pure state machine. */
-function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
-  const { status } = useReturnsContext("BitsnapReturns");
+function ReturnsRouter({
+  panelToken,
+  logo,
+}: {
+  panelToken: boolean;
+  logo: LoginLogoOptions;
+}) {
+  const { status, challenge, projectID } = useReturnsContext("BitsnapReturns");
+  const locale = useReturnsLocale();
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
     initialReturnsStep(false),
@@ -58,6 +75,19 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
     }
   }, [status]);
 
+  // A verification that was pending before a reload or an app switch returns
+  // to the code step once, when the stored state has been read.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || status === "hydrating") {
+      return;
+    }
+    restored.current = true;
+    if (status === "anonymous" && challenge != null) {
+      dispatch({ type: "CODE_SENT" });
+    }
+  }, [status, challenge]);
+
   // Without a panel token the server render and the first client render show
   // the email step; a stored session switches to the orders after hydration.
   if (status === "exchanging" || (status === "hydrating" && panelToken)) {
@@ -66,14 +96,25 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
 
   const stepNumber = returnsStepNumber(step.name);
 
+  // The logo sits above the step indicator, and stays mounted between the
+  // e-mail and the code step; the steps themselves then show none.
+  const loginStep = step.name === "email" || step.name === "code";
+
   return (
     <div className="flex flex-col gap-4">
+      {loginStep && (
+        <LoginBrandLogo projectId={projectID} locale={locale} {...logo} />
+      )}
       {stepNumber != null && <StepIndicator current={stepNumber} />}
       {step.name === "email" && (
-        <ReturnsEmailStep onSubmitted={() => dispatch({ type: "CODE_SENT" })} />
+        <ReturnsEmailStep
+          showLogo={false}
+          onSubmitted={() => dispatch({ type: "CODE_SENT" })}
+        />
       )}
       {step.name === "code" && (
         <ReturnsCodeStep
+          showLogo={false}
           onVerified={() => dispatch({ type: "AUTHENTICATED" })}
           onBack={() => dispatch({ type: "BACK" })}
         />
@@ -144,10 +185,18 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
  * <BitsnapReturns projectID="…" appearance={brand} texts={{ emailStepTitle: "Return a product" }} />
  * ```
  */
-export function BitsnapReturns(props: BitsnapReturnsProps) {
+export function BitsnapReturns({
+  showLogo,
+  logoUrl,
+  logoDarkUrl,
+  ...props
+}: BitsnapReturnsProps) {
   return (
     <ReturnsProvider {...props}>
-      <ReturnsRouter panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""} />
+      <ReturnsRouter
+        panelToken={props.panelAccessToken != null && props.panelAccessToken !== ""}
+        logo={{ showLogo, logoUrl, logoDarkUrl }}
+      />
     </ReturnsProvider>
   );
 }

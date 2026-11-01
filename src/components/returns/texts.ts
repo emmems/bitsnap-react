@@ -6,7 +6,22 @@ import { lookupText, resolveTexts, type LocaleTables } from "@/src/lib/texts";
  * whatever the locale. Strings with `{name}` placeholders keep them in
  * overrides; unknown placeholders are left untouched.
  */
-export type ReturnsTexts = {
+export type ReturnsTexts = Omit<ResolvedReturnsTexts, OptionalReturnsTextKey> &
+  Partial<Pick<ResolvedReturnsTexts, OptionalReturnsTextKey>>;
+
+/**
+ * Keys added after 1.6: optional in {@link ReturnsTexts} so that code which
+ * builds a complete texts object keeps compiling. The defaults fill them in.
+ */
+type OptionalReturnsTextKey =
+  | "resendSent"
+  | "codeSpamHint"
+  | "codeValidity"
+  | "codeIncomplete"
+  | "errorNetwork";
+
+/** The texts after the defaults are applied: every key is present. */
+export type ResolvedReturnsTexts = {
   // Frame
   /** Label of the back buttons. */
   back: string;
@@ -33,6 +48,13 @@ export type ReturnsTexts = {
   resend: string;
   /** Placeholder `{seconds}`. */
   resendIn: string;
+  /** Confirmation after a new code was sent. */
+  resendSent: string;
+  /** Hint under the code field. */
+  codeSpamHint: string;
+  codeValidity: string;
+  /** Shown when the form is submitted with fewer than 6 digits. */
+  codeIncomplete: string;
   logout: string;
 
   // Orders
@@ -122,6 +144,7 @@ export type ReturnsTexts = {
 
   // Error messages
   errorGeneric: string;
+  errorNetwork: string;
   errorInvalidEmail: string;
   errorInvalidCode: string;
   errorSessionExpired: string;
@@ -136,7 +159,7 @@ export type ReturnsTexts = {
   errorRetry: string;
 };
 
-export type ReturnsTextKey = keyof ReturnsTexts;
+export type ReturnsTextKey = keyof ResolvedReturnsTexts;
 
 export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
   en: {
@@ -158,6 +181,10 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     codeSubmit: "Verify",
     resend: "Send the code again",
     resendIn: "Send again in {seconds} s",
+    resendSent: "We sent a new code.",
+    codeSpamHint: "Can't see the email? Check your spam folder.",
+    codeValidity: "The code is valid for 10 minutes.",
+    codeIncomplete: "Enter all 6 digits of the code.",
     logout: "Sign out",
 
     ordersTitle: "Your orders",
@@ -227,6 +254,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     refundStatusFallback: "Unknown",
 
     errorGeneric: "Something went wrong. Please try again.",
+    errorNetwork: "Cannot reach the server. Check your connection and try again.",
     errorInvalidEmail: "Enter a valid email address.",
     errorInvalidCode: "The code is invalid or has expired.",
     errorSessionExpired: "Your session has expired. Verify your email again.",
@@ -261,6 +289,10 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     codeSubmit: "Zweryfikuj",
     resend: "Wyślij kod ponownie",
     resendIn: "Wyślij ponownie za {seconds} s",
+    resendSent: "Wysłaliśmy nowy kod.",
+    codeSpamHint: "Nie widzisz e-maila? Sprawdź folder spam.",
+    codeValidity: "Kod jest ważny 10 minut.",
+    codeIncomplete: "Wpisz wszystkie 6 cyfr kodu.",
     logout: "Wyloguj się",
 
     ordersTitle: "Twoje zamówienia",
@@ -330,6 +362,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     refundStatusFallback: "Nieznany",
 
     errorGeneric: "Coś poszło nie tak. Spróbuj ponownie.",
+    errorNetwork: "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.",
     errorInvalidEmail: "Podaj poprawny adres e-mail.",
     errorInvalidCode: "Kod jest nieprawidłowy lub wygasł.",
     errorSessionExpired: "Sesja wygasła. Zweryfikuj adres e-mail ponownie.",
@@ -351,7 +384,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
 export function resolveReturnsTexts(
   locale: string,
   overrides?: Partial<ReturnsTexts>,
-): ReturnsTexts {
+): ResolvedReturnsTexts {
   return resolveTexts(RETURNS_TEXT_TABLES, locale, overrides);
 }
 

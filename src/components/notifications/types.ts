@@ -57,7 +57,34 @@ export interface CustomizationTexts {
   loginVerifyCodeError?: string;
   loginResendEmailError?: string;
   loginTitle?: string;
+  /** Submit button of the code step. */
+  loginVerifyButton?: string;
+  /** Placeholder `{seconds}`: the resend button while the cooldown runs. */
+  loginResendInText?: string;
+  loginResentMessage?: string;
+  loginExpiredError?: string;
+  loginTooManyAttemptsError?: string;
+  /** Placeholder `{time}`, for example "45 s" or "2 min". */
+  loginRateLimitedError?: string;
+  loginNetworkError?: string;
+  loginSpamHint?: string;
+  loginValidityHint?: string;
   loginDescription?: string;
+  /** Code button while the code is checked. */
+  loginVerifyingButton?: string;
+  /** Spoken when the e-mail step is shown again. */
+  loginStepEmailHint?: string;
+  /** Spoken when the code step is shown. */
+  loginStepCodeHint?: string;
+  /** Placeholder `{time}`: a code was sent a moment ago, a new one comes later. */
+  loginAlreadySentMessage?: string;
+  loginEmailNotFoundError?: string;
+  loginDeliveryUnavailableError?: string;
+  /** Resend button once the code expired or ran out of attempts. */
+  loginResendNewCodeButton?: string;
+  /** Link in the "I already have a code" view that goes back to sending one. */
+  loginNoCodeButton?: string;
+  loginCodeIncompleteError?: string;
 }
 
 export interface ComponentClassNames {
@@ -82,6 +109,47 @@ export interface ComponentClassNames {
 /**
  * Props for the NotificationsComponentPublic component.
  */
+/** The texts of the notifications login dialog. */
+export type LoginScreenTexts = Pick<
+  CustomizationTexts,
+  | "loginTitle"
+  | "loginDescription"
+  | "loginEmailLabel"
+  | "loginEmailPlaceholder"
+  | "loginSendCodeButton"
+  | "loginSendingButton"
+  | "loginCodeLabel"
+  | "loginCodeSentMessage"
+  | "loginIHaveCode"
+  | "loginChangeEmailButton"
+  | "loginResendCodeButton"
+  | "loginInvalidEmailError"
+  | "loginInvalidCodeError"
+  | "loginSlugRequiredError"
+  | "loginVerificationFailedError"
+  | "loginSendEmailError"
+  | "loginVerifyCodeError"
+  | "loginResendEmailError"
+  | "loginVerifyButton"
+  | "loginResendInText"
+  | "loginResentMessage"
+  | "loginExpiredError"
+  | "loginTooManyAttemptsError"
+  | "loginRateLimitedError"
+  | "loginNetworkError"
+  | "loginSpamHint"
+  | "loginValidityHint"
+  | "loginVerifyingButton"
+  | "loginStepEmailHint"
+  | "loginStepCodeHint"
+  | "loginAlreadySentMessage"
+  | "loginEmailNotFoundError"
+  | "loginDeliveryUnavailableError"
+  | "loginResendNewCodeButton"
+  | "loginNoCodeButton"
+  | "loginCodeIncompleteError"
+>;
+
 export interface NotificationsComponentPublicProps {
   /**
    * Unique identifier for the project (if not provided, productID will be used via CartProvider).
@@ -112,6 +180,12 @@ export interface NotificationsComponentPublicProps {
    * URL or path to the project's logo (dark mode).
    */
   projectLogoDark?: string;
+
+  /**
+   * The login dialog shows the project logo (`projectLogo`, else the one of
+   * the shop settings, else Bitsnap's). `false` hides it.
+   */
+  showLoginLogo?: boolean;
 
   /**
    * Array of notification groups that the user can subscribe to. If you will provide group, we will not show all possible public groups from dashboard.
