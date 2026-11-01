@@ -84,7 +84,7 @@ const PanelLoginForm = ({
           if (response.result.case === "success") {
             return {
               ok: true,
-              retryIn: response.result.value.retryIn,
+              retryIn: response.result.value.retryIn || undefined,
               challengeId: response.result.value.challengeId || undefined,
             };
           }

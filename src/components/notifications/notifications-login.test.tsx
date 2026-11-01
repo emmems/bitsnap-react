@@ -135,12 +135,12 @@ describe("notifications failure mapping", () => {
     assert.equal(notificationsFailureKind(new ConnectError("Invalid code", Code.InvalidArgument)), "wrongCode");
     assert.equal(notificationsFailureKind(new ConnectError("Too many attempts", Code.ResourceExhausted)), "tooManyAttempts");
     assert.equal(notificationsFailureKind(new ConnectError("slow down", Code.ResourceExhausted)), "rateLimited");
-    assert.equal(notificationsFailureKind(new ConnectError("down", Code.Unavailable)), "network");
+    assert.equal(notificationsFailureKind(new ConnectError("down", Code.Unavailable)), "unknown");
     assert.equal(notificationsFailureKind(new TypeError("Failed to fetch")), "network");
     assert.equal(notificationsFailureKind(new Error("boom")), "unknown");
   });
 
-  it("reads a throttled send (ok: false + retryIn) as a code that was already sent", async () => {
+  it("reads ok: false + retryIn as the per-IP limit (nothing was sent)", async () => {
     const adapter = createNotificationsAdapter(
       async () => ({ ok: false, retryIn: 42 }),
       "slug",
@@ -148,9 +148,26 @@ describe("notifications failure mapping", () => {
     );
     assert.deepEqual(await adapter.send("a@b.co", { resend: false }), {
       ok: false,
-      kind: "alreadySent",
+      kind: "rateLimited",
       retryIn: 42,
     });
+  });
+
+  it("treats retryIn 0 (older backend) as no cooldown given", async () => {
+    const adapter = createNotificationsAdapter(async () => ({ ok: true, retryIn: 0 }), "slug", DEFAULT_TEXTS);
+    assert.deepEqual(await adapter.send("a@b.co", { resend: false }), { ok: true, retryIn: undefined });
+  });
+
+  it("maps the new login* texts onto the shared ones", () => {
+    const mapped = notificationsLoginTexts({
+      ...DEFAULT_TEXTS,
+      loginVerifyingButton: "Sprawdzam",
+      loginNoCodeButton: "Bez kodu",
+      loginCodeIncompleteError: "Za krótki",
+    });
+    assert.equal(mapped.verifying, "Sprawdzam");
+    assert.equal(mapped.noCode, "Bez kodu");
+    assert.equal(mapped.codeIncomplete, "Za krótki");
   });
 
   it("keeps the legacy texts working", () => {
@@ -189,7 +206,7 @@ describe("notifications LoginScreen", () => {
     assert.equal(alertText(), DEFAULT_TEXTS.loginInvalidCodeError);
     assert.equal(codeInput().value, "");
     assert.equal(doc().activeElement, codeInput());
-    assert.equal(errors.length, 0, "a mistyped code is not an error to report");
+    assert.equal(errors.length, 1, "onError still gets a wrong code, as before");
   });
 
   it("explains 'Too many attempts' (ResourceExhausted) and offers a new code", async () => {
@@ -210,14 +227,26 @@ describe("notifications LoginScreen", () => {
     assert.ok(emailInput(), "stays on the e-mail step");
   });
 
-  it("continues to the code step when the send was throttled, with the server's wait", async () => {
+  it("stays on the e-mail step with the wait when the per-IP limit stopped the send", async () => {
     replies = [{ ok: false, retryIn: 90 }];
     await mount();
     await toCodeStep();
+    assert.ok(emailInput(), "nothing was sent: no code step");
+    assert.equal(codeInput(), null);
+    assert.match(alertText(), /Zbyt wiele prób\. Spróbuj ponownie za 2 min/);
+  });
+
+  it("continues to the code step when a resend was throttled (ok: true + retryIn)", async () => {
+    replies = [{ ok: true, retryIn: 90 }];
+    await mount();
+    await toCodeStep();
     assert.ok(codeInput(), "a code was sent a moment ago: go and enter it");
-    assert.match(doc().body.textContent ?? "", /2 min/);
     assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (89|90) s/);
     assert.equal(buttonWith(/Wyślij ponownie/)!.disabled, true);
+  });
+
+  it("answers Unavailable with the generic copy, not the connection one", () => {
+    assert.equal(notificationsFailureKind(new ConnectError("redis", Code.Unavailable)), "unknown");
   });
 
   it("makes the header back arrow and the change link do the same thing", async () => {

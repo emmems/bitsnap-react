@@ -70,6 +70,21 @@ export interface CustomizationTexts {
   loginSpamHint?: string;
   loginValidityHint?: string;
   loginDescription?: string;
+  /** Code button while the code is checked. */
+  loginVerifyingButton?: string;
+  /** Spoken when the e-mail step is shown again. */
+  loginStepEmailHint?: string;
+  /** Spoken when the code step is shown. */
+  loginStepCodeHint?: string;
+  /** Placeholder `{time}`: a code was sent a moment ago, a new one comes later. */
+  loginAlreadySentMessage?: string;
+  loginEmailNotFoundError?: string;
+  loginDeliveryUnavailableError?: string;
+  /** Resend button once the code expired or ran out of attempts. */
+  loginResendNewCodeButton?: string;
+  /** Link in the "I already have a code" view that goes back to sending one. */
+  loginNoCodeButton?: string;
+  loginCodeIncompleteError?: string;
 }
 
 export interface ComponentClassNames {
@@ -124,6 +139,15 @@ export type LoginScreenTexts = Pick<
   | "loginNetworkError"
   | "loginSpamHint"
   | "loginValidityHint"
+  | "loginVerifyingButton"
+  | "loginStepEmailHint"
+  | "loginStepCodeHint"
+  | "loginAlreadySentMessage"
+  | "loginEmailNotFoundError"
+  | "loginDeliveryUnavailableError"
+  | "loginResendNewCodeButton"
+  | "loginNoCodeButton"
+  | "loginCodeIncompleteError"
 >;
 
 export interface NotificationsComponentPublicProps {

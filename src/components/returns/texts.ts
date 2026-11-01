@@ -6,7 +6,22 @@ import { lookupText, resolveTexts, type LocaleTables } from "@/src/lib/texts";
  * whatever the locale. Strings with `{name}` placeholders keep them in
  * overrides; unknown placeholders are left untouched.
  */
-export type ReturnsTexts = {
+export type ReturnsTexts = Omit<ResolvedReturnsTexts, OptionalReturnsTextKey> &
+  Partial<Pick<ResolvedReturnsTexts, OptionalReturnsTextKey>>;
+
+/**
+ * Keys added after 1.6: optional in {@link ReturnsTexts} so that code which
+ * builds a complete texts object keeps compiling. The defaults fill them in.
+ */
+type OptionalReturnsTextKey =
+  | "resendSent"
+  | "codeSpamHint"
+  | "codeValidity"
+  | "codeIncomplete"
+  | "errorNetwork";
+
+/** The texts after the defaults are applied: every key is present. */
+export type ResolvedReturnsTexts = {
   // Frame
   /** Label of the back buttons. */
   back: string;
@@ -144,7 +159,7 @@ export type ReturnsTexts = {
   errorRetry: string;
 };
 
-export type ReturnsTextKey = keyof ReturnsTexts;
+export type ReturnsTextKey = keyof ResolvedReturnsTexts;
 
 export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
   en: {
@@ -369,7 +384,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
 export function resolveReturnsTexts(
   locale: string,
   overrides?: Partial<ReturnsTexts>,
-): ReturnsTexts {
+): ResolvedReturnsTexts {
   return resolveTexts(RETURNS_TEXT_TABLES, locale, overrides);
 }
 

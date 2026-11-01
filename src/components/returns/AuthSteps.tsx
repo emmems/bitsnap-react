@@ -226,7 +226,7 @@ export function ReturnsCodeStep({
             {text("codeValidity")} {text("codeSpamHint")}
           </p>
         </div>
-        <div className="min-h-5" aria-live="polite">
+        <div className="min-h-5">
           {incomplete && (
             <p role="alert" className="text-sm">
               {text("codeIncomplete")}

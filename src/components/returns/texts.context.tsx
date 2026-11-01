@@ -5,13 +5,14 @@ import {
   fillText,
   resolveReturnsTexts,
   type ReturnsTextKey,
+  type ResolvedReturnsTexts,
   type ReturnsTexts,
 } from "./texts";
 
 type ReturnsTextsContextValue = {
   /** Active locale (the `locale` prop or the library locale). */
   locale: string;
-  texts: ReturnsTexts;
+  texts: ResolvedReturnsTexts;
 };
 
 const ReturnsTextsContext = createContext<ReturnsTextsContextValue>({

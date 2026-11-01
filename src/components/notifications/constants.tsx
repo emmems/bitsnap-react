@@ -76,4 +76,13 @@ export const DEFAULT_TEXTS: Required<CustomizationTexts> = {
   loginNetworkError: LOGIN.network,
   loginSpamHint: LOGIN.spamHint,
   loginValidityHint: LOGIN.validity,
+  loginVerifyingButton: LOGIN.verifying,
+  loginStepEmailHint: LOGIN.stepEmail,
+  loginStepCodeHint: LOGIN.stepCode,
+  loginAlreadySentMessage: LOGIN.alreadySent,
+  loginEmailNotFoundError: LOGIN.emailNotFound,
+  loginDeliveryUnavailableError: LOGIN.deliveryUnavailable,
+  loginResendNewCodeButton: LOGIN.resendNew,
+  loginNoCodeButton: LOGIN.noCode,
+  loginCodeIncompleteError: LOGIN.codeIncomplete,
 };

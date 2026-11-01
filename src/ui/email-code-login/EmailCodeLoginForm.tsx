@@ -59,20 +59,19 @@ export function EmailCodeLoginForm({
   const resending = login.busy === "resend";
   const buttonBase = cn("h-11 w-full", buttonClassName);
 
+  // Both live regions stay mounted (empty) so that a screen reader has
+  // registered them before a message is put in; only their text changes.
   const noticeArea = (
     <div id={noticeId} className="min-h-5 text-sm leading-5">
-      {notice != null && (
-        <p
-          role={isError ? "alert" : "status"}
-          className={
-            isError
-              ? "font-medium text-red-700 dark:text-red-400"
-              : "text-foreground"
-          }
-        >
-          {notice.text}
-        </p>
-      )}
+      <p
+        role="alert"
+        className="font-medium text-red-700 dark:text-red-400"
+      >
+        {isError ? notice.text : null}
+      </p>
+      <p role="status" className="text-foreground">
+        {notice != null && !isError ? notice.text : null}
+      </p>
     </div>
   );
 

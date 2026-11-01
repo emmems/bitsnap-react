@@ -170,6 +170,15 @@ export function useEmailCodeLogin<T = void>(
 
   // Restore a code step that was pending before a reload or an app switch.
   useEffect(() => {
+    // A new key means another surface or project: start from the e-mail step
+    // instead of keeping what the previous key left behind.
+    setStep("email");
+    setCodeState("");
+    setChallengeId(undefined);
+    setResendAt(undefined);
+    setNeedsEmail(false);
+    setDead(undefined);
+    setNotice(undefined);
     if (storageKey == null) return;
     const pending = readPendingLogin(storageKey);
     if (pending == null) return;

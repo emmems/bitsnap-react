@@ -1,6 +1,6 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { ArrowLeft } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { rpcProvider, RpcProvider, useMutation } from "src/rpc-provider";
 import { Button } from "@/src/ui/button";
 import {
@@ -75,15 +75,31 @@ function LoginDialogBody({
   );
 
   const loginTexts = useMemo(() => notificationsLoginTexts(texts), [texts]);
-  const adapter = useMemo(
-    () =>
-      createNotificationsAdapter(
-        (request) => verifyUserEmail(request),
-        slug,
-        texts,
-      ),
-    [verifyUserEmail, slug, texts],
-  );
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const adapter = useMemo(() => {
+    const base = createNotificationsAdapter(
+      (request) => verifyUserEmail(request),
+      slug,
+      texts,
+    );
+    return {
+      ...base,
+      // The hook reports every failure but a wrong code; `onError` always
+      // got that one too, so keep it.
+      async verify(input) {
+        const outcome = await base.verify(input);
+        if (!outcome.ok && outcome.kind === "wrongCode") {
+          onErrorRef.current?.(
+            outcome.cause instanceof Error
+              ? outcome.cause
+              : new Error(outcome.message ?? "wrongCode"),
+          );
+        }
+        return outcome;
+      },
+    } satisfies typeof base;
+  }, [verifyUserEmail, slug, texts]);
 
   const login = useEmailCodeLogin<NotificationsLoginResult>({
     adapter,

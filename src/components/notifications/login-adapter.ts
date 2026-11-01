@@ -59,6 +59,15 @@ export function notificationsLoginTexts(
     network: texts.loginNetworkError,
     generic: texts.loginVerifyCodeError,
     deliveryFailed: texts.loginSendEmailError,
+    verifying: texts.loginVerifyingButton,
+    stepEmail: texts.loginStepEmailHint,
+    stepCode: texts.loginStepCodeHint,
+    alreadySent: texts.loginAlreadySentMessage,
+    emailNotFound: texts.loginEmailNotFoundError,
+    deliveryUnavailable: texts.loginDeliveryUnavailableError,
+    resendNew: texts.loginResendNewCodeButton,
+    noCode: texts.loginNoCodeButton,
+    codeIncomplete: texts.loginCodeIncompleteError,
   };
   return resolveEmailCodeTexts(locale, overrides);
 }
@@ -76,6 +85,9 @@ export function notificationsFailureKind(error: unknown): FailureKind {
   }
   if (/invalid code/i.test(message)) return "wrongCode";
   if (/expired/i.test(message)) return "expired";
+  // Redis outage on the backend: not the customer's connection, so the
+  // generic "try again shortly" copy.
+  if (connect.code === Code.Unavailable) return "unknown";
   return kindFromRpcError(error);
 }
 
@@ -92,16 +104,17 @@ export function createNotificationsAdapter(
       try {
         const response = await call({ email, slug });
         if (response.ok === false) {
-          // Throttled: a code went out a moment ago, `retryIn` says until when.
+          // `retryIn` without `ok`: the per-IP limit, nothing was sent. (A
+          // throttled resend of a code that went out is `ok: true`.)
           return response.retryIn != null && response.retryIn > 0
-            ? { ok: false, kind: "alreadySent", retryIn: response.retryIn }
+            ? { ok: false, kind: "rateLimited", retryIn: response.retryIn }
             : {
                 ok: false,
                 kind: "deliveryFailed",
                 message: resend ? texts.loginResendEmailError : texts.loginSendEmailError,
               };
         }
-        return { ok: true, retryIn: response.retryIn };
+        return { ok: true, retryIn: response.retryIn || undefined };
       } catch (cause) {
         const kind = notificationsFailureKind(cause);
         return {
