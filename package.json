@@ -197,6 +197,16 @@
         "default": "./dist/course.js"
       }
     },
+    "./chat": {
+      "import": {
+        "types": "./dist/chat.d.mts",
+        "default": "./dist/chat.mjs"
+      },
+      "require": {
+        "types": "./dist/chat.d.ts",
+        "default": "./dist/chat.js"
+      }
+    },
     "./consent": {
       "import": {
         "types": "./dist/consent.d.mts",
@@ -244,6 +254,9 @@
       ],
       "course": [
         "./dist/course.d.ts"
+      ],
+      "chat": [
+        "./dist/chat.d.ts"
       ],
       "consent": [
         "./dist/consent.d.ts"

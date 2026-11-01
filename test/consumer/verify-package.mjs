@@ -58,6 +58,10 @@ const requiredFiles = [
   "course.mjs",
   "course.d.ts",
   "course.d.mts",
+  "chat.js",
+  "chat.mjs",
+  "chat.d.ts",
+  "chat.d.mts",
   "consent.js",
   "consent.mjs",
   "consent.d.ts",
@@ -225,6 +229,54 @@ assert.ok(
   const courseDeclaration = readFileSync(join(dist, "course.d.ts"), "utf8");
   for (const name of ["PanelCourseProps", "CourseDataSource", "createRpcCourseDataSource"]) {
     assert.match(courseDeclaration, new RegExp(name), `dist/course.d.ts lacks ${name}`);
+  }
+}
+
+// The buyer chat is a subpath that `Panel`, `ChatThread` and `Channel` of the
+// main entry load on demand, and the NATS client is a dynamic import of the
+// chat itself: shops without chat download neither.
+{
+  const chatNames = [
+    "ChatThread",
+    "Channel",
+    "PanelMessages",
+    "createChatClient",
+    "startLive",
+    "useConversation",
+    "addPackToCart",
+    "getChatTexts",
+    "ChatError",
+  ];
+  const require = createRequire(import.meta.url);
+  const esmChat = await import(join(dist, "chat.mjs"));
+  const cjsChat = require(join(dist, "chat.js"));
+  for (const name of chatNames) {
+    assert.equal(typeof esmChat[name], "function", `missing chat export ${name} in dist/chat.mjs`);
+    assert.equal(typeof cjsChat[name], "function", `missing chat export ${name} in dist/chat.js`);
+  }
+  for (const name of ["ChatThread", "Channel"]) {
+    assert.equal(typeof built[name], "function", `missing export ${name} in dist/index.mjs`);
+  }
+
+  const { text: mainBundle, files } = readWithChunks("index.mjs");
+  assert.ok(
+    /import\("\.\/chat\.mjs"\)/.test(mainBundle),
+    "the main entry does not load the chat through import(\"./chat.mjs\")",
+  );
+  assert.ok(!files.includes("chat.mjs"), "dist/index.mjs imports dist/chat.mjs statically");
+  assert.ok(!mainBundle.includes("data-bitsnap-chat"), "the chat view is part of the main ESM bundle");
+  assert.ok(!mainBundle.includes("@nats-io/nats-core"), "the main ESM bundle reaches the NATS client");
+
+  const { text: chatBundle } = readWithChunks("chat.mjs");
+  assert.ok(
+    /import\("@nats-io\/nats-core"\)/.test(chatBundle) &&
+      !/from"@nats-io\/nats-core"/.test(chatBundle),
+    "the chat must load @nats-io/nats-core with a dynamic import",
+  );
+
+  const chatDeclaration = readFileSync(join(dist, "chat.d.ts"), "utf8");
+  for (const name of ["ChatThreadProps", "ChannelProps", "ChatClient", "ChatTexts"]) {
+    assert.match(chatDeclaration, new RegExp(name), `dist/chat.d.ts lacks ${name}`);
   }
 }
 

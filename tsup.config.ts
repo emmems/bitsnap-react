@@ -109,6 +109,7 @@ export default defineConfig((overrideOptions) => {
       returns: "src/returns/index.ts",
       catalog: "src/catalog/index.ts",
       course: "src/course/index.ts",
+      chat: "src/chat/index.ts",
       consent: "src/consent/index.ts",
       analytics: "src/analytics/index.ts",
       viewer3d: "src/viewer3d/index.ts",
