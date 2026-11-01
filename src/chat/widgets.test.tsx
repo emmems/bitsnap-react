@@ -446,7 +446,7 @@ describe("Channel", () => {
     assert.match(container.textContent!, /Spróbuj ponownie za 25 s/);
   });
 
-  it("sends a failed message again under the same id, a refused one under a new id", async () => {
+  it("sends a failed message again under the same id, even after a refused retry", async () => {
     let calls = 0;
     routes.push(
       on("GET", "/v1/me", () => json(200, me({ threads: [], channels: [channel()] }))),
@@ -465,7 +465,24 @@ describe("Channel", () => {
       .map((r) => (r.body as { client_id: string }).client_id);
     assert.equal(ids.length, 3);
     assert.equal(ids[1], ids[0], "a send with an unknown outcome keeps its id");
-    assert.notEqual(ids[2], ids[1], "a refused send gets a new id");
+    assert.equal(ids[2], ids[0], "a refusal does not forget the earlier unknown outcome");
+  });
+
+  it("sends a message refused every time under a new id", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [], channels: [channel()] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(200, { messages: [], has_more: false })),
+      on("POST", "/v1/threads/c1/messages", () => json(429, { error: "cooldown", retry_after: 5 })),
+    );
+    const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="pl" pollIntervalMs={60_000} />);
+    await type(container, "Raz");
+    await click(container.querySelector("button[type=submit]"));
+    await click(byText(container, "button", "Wyślij ponownie"));
+    const ids = requests
+      .filter((r) => r.method === "POST" && r.path === "/v1/threads/c1/messages")
+      .map((r) => (r.body as { client_id: string }).client_id);
+    assert.equal(ids.length, 2);
+    assert.notEqual(ids[1], ids[0]);
   });
 
   it("blocks the composer where only the creator posts", async () => {

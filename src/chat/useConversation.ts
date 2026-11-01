@@ -21,6 +21,8 @@ export type LocalMessageState = {
   /** Error code or live reject reason. */
   reason?: string;
   retryAfter?: number;
+  /** An earlier send of this message may have been queued: retries keep its id. */
+  keepId?: boolean;
 };
 
 export type ConversationMessage = ChatMessage & { local?: LocalMessageState };
@@ -440,6 +442,7 @@ export function useConversation(
             state: failed ? "failed" : "rejected",
             reason: e.code,
             retryAfter: e.retryAfter,
+            keepId: failed || reuseId != null,
           },
         }));
       }
@@ -458,9 +461,10 @@ export function useConversation(
       if (!message) return;
       // A send whose outcome is unknown (network error, 5xx, no
       // confirmation) may have been queued: it goes again under the same
-      // id, so the service stores and bills it once. Only a refused send
-      // gets a new id.
-      const uncertain = message.local?.state !== "rejected";
+      // id, so the service stores and bills it once, also after a later
+      // attempt was refused. Only a send that was refused every time gets a
+      // new id.
+      const uncertain = message.local?.state !== "rejected" || message.local.keepId === true;
       discard(id);
       await send(message.body, uncertain ? id : undefined);
     },
