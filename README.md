@@ -22,7 +22,7 @@ It uses modern React patterns and libraries like:
 - Protocol Buffers for data serialization
 - Tailwind CSS for styling
 
-## Unreleased / next
+## 1.17.0
 
 Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,
 `BitsnapReturns` and the notifications login dialog.
@@ -35,7 +35,8 @@ Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,
   "Logo sklepu" / "Shop logo" by locale.
 - **`PanelLogin`: the logo moved** from the page header (alt "Company Logo",
   `theme.logoURL` / `theme.logoDarkURL`) into the login card, above the title.
-  The theme logos are still used, unless `logoUrl` / `logoDarkUrl` are given.
+  The theme logos are still used, per variant: `logoUrl` replaces only the
+  light theme logo and `logoDarkUrl` only the dark one.
   The card is top-aligned instead of vertically centred.
 - **New props.** `PanelLogin` and `BitsnapReturns`: `showLogo` (default
   `true`), `logoUrl` (light background), `logoDarkUrl` (dark background).
