@@ -21,6 +21,7 @@ export {
 } from "./return-url";
 
 export type { PanelConfig } from "./config";
+export type { PanelLoginTexts } from "./login-texts";
 export type {
   GetThemeOutput,
   PanelLoginProps,

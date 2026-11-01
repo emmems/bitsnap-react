@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { cn } from "@/src/lib/utils";
 import { useReturnsSlot } from "./appearance.context";
 import { ReturnsCodeStep, ReturnsEmailStep } from "./AuthSteps";
@@ -42,7 +42,7 @@ function StepIndicator({ current }: { current: number }) {
 
 /** Default step router. All transitions come from the pure state machine. */
 function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
-  const { status } = useReturnsContext("BitsnapReturns");
+  const { status, challenge } = useReturnsContext("BitsnapReturns");
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
     initialReturnsStep(false),
@@ -57,6 +57,19 @@ function ReturnsRouter({ panelToken }: { panelToken: boolean }) {
       dispatch({ type: "SESSION_EXPIRED" });
     }
   }, [status]);
+
+  // A verification that was pending before a reload or an app switch returns
+  // to the code step once, when the stored state has been read.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || status === "hydrating") {
+      return;
+    }
+    restored.current = true;
+    if (status === "anonymous" && challenge != null) {
+      dispatch({ type: "CODE_SENT" });
+    }
+  }, [status, challenge]);
 
   // Without a panel token the server render and the first client render show
   // the email step; a stored session switches to the orders after hydration.

@@ -33,6 +33,13 @@ export type ReturnsTexts = {
   resend: string;
   /** Placeholder `{seconds}`. */
   resendIn: string;
+  /** Confirmation after a new code was sent. */
+  resendSent: string;
+  /** Hint under the code field. */
+  codeSpamHint: string;
+  codeValidity: string;
+  /** Shown when the form is submitted with fewer than 6 digits. */
+  codeIncomplete: string;
   logout: string;
 
   // Orders
@@ -122,6 +129,7 @@ export type ReturnsTexts = {
 
   // Error messages
   errorGeneric: string;
+  errorNetwork: string;
   errorInvalidEmail: string;
   errorInvalidCode: string;
   errorSessionExpired: string;
@@ -158,6 +166,10 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     codeSubmit: "Verify",
     resend: "Send the code again",
     resendIn: "Send again in {seconds} s",
+    resendSent: "We sent a new code.",
+    codeSpamHint: "Can't see the email? Check your spam folder.",
+    codeValidity: "The code is valid for 10 minutes.",
+    codeIncomplete: "Enter all 6 digits of the code.",
     logout: "Sign out",
 
     ordersTitle: "Your orders",
@@ -227,6 +239,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     refundStatusFallback: "Unknown",
 
     errorGeneric: "Something went wrong. Please try again.",
+    errorNetwork: "Cannot reach the server. Check your connection and try again.",
     errorInvalidEmail: "Enter a valid email address.",
     errorInvalidCode: "The code is invalid or has expired.",
     errorSessionExpired: "Your session has expired. Verify your email again.",
@@ -261,6 +274,10 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     codeSubmit: "Zweryfikuj",
     resend: "Wyślij kod ponownie",
     resendIn: "Wyślij ponownie za {seconds} s",
+    resendSent: "Wysłaliśmy nowy kod.",
+    codeSpamHint: "Nie widzisz e-maila? Sprawdź folder spam.",
+    codeValidity: "Kod jest ważny 10 minut.",
+    codeIncomplete: "Wpisz wszystkie 6 cyfr kodu.",
     logout: "Wyloguj się",
 
     ordersTitle: "Twoje zamówienia",
@@ -330,6 +347,7 @@ export const RETURNS_TEXT_TABLES: LocaleTables<ReturnsTextKey> = {
     refundStatusFallback: "Nieznany",
 
     errorGeneric: "Coś poszło nie tak. Spróbuj ponownie.",
+    errorNetwork: "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.",
     errorInvalidEmail: "Podaj poprawny adres e-mail.",
     errorInvalidCode: "Kod jest nieprawidłowy lub wygasł.",
     errorSessionExpired: "Sesja wygasła. Zweryfikuj adres e-mail ponownie.",

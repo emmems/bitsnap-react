@@ -1,49 +1,25 @@
-import { useState } from "react";
-import { rpcProvider, RpcProvider, useMutation } from "src/rpc-provider";
-import { getProjectID } from "../checkout/CartProvider";
-import { Input } from "@/src/ui/input";
-import { Label } from "@/src/ui/label";
-import { Button } from "@/src/ui/button";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/src/ui/input-otp";
-import { cn } from "@/src/lib/utils";
-import { DEFAULT_TEXTS } from "./constants";
-import type { CustomizationTexts } from "./types";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/src/ui/card";
-import { ArrowLeft, X } from "lucide-react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { Dialog, DialogContent } from "@/src/ui/dialog";
-import { ConnectError } from "@connectrpc/connect";
-import { Spinner } from "@/src/ui/spinner";
+import { ArrowLeft } from "lucide-react";
+import { useMemo } from "react";
+import { rpcProvider, RpcProvider, useMutation } from "src/rpc-provider";
+import { Button } from "@/src/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/src/ui/dialog";
+import { EmailCodeLoginForm } from "@/src/ui/email-code-login/EmailCodeLoginForm";
+import { pendingLoginKey } from "@/src/ui/email-code-login/pending";
+import { useEmailCodeLogin } from "@/src/ui/email-code-login/useEmailCodeLogin";
+import {
+  createNotificationsAdapter,
+  notificationsLoginTexts,
+  type NotificationsLoginResult,
+} from "./login-adapter";
+import type { LoginScreenTexts } from "./types";
 
-export type LoginScreenTexts = Pick<
-  CustomizationTexts,
-  | "loginTitle"
-  | "loginDescription"
-  | "loginEmailLabel"
-  | "loginEmailPlaceholder"
-  | "loginSendCodeButton"
-  | "loginSendingButton"
-  | "loginCodeLabel"
-  | "loginCodeSentMessage"
-  | "loginIHaveCode"
-  | "loginChangeEmailButton"
-  | "loginResendCodeButton"
-  | "loginInvalidEmailError"
-  | "loginInvalidCodeError"
-  | "loginSlugRequiredError"
-  | "loginVerificationFailedError"
-  | "loginSendEmailError"
-  | "loginVerifyCodeError"
-  | "loginResendEmailError"
->;
+export type { LoginScreenTexts };
 
 interface LoginScreenProps {
   /**
@@ -82,6 +58,77 @@ interface LoginScreenProps {
   texts: LoginScreenTexts;
 }
 
+/**
+ * The dialog content. It mounts each time the dialog opens, so a finished or
+ * abandoned login never leaves a locked form behind; a pending code step is
+ * restored from `sessionStorage`.
+ */
+function LoginDialogBody({
+  slug,
+  onSuccess,
+  onError,
+  texts,
+}: Pick<LoginScreenProps, "slug" | "onSuccess" | "onError" | "texts">) {
+  const [parentHeader] = useAutoAnimate();
+  const { mutateAsync: verifyUserEmail } = useMutation(
+    rpcProvider.notifications.verifyUserEmail,
+  );
+
+  const loginTexts = useMemo(() => notificationsLoginTexts(texts), [texts]);
+  const adapter = useMemo(
+    () =>
+      createNotificationsAdapter(
+        (request) => verifyUserEmail(request),
+        slug,
+        texts,
+      ),
+    [verifyUserEmail, slug, texts],
+  );
+
+  const login = useEmailCodeLogin<NotificationsLoginResult>({
+    adapter,
+    texts: loginTexts,
+    storageKey: slug ? pendingLoginKey("notifications", slug) : undefined,
+    onVerified: ({ userId, accessToken }) => onSuccess?.(userId, accessToken),
+    onFailure: (kind, cause) =>
+      onError?.(cause instanceof Error ? cause : new Error(kind)),
+  });
+
+  const onCodeStep = login.step === "code";
+  // The title of the code step is the code label, as before.
+  const title =
+    onCodeStep && !login.needsEmail
+      ? texts.loginCodeLabel ?? ""
+      : texts.loginTitle ?? "";
+
+  return (
+    <div className="flex h-full flex-col">
+      <div ref={parentHeader} className="mb-2 flex items-start gap-2">
+        {onCodeStep && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="-mt-2 -ml-2 size-11 shrink-0"
+            aria-label={loginTexts.changeEmail}
+            disabled={login.isBusy}
+            onClick={login.changeEmail}
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+          </Button>
+        )}
+        <DialogTitle className="text-lg leading-6 font-semibold">
+          {title}
+        </DialogTitle>
+      </div>
+      <DialogDescription className={onCodeStep ? "sr-only" : "mb-4"}>
+        {onCodeStep ? loginTexts.stepCode : texts.loginDescription ?? ""}
+      </DialogDescription>
+      <EmailCodeLoginForm login={login} texts={loginTexts} />
+    </div>
+  );
+}
+
 export function LoginScreen({
   slug,
   onSuccess,
@@ -91,248 +138,15 @@ export function LoginScreen({
   onClose,
   texts,
 }: LoginScreenProps) {
-  const [parentContent] = useAutoAnimate();
-  const [parentHeader] = useAutoAnimate();
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [isEmailSent, setIsEmailSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const { mutateAsync: verifyUserEmail, isPending: isVerifying } = useMutation(
-    rpcProvider.notifications.verifyUserEmail
-  );
-
-  const handleSendEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!email || !email.includes("@")) {
-      setError(texts.loginInvalidEmailError ?? "");
-      return;
-    }
-
-    try {
-      await verifyUserEmail({
-        email,
-        slug: slug,
-      });
-      setIsEmailSent(true);
-    } catch (err) {
-      const error =
-        err instanceof Error ? err : new Error(texts.loginSendEmailError);
-      setError(error.message);
-      onError?.(error);
-    }
-  };
-
-  const handleVerifyCode = async (value: string) => {
-    setCode(value);
-    setError(null);
-
-    // Only verify when all 6 digits are entered
-    if (value.length === 6) {
-      try {
-        const response = await verifyUserEmail({
-          email: undefined,
-          code: value,
-          slug: slug,
-        });
-
-        if (response.ok && response.accessToken) {
-          onSuccess?.(response.userId, response.accessToken);
-        } else {
-          setError(texts.loginVerificationFailedError ?? "");
-          onError?.(new Error(texts.loginVerificationFailedError));
-        }
-      } catch (err) {
-        const error =
-          err instanceof Error ? err : new Error(texts.loginVerifyCodeError);
-        if (error.message.includes("Invalid code")) {
-          setError(texts.loginInvalidCodeError ?? error.message);
-          setCode("");
-          return;
-        }
-        setError(error.message);
-        onError?.(error);
-        // Clear the code on error so user can retry
-        setCode("");
-      }
-    }
-  };
-
-  const handleResendEmail = async () => {
-    setCode("");
-    setError(null);
-
-    if (!email || !slug) {
-      setError(texts.loginSlugRequiredError ?? "");
-      return;
-    }
-
-    try {
-      await verifyUserEmail({
-        email,
-        slug: slug,
-      });
-      // Keep isEmailSent as true, just clear the code
-    } catch (err) {
-      const error =
-        err instanceof Error ? err : new Error(texts.loginResendEmailError);
-      setError(error.message);
-      onError?.(error);
-    }
-  };
-
-  const handleChangeEmail = () => {
-    setIsEmailSent(false);
-    setCode("");
-    setError(null);
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] min-h-[250px]">
-        <div className="flex flex-col min-h-[250px] h-full">
-          {/* Header */}
-          <div ref={parentHeader} className="flex items-start gap-2 mb-2">
-            {isEmailSent && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => {
-                  setIsEmailSent(false);
-                }}
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            )}
-            <div>
-              <CardTitle>
-                {isEmailSent
-                  ? texts.loginCodeLabel ?? ""
-                  : texts.loginTitle ?? ""}
-              </CardTitle>
-            </div>
-          </div>
-          {/* Description */}
-          <CardDescription className="mb-4">
-            {isEmailSent ? (
-              <>
-                {texts.loginCodeSentMessage ?? ""} {email}
-              </>
-            ) : (
-              texts.loginDescription ?? ""
-            )}
-          </CardDescription>
-
-          {/* Main form area */}
-          <div className="flex-1 flex flex-col">
-            {!isEmailSent ? (
-              <form onSubmit={handleSendEmail} className="flex flex-col flex-1">
-                <div className="space-y-2">
-                  <Label htmlFor="email">{texts.loginEmailLabel ?? ""}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder={texts.loginEmailPlaceholder ?? ""}
-                    value={email}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setEmail(e.target.value)
-                    }
-                    required
-                    disabled={isVerifying}
-                    aria-invalid={error ? "true" : "false"}
-                  />
-                </div>
-                {error && (
-                  <div
-                    className="text-sm text-destructive mt-2 mb-1"
-                    role="alert"
-                  >
-                    {error}
-                  </div>
-                )}
-                <div className="grow" />
-                {/* Always pin buttons to the bottom */}
-                <div className="flex flex-col items-start gap-0 pt-2">
-                  <Button type="submit" size="sm" disabled={isVerifying}>
-                    {isVerifying
-                      ? texts.loginSendingButton ?? ""
-                      : texts.loginSendCodeButton ?? ""}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="ml-0 pl-0"
-                    size="sm"
-                    onClick={() => {
-                      setIsEmailSent(true);
-                    }}
-                  >
-                    {texts.loginIHaveCode ?? ""}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <form
-                onSubmit={(e) => e.preventDefault()}
-                className="flex flex-col flex-1"
-              >
-                <div className="space-y-2">
-                  <Label>{texts.loginCodeLabel ?? ""}</Label>
-                  <InputOTP
-                    maxLength={6}
-                    value={code}
-                    onChange={handleVerifyCode}
-                    disabled={isVerifying}
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                  {isVerifying && <Spinner />}
-                </div>
-                {error && (
-                  <div
-                    className="text-sm text-destructive mt-2 mb-1"
-                    role="alert"
-                  >
-                    {error}
-                  </div>
-                )}
-                <div className="grow" />
-                {/* Always pin buttons to the bottom */}
-                <div className="flex flex-col items-start gap-2 pt-2">
-                  {email.length > 0 && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={handleResendEmail}
-                      disabled={isVerifying}
-                      className="flex-1 ml-0 pl-0"
-                    >
-                      {texts.loginResendCodeButton ?? ""}
-                    </Button>
-                  )}
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={handleChangeEmail}
-                    disabled={isVerifying}
-                    className="flex-1 ml-0 pl-0"
-                  >
-                    {texts.loginChangeEmailButton ?? ""}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
+      <DialogContent className="max-h-[100dvh] overflow-y-auto sm:max-w-[425px]">
+        <LoginDialogBody
+          slug={slug}
+          onSuccess={onSuccess}
+          onError={onError}
+          texts={texts}
+        />
       </DialogContent>
     </Dialog>
   );

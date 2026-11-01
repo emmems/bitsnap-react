@@ -1189,6 +1189,19 @@ function LoginPage() {
 }
 ```
 
+Customers sign in with an e-mail and a 6-digit code. The code field fills in
+from the keyboard suggestion or a paste (spaces and dashes are ignored) and
+submits on the sixth digit. A pending code survives a reload or an app switch
+(`sessionStorage`, up to 10 minutes). Texts are Polish by default; pass
+`locale="en"` for English, and `texts` to override any string:
+
+```tsx
+<PanelLogin locale="en" texts={{ title: "Welcome back", wrongCode: "That code is wrong." }} />
+```
+
+The returns widget and the notifications login use the same code field and
+messages.
+
 ## Complete Example
 
 ### App Entry Point

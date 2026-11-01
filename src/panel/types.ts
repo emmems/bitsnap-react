@@ -1,6 +1,7 @@
 import type { AnalyticsOption } from "../analytics/instrument";
 import type { ReturnsAppearance } from "../components/returns/appearance";
 import type { ReturnsTexts } from "../components/returns/texts";
+import type { PanelLoginTexts } from "./login-texts";
 
 export interface GetThemeOutput {
   logoURL?: string;
@@ -62,4 +63,14 @@ export interface PanelLoginProps {
    * `{ onEvent }`. Nothing is stored on the visitor's device.
    */
   analytics?: AnalyticsOption;
+  /**
+   * Text overrides of the login: titles, buttons and every message. Polish
+   * and English defaults are chosen by `locale`.
+   */
+  texts?: Partial<PanelLoginTexts>;
+  /**
+   * Language of the default texts: a locale starting with `en` gives English,
+   * anything else Polish. Defaults to the library locale (`setLocale`).
+   */
+  locale?: string;
 }

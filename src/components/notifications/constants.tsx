@@ -1,4 +1,7 @@
+import { EMAIL_CODE_TEXT_TABLES } from "@/src/ui/email-code-login/texts";
 import type { CustomizationTexts } from "./types";
+
+const LOGIN = EMAIL_CODE_TEXT_TABLES.pl;
 
 export const DEFAULT_TEXTS: Required<CustomizationTexts> = {
   title: null,
@@ -64,4 +67,13 @@ export const DEFAULT_TEXTS: Required<CustomizationTexts> = {
   loginTitle: "Wpisz email aby zarządzać powiadomieniami",
   loginDescription: "Dostaniesz kod weryfikacyjny na email.",
   loginIHaveCode: "Mam już kod",
+  loginVerifyButton: "Potwierdź",
+  loginResendInText: LOGIN.resendIn,
+  loginResentMessage: LOGIN.resent,
+  loginExpiredError: LOGIN.expired,
+  loginTooManyAttemptsError: LOGIN.tooManyAttempts,
+  loginRateLimitedError: LOGIN.rateLimited,
+  loginNetworkError: LOGIN.network,
+  loginSpamHint: LOGIN.spamHint,
+  loginValidityHint: LOGIN.validity,
 };

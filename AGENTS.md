@@ -76,6 +76,7 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
 - For the panel, configure `setProjectID` and `setLoginURL("/panel/login")` on
   the client before mounting `<PanelProvider><Panel /></PanelProvider>`.
   Mount `<PanelProvider><PanelLogin /></PanelProvider>` at that login URL.
+  `PanelLogin` takes optional `locale` (`"en"`; Polish by default) and `texts`.
 
 ## Avoid these mistakes
 

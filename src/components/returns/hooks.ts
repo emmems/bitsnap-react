@@ -25,6 +25,7 @@ import {
   type ReturnsSessionStatus,
 } from "./ReturnsProvider";
 import { expiryToMillis } from "./session-storage";
+import { useReturnsLocale } from "./texts.context";
 import type { ReturnsTextKey } from "./texts";
 
 /** React Query style status shared by the query and mutation results. */
@@ -119,6 +120,8 @@ export function useReturnSession(): UseReturnSessionResult {
   const startMutation = useMutation(rpcProvider.returns.startReturnSession);
   const verifyMutation = useMutation(rpcProvider.returns.verifyReturnSession);
   const { setChallenge, authenticate, clearSession } = ctx;
+  // The widget's language, so the code e-mail is written in it.
+  const locale = useReturnsLocale().toLowerCase().startsWith("en") ? "en" : "pl";
 
   const startSession = useCallback(
     async (email: string) => {
@@ -128,6 +131,7 @@ export function useReturnSession(): UseReturnSessionResult {
         projectId: ctx.projectID,
         email: trimmed,
         environment: ctx.environment,
+        locale,
       });
       setChallenge({
         challengeId: response.challengeId,
@@ -137,7 +141,7 @@ export function useReturnSession(): UseReturnSessionResult {
       });
       return response;
     },
-    [ctx.projectID, ctx.environment, setChallenge, startMutation, verifyMutation],
+    [ctx.projectID, ctx.environment, locale, setChallenge, startMutation, verifyMutation],
   );
 
   const verifySession = useCallback(

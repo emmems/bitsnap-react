@@ -121,3 +121,11 @@ export function legacyPanel() {
     </PanelProvider>
   );
 }
+
+export function panelLoginWithTexts() {
+  return (
+    <PanelProvider>
+      <PanelLogin locale="en" texts={{ title: "Welcome back", wrongCode: "Wrong code." }} />
+    </PanelProvider>
+  );
+}

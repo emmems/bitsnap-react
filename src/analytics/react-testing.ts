@@ -49,6 +49,9 @@ export function setupReactPage(url = "https://shop.example.test/products?utm_sou
   const media = (win.HTMLMediaElement as { prototype: { load: () => void } } | undefined)?.prototype;
   if (media) media.load = () => {};
   (win.Element as { prototype: { scrollIntoView: () => void } }).prototype.scrollIntoView = () => {};
+  // input-otp probes the point under its password-manager badge after focus.
+  const doc = win.document as { elementFromPoint?: () => null };
+  doc.elementFromPoint ??= () => null;
   return page;
 }
 

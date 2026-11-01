@@ -57,6 +57,18 @@ export interface CustomizationTexts {
   loginVerifyCodeError?: string;
   loginResendEmailError?: string;
   loginTitle?: string;
+  /** Submit button of the code step. */
+  loginVerifyButton?: string;
+  /** Placeholder `{seconds}`: the resend button while the cooldown runs. */
+  loginResendInText?: string;
+  loginResentMessage?: string;
+  loginExpiredError?: string;
+  loginTooManyAttemptsError?: string;
+  /** Placeholder `{time}`, for example "45 s" or "2 min". */
+  loginRateLimitedError?: string;
+  loginNetworkError?: string;
+  loginSpamHint?: string;
+  loginValidityHint?: string;
   loginDescription?: string;
 }
 
@@ -82,6 +94,38 @@ export interface ComponentClassNames {
 /**
  * Props for the NotificationsComponentPublic component.
  */
+/** The texts of the notifications login dialog. */
+export type LoginScreenTexts = Pick<
+  CustomizationTexts,
+  | "loginTitle"
+  | "loginDescription"
+  | "loginEmailLabel"
+  | "loginEmailPlaceholder"
+  | "loginSendCodeButton"
+  | "loginSendingButton"
+  | "loginCodeLabel"
+  | "loginCodeSentMessage"
+  | "loginIHaveCode"
+  | "loginChangeEmailButton"
+  | "loginResendCodeButton"
+  | "loginInvalidEmailError"
+  | "loginInvalidCodeError"
+  | "loginSlugRequiredError"
+  | "loginVerificationFailedError"
+  | "loginSendEmailError"
+  | "loginVerifyCodeError"
+  | "loginResendEmailError"
+  | "loginVerifyButton"
+  | "loginResendInText"
+  | "loginResentMessage"
+  | "loginExpiredError"
+  | "loginTooManyAttemptsError"
+  | "loginRateLimitedError"
+  | "loginNetworkError"
+  | "loginSpamHint"
+  | "loginValidityHint"
+>;
+
 export interface NotificationsComponentPublicProps {
   /**
    * Unique identifier for the project (if not provided, productID will be used via CartProvider).
