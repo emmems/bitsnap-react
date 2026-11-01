@@ -67,11 +67,13 @@ const PanelLoginForm = ({
   texts,
   projectID,
   host,
+  locale,
   logo,
 }: {
   texts: PanelLoginTexts;
   projectID?: string;
   host?: string;
+  locale?: string;
   logo: LoginLogoOptions;
 }) => {
   const instrument = useInstrumentContext();
@@ -156,7 +158,12 @@ const PanelLoginForm = ({
     // Top-aligned: a vertically centred card moved when the step changed height.
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-start pt-4 sm:pt-[12vh]">
       <Card>
-        <LoginBrandLogo projectId={projectID} className="px-4 sm:px-6" {...logo} />
+        <LoginBrandLogo
+          projectId={projectID}
+          locale={locale}
+          className="px-4 sm:px-6"
+          {...logo}
+        />
         <CardHeader className="px-4 sm:px-6">
           <CardTitle role="heading" aria-level={1} className="text-2xl">
             {title}
@@ -244,6 +251,7 @@ const PanelLoginComponentWrapper = ({
             texts={texts}
             projectID={projectID}
             host={host}
+            locale={locale}
             logo={{
               showLogo,
               logoUrl: logoUrl ?? theme?.logoURL,

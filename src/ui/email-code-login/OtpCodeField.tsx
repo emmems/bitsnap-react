@@ -31,9 +31,12 @@ export type OtpCodeFieldProps = {
 
 /**
  * The library stretches the hidden input over the slots with `width: 100%`.
- * Where the CSS reset does not reach (a dialog portal outside the library's
- * root), the browser's own 2px padding makes it 4px wider than the slots, and
- * than the viewport on a phone. The library ignores `style`, so set it here.
+ * The browser's own 2px padding on a content-box input makes it 4px wider than
+ * the slots, and than the viewport on a phone. Our stylesheet resets that, but
+ * it is scoped to `.bitsnap-react`, and the notifications dialog renders in a
+ * portal outside that root, so a class name on the input (`className` reaches
+ * it) does not apply there. The library also overrides the `style` prop, so
+ * the inline style is set on the node itself, from the ref.
  */
 function resetFieldBox(node: HTMLInputElement | null) {
   if (node != null) {

@@ -23,7 +23,7 @@ import {
   StepFrame,
 } from "./internal";
 import { useReturnsContext } from "./ReturnsProvider";
-import { useReturnsText } from "./texts.context";
+import { useReturnsLocale, useReturnsText } from "./texts.context";
 
 export type ReturnsEmailStepProps = LoginLogoOptions & {
   /** Called after the verification code was sent, with the trimmed email. */
@@ -39,6 +39,7 @@ export function ReturnsEmailStep({
 }: ReturnsEmailStepProps) {
   const ctx = useReturnsContext("ReturnsEmailStep");
   const text = useReturnsText();
+  const locale = useReturnsLocale();
   const session = useReturnSession();
   // Coming back from the code step keeps what was typed.
   const [email, setEmail] = useState(ctx.lastEmail ?? "");
@@ -59,7 +60,7 @@ export function ReturnsEmailStep({
   return (
     <StepFrame
       className={className}
-      lead={<LoginBrandLogo projectId={ctx.projectID} {...logo} />}
+      lead={<LoginBrandLogo projectId={ctx.projectID} locale={locale} {...logo} />}
       title={text("emailStepTitle")}
       description={text("emailStepDescription")}
     >
@@ -127,6 +128,7 @@ export function ReturnsCodeStep({
 }: ReturnsCodeStepProps) {
   const ctx = useReturnsContext("ReturnsCodeStep");
   const text = useReturnsText();
+  const locale = useReturnsLocale();
   const session = useReturnSession();
   const [code, setCode] = useState("");
   const [incomplete, setIncomplete] = useState(false);
@@ -199,7 +201,7 @@ export function ReturnsCodeStep({
     <StepFrame
       className={className}
       onBack={onBack != null ? handleBack : undefined}
-      lead={<LoginBrandLogo projectId={ctx.projectID} {...logo} />}
+      lead={<LoginBrandLogo projectId={ctx.projectID} locale={locale} {...logo} />}
       title={text("codeStepTitle")}
       description={text("codeStepDescription", {
         email: session.challenge?.email ?? "",

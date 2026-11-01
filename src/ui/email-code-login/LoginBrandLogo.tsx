@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { getLocale } from "@/src/components/checkout/locale";
 import { cn } from "@/src/lib/utils";
+import { pickLocaleTable, type LocaleTables } from "@/src/lib/texts";
 import { useQuery } from "@/src/rpc-provider";
 import { getLoginBranding } from "../../gen/proto/public/v1/public_api-PublicApiService_connectquery";
 
@@ -21,7 +23,15 @@ export type LoginBrandLogoProps = LoginLogoOptions & {
   projectId?: string;
   /** Shop name used as the alt text, when already known. */
   name?: string;
+  /** Language of the generic alt text ("Logo sklepu"). Default: library locale. */
+  locale?: string;
   className?: string;
+};
+
+/** Alt text of a shop logo whose shop name is not known. */
+const LOGO_ALT: LocaleTables<"alt"> = {
+  pl: { alt: "Logo sklepu" },
+  en: { alt: "Shop logo" },
 };
 
 const BOX = "flex h-10 items-center";
@@ -58,6 +68,23 @@ function BitsnapLogo() {
 }
 
 /**
+ * Reads the shop logo and name once per page (the query never goes stale), so
+ * a surface can start it early and {@link LoginBrandLogo} reuses the result.
+ */
+export function useLoginBranding(projectId: string, enabled: boolean) {
+  return useQuery(
+    getLoginBranding,
+    { projectId },
+    {
+      enabled,
+      staleTime: Infinity,
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  );
+}
+
+/**
  * Logo at the top of every login step: the shop's own (light and dark
  * variant), or Bitsnap's when the shop has none, the request fails or there is
  * no project. The box keeps its height while the logo loads, so the form does
@@ -66,23 +93,20 @@ function BitsnapLogo() {
 export function LoginBrandLogo({
   projectId,
   name,
+  locale,
   showLogo = true,
   logoUrl,
   logoDarkUrl,
   className,
 }: LoginBrandLogoProps) {
-  const [broken, setBroken] = useState(false);
+  // URLs that failed to load. Compared with the current ones, so a new URL
+  // (other prop, branding that arrives later) gets its own try.
+  const [failed, setFailed] = useState<readonly string[]>([]);
   const given = logoUrl || logoDarkUrl;
   const project = projectId?.trim() ?? "";
-  const { data, isPending } = useQuery(
-    getLoginBranding,
-    { projectId: project },
-    {
-      enabled: showLogo && !given && project !== "",
-      staleTime: Infinity,
-      retry: false,
-      refetchOnWindowFocus: false,
-    },
+  const { data, isPending } = useLoginBranding(
+    project,
+    showLogo && !given && project !== "",
   );
 
   if (!showLogo) return null;
@@ -94,9 +118,12 @@ export function LoginBrandLogo({
 
   const light = (given ? logoUrl || logoDarkUrl : data?.logoUrl || data?.logoDarkUrl) || "";
   const dark = (given ? logoDarkUrl || logoUrl : data?.logoDarkUrl || data?.logoUrl) || "";
-  const alt = name || data?.name || "";
+  const works = (url: string) => url !== "" && !failed.includes(url);
+  // One variant that fails is replaced by the other, in both themes.
+  const lightSrc = works(light) ? light : works(dark) ? dark : "";
+  const darkSrc = works(dark) ? dark : works(light) ? light : "";
 
-  if ((light === "" && dark === "") || broken) {
+  if (lightSrc === "" && darkSrc === "") {
     return (
       <div className={cn(BOX, className)}>
         <BitsnapLogo />
@@ -104,15 +131,19 @@ export function LoginBrandLogo({
     );
   }
 
-  const onError = () => setBroken(true);
+  // A shop logo is content, never decoration: the shop name, else a generic text.
+  const alt =
+    name || data?.name || pickLocaleTable(LOGO_ALT, locale ?? getLocale()).alt;
+  const onError = (url: string) => () =>
+    setFailed((urls) => (urls.includes(url) ? urls : [...urls, url]));
   return (
     <div className={cn(BOX, className)}>
-      {light === dark ? (
-        <img src={light} alt={alt} className={IMAGE} draggable={false} onError={onError} />
+      {lightSrc === darkSrc ? (
+        <img src={lightSrc} alt={alt} className={IMAGE} draggable={false} onError={onError(lightSrc)} />
       ) : (
         <>
-          <img src={light} alt={alt} className={cn(IMAGE, "dark:hidden")} draggable={false} onError={onError} />
-          <img src={dark} alt={alt} className={cn(IMAGE, "hidden dark:block")} draggable={false} onError={onError} />
+          <img src={lightSrc} alt={alt} className={cn(IMAGE, "dark:hidden")} draggable={false} onError={onError(lightSrc)} />
+          <img src={darkSrc} alt={alt} className={cn(IMAGE, "hidden dark:block")} draggable={false} onError={onError(darkSrc)} />
         </>
       )}
     </div>

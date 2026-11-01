@@ -10,9 +10,14 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { resetTracker } from "@/src/analytics/core";
 import { setupReactPage, TEST_KEY } from "@/src/analytics/react-testing";
 import {
+  GetUserGroupsResponseSchema,
   VerifyUserEmailRequestSchema,
   VerifyUserEmailResponseSchema,
 } from "@/src/gen/proto/dashboard/v1/notifications_pb";
+import {
+  GetLoginBrandingRequestSchema,
+  GetLoginBrandingResponseSchema,
+} from "@/src/gen/proto/public/v1/public_api_pb";
 import {
   createNotificationsAdapter,
   notificationsFailureKind,
@@ -24,12 +29,14 @@ const page = setupReactPage();
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let LoginScreen: typeof import("./LoginScreen.tsx").default;
+let Notifications: typeof import("./NotificationsComponentPublic.tsx").default;
 let DEFAULT_TEXTS: typeof import("./constants.tsx").DEFAULT_TEXTS;
 
 before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
   LoginScreen = (await import("./LoginScreen.tsx")).default;
+  Notifications = (await import("./NotificationsComponentPublic.tsx")).default;
   ({ DEFAULT_TEXTS } = await import("./constants.tsx"));
 });
 
@@ -326,5 +333,52 @@ describe("notifications LoginScreen", () => {
     await mount();
     assert.ok(codeInput(), "restored");
     assert.match(doc().body.textContent ?? "", /jane@example\.com/);
+  });
+});
+
+describe("notifications login branding", () => {
+  let branding: string[];
+  beforeEach(() => {
+    branding = [];
+    const base = globalThis.fetch;
+    globalThis.fetch = (async (input: string, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/GetLoginBranding")) {
+        branding.push(fromBinary(GetLoginBrandingRequestSchema, init!.body as Uint8Array).projectId);
+        return new Response(
+          toBinary(GetLoginBrandingResponseSchema, create(GetLoginBrandingResponseSchema, { name: "Shop", logoUrl: "https://cdn.test/l.png" })) as BodyInit,
+          { status: 200, headers: { "Content-Type": "application/proto" } },
+        );
+      }
+      if (url.endsWith("/GetUserGroups")) {
+        return new Response(toBinary(GetUserGroupsResponseSchema, create(GetUserGroupsResponseSchema, { groups: [] })) as BodyInit, {
+          status: 200,
+          headers: { "Content-Type": "application/proto" },
+        });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+  });
+
+  async function mountNotifications(props: Partial<React.ComponentProps<typeof Notifications>> = {}) {
+    const container = doc().createElement("div");
+    doc().body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () => root.render(<Notifications slug="shop-slug" {...props} />));
+    await settle();
+  }
+
+  it("reads the shop logo when the component mounts, before the dialog opens", async () => {
+    await mountNotifications();
+    assert.deepEqual(branding, ["shop-slug"]);
+    assert.equal(doc().querySelector('[role="dialog"]'), null);
+  });
+
+  it("does not ask when the logo is given or the login logo is off", async () => {
+    await mountNotifications({ projectLogo: "https://cdn.test/own.png" });
+    await mountNotifications({ projectLogoDark: "https://cdn.test/own-dark.png", slug: "other" });
+    await mountNotifications({ showLoginLogo: false, slug: "third" });
+    assert.deepEqual(branding, []);
   });
 });

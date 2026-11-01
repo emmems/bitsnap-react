@@ -1,6 +1,9 @@
 import { useEffect, useReducer, useRef } from "react";
 import { cn } from "@/src/lib/utils";
-import type { LoginLogoOptions } from "@/src/ui/email-code-login/LoginBrandLogo";
+import {
+  LoginBrandLogo,
+  type LoginLogoOptions,
+} from "@/src/ui/email-code-login/LoginBrandLogo";
 import { useReturnsSlot } from "./appearance.context";
 import { ReturnsCodeStep, ReturnsEmailStep } from "./AuthSteps";
 import { SkeletonRows } from "./internal";
@@ -22,7 +25,7 @@ import {
   RETURNS_STEP_COUNT,
   returnsStepNumber,
 } from "./state-machine";
-import { useReturnsText } from "./texts.context";
+import { useReturnsLocale, useReturnsText } from "./texts.context";
 
 /**
  * Props of {@link BitsnapReturns}. `showLogo`, `logoUrl` and `logoDarkUrl` set
@@ -55,7 +58,8 @@ function ReturnsRouter({
   panelToken: boolean;
   logo: LoginLogoOptions;
 }) {
-  const { status, challenge } = useReturnsContext("BitsnapReturns");
+  const { status, challenge, projectID } = useReturnsContext("BitsnapReturns");
+  const locale = useReturnsLocale();
   const [step, dispatch] = useReducer(
     reduceReturnsStep,
     initialReturnsStep(false),
@@ -92,18 +96,25 @@ function ReturnsRouter({
 
   const stepNumber = returnsStepNumber(step.name);
 
+  // The logo sits above the step indicator, and stays mounted between the
+  // e-mail and the code step; the steps themselves then show none.
+  const loginStep = step.name === "email" || step.name === "code";
+
   return (
     <div className="flex flex-col gap-4">
+      {loginStep && (
+        <LoginBrandLogo projectId={projectID} locale={locale} {...logo} />
+      )}
       {stepNumber != null && <StepIndicator current={stepNumber} />}
       {step.name === "email" && (
         <ReturnsEmailStep
-          {...logo}
+          showLogo={false}
           onSubmitted={() => dispatch({ type: "CODE_SENT" })}
         />
       )}
       {step.name === "code" && (
         <ReturnsCodeStep
-          {...logo}
+          showLogo={false}
           onVerified={() => dispatch({ type: "AUTHENTICATED" })}
           onBack={() => dispatch({ type: "BACK" })}
         />

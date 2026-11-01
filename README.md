@@ -22,6 +22,48 @@ It uses modern React patterns and libraries like:
 - Protocol Buffers for data serialization
 - Tailwind CSS for styling
 
+## Unreleased / next
+
+Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,
+`BitsnapReturns` and the notifications login dialog.
+
+- **Shop logo on every login step.** The logo from the shop settings (light
+  and dark variant) shows above the form, as does Bitsnap's logo when the shop
+  has none. The height is reserved while it loads, so the form does not jump.
+  A variant that does not load is replaced by the other one; Bitsnap's logo
+  shows only when none loads. The image's alt text is the shop name, else
+  "Logo sklepu" / "Shop logo" by locale.
+- **`PanelLogin`: the logo moved** from the page header (alt "Company Logo",
+  `theme.logoURL` / `theme.logoDarkURL`) into the login card, above the title.
+  The theme logos are still used, unless `logoUrl` / `logoDarkUrl` are given.
+  The card is top-aligned instead of vertically centred.
+- **New props.** `PanelLogin` and `BitsnapReturns`: `showLogo` (default
+  `true`), `logoUrl` (light background), `logoDarkUrl` (dark background).
+  Notifications: `showLoginLogo` (default `true`; `projectLogo`,
+  `projectLogoDark` and `projectName` are used first). The notifications
+  component reads the shop logo when it mounts, so the dialog has it on open.
+- **`BitsnapReturns`:** the logo sits above the step indicator.
+- **New login flow states.** E-mail step and code step, with a code restored
+  after a reload (`sessionStorage`, 10 minutes); "I already have a code" asks
+  for the e-mail first; a throttled resend is reported as "already sent" (not
+  as a new code); countdown from the server's `retryIn`; rate limit, expired
+  code, too many attempts, e-mail not found, delivery failed or unavailable and
+  network errors each have their own message; one live region announces
+  "step 1 of 2" / "step 2 of 2".
+- **Returns texts: new optional keys** `resendSent`, `codeSpamHint`,
+  `codeValidity`, `codeIncomplete` and `errorNetwork`. They are optional in
+  `ReturnsTexts`, so code that builds a complete texts object still compiles.
+- **Notifications login: new text keys** `loginVerifyButton`,
+  `loginResendInText`, `loginResentMessage`, `loginExpiredError`,
+  `loginTooManyAttemptsError`, `loginRateLimitedError`, `loginNetworkError`,
+  `loginSpamHint`, `loginValidityHint`, `loginVerifyingButton`,
+  `loginStepEmailHint`, `loginStepCodeHint`, `loginAlreadySentMessage`,
+  `loginEmailNotFoundError`, `loginDeliveryUnavailableError`,
+  `loginResendNewCodeButton`, `loginNoCodeButton` and
+  `loginCodeIncompleteError`; all optional.
+- The server must provide `GetLoginBranding` (public API) for the shop logo;
+  without it the logos given as props, or Bitsnap's, are used.
+
 ## Capabilities
 
 ### Cart Management:

@@ -137,4 +137,88 @@ describe("LoginBrandLogo", () => {
     );
     assert.deepEqual(requested, ["proj1"]);
   });
+  it("a failing hidden dark variant does not hide the working light logo", async () => {
+    reply = { name: "Shop", logoUrl: "https://cdn.test/l.png", logoDarkUrl: "https://cdn.test/gone-dark.png" };
+    await mount(<LoginBrandLogo projectId="proj1" />);
+    assert.equal(images().length, 2);
+    await React.act(async () => void images()[1].dispatchEvent(new page.win.Event("error")));
+    // The light logo serves both themes; Bitsnap's logo stays away.
+    assert.deepEqual(images().map((img) => img.getAttribute("src")), ["https://cdn.test/l.png"]);
+    assert.equal(bitsnap(), null);
+  });
+
+  it("a failing light variant is replaced by the dark one in both themes", async () => {
+    reply = { name: "Shop", logoUrl: "https://cdn.test/gone-light.png", logoDarkUrl: "https://cdn.test/d.png" };
+    await mount(<LoginBrandLogo projectId="proj1" />);
+    await React.act(async () => void images()[0].dispatchEvent(new page.win.Event("error")));
+    assert.deepEqual(images().map((img) => img.getAttribute("src")), ["https://cdn.test/d.png"]);
+    assert.equal(bitsnap(), null);
+  });
+
+  it("falls back to Bitsnap only when both variants fail", async () => {
+    reply = { name: "Shop", logoUrl: "https://cdn.test/a.png", logoDarkUrl: "https://cdn.test/b.png" };
+    await mount(<LoginBrandLogo projectId="proj1" />);
+    await React.act(async () => void images()[1].dispatchEvent(new page.win.Event("error")));
+    assert.equal(bitsnap(), null);
+    await React.act(async () => void images()[0].dispatchEvent(new page.win.Event("error")));
+    assert.equal(images().length, 0);
+    assert.ok(bitsnap());
+  });
+
+  it("tries a new URL after the old one failed", async () => {
+    const container = doc().createElement("div");
+    doc().body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const render = (url: string) =>
+      React.act(async () =>
+        root.render(
+          <RpcProvider>
+            <LoginBrandLogo projectId="proj1" logoUrl={url} />
+          </RpcProvider>,
+        ),
+      );
+    await render("https://cdn.test/gone.png");
+    await React.act(async () => void images()[0].dispatchEvent(new page.win.Event("error")));
+    assert.ok(bitsnap());
+    await render("https://cdn.test/new.png");
+    assert.deepEqual(images().map((img) => img.getAttribute("src")), ["https://cdn.test/new.png"]);
+    assert.equal(bitsnap(), null);
+    // The URL that failed stays failed.
+    await render("https://cdn.test/gone.png");
+    assert.ok(bitsnap());
+  });
+
+  it("never leaves a shop logo without alt text, in the language of the page", async () => {
+    await mount(<LoginBrandLogo logoUrl="https://cdn.test/own.png" />);
+    assert.equal(images()[0].alt, "Logo sklepu");
+    await mount(<LoginBrandLogo logoUrl="https://cdn.test/own.png" locale="en" />);
+    assert.equal(images()[1].alt, "Shop logo");
+    await mount(<LoginBrandLogo logoUrl="https://cdn.test/own.png" locale="en" name="Own" />);
+    assert.equal(images()[2].alt, "Own");
+    assert.ok(images().every((img) => img.alt !== ""));
+  });
+
+  it("names the Bitsnap fallback 'Bitsnap'", async () => {
+    await mount(<LoginBrandLogo locale="en" />);
+    assert.equal(bitsnap()?.getAttribute("aria-label"), "Bitsnap");
+  });
+
+  it("renders the pending box on the server: reserved height, no image, no Bitsnap logo", async () => {
+    const { renderToString } = await import("react-dom/server");
+    const html = renderToString(
+      <RpcProvider>
+        <LoginBrandLogo projectId="proj1" className="px-4" />
+      </RpcProvider>,
+    );
+    assert.match(html, /<div class="[^"]*\bh-10\b[^"]*\bpx-4\b[^"]*" aria-hidden="true"><\/div>/);
+    assert.doesNotMatch(html, /<img|Bitsnap|bitsnap\./);
+    const given = renderToString(
+      <RpcProvider>
+        <LoginBrandLogo logoUrl="https://cdn.test/own.png" locale="en" />
+      </RpcProvider>,
+    );
+    assert.match(given, /<img[^>]*src="https:\/\/cdn\.test\/own\.png"/);
+    assert.match(given, /alt="Shop logo"/);
+  });
 });

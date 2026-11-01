@@ -284,4 +284,17 @@ describe("Returns code step", () => {
     await toCodeStep();
     assert.match(doc().body.textContent ?? "", /Zajrzyj do spamu\./);
   });
+  it("puts the shop logo above the step indicator, once, on both login steps", async () => {
+    const logo = () => doc().querySelectorAll('img[src="https://cdn.test/shop.png"]');
+    const indicator = () => doc().querySelector('[data-bitsnap-returns-slot="stepIndicator"]')!;
+    const above = () =>
+      Boolean(logo()[0]!.compareDocumentPosition(indicator()) & page.win.Node.DOCUMENT_POSITION_FOLLOWING);
+    await mount({ logoUrl: "https://cdn.test/shop.png", locale: "en" });
+    assert.equal(logo().length, 1);
+    assert.ok(above(), "e-mail step: logo before the indicator");
+    assert.equal((logo()[0] as HTMLImageElement).alt, "Shop logo");
+    await toCodeStep();
+    assert.equal(logo().length, 1);
+    assert.ok(above(), "code step: logo before the indicator");
+  });
 });

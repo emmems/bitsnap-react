@@ -28,6 +28,7 @@ import { QRCodeSection } from "./QRCodeSection";
 import { AddUserToGroups } from "./AddUserToGroups";
 import { ManageMyData } from "./ManageMyData";
 import { LoginScreen } from "./LoginScreen";
+import { useLoginBranding } from "@/src/ui/email-code-login/LoginBrandLogo";
 import { Button } from "@/src/ui/button";
 import { getProjectID } from "../checkout/CartProvider";
 import { currentProjectID } from "../checkout/project-id";
@@ -200,6 +201,16 @@ function NotificationsComponentPublic({
     slugProp ??
     getProjectID() ??
     (typeof window !== "undefined" ? window.location.hostname : "");
+
+  // The login dialog shows the shop logo: read it now, so it is there when
+  // the dialog opens (LoginBrandLogo reuses this query).
+  useLoginBranding(
+    slug.trim(),
+    showLoginLogo !== false &&
+      !projectLogo &&
+      !projectLogoDark &&
+      slug.trim() !== "",
+  );
 
   const { mutateAsync: updateUserGroups, isPending: isUpdating } = useMutation(
     rpcProvider.notifications.updateUserGroups,

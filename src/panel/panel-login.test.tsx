@@ -276,4 +276,20 @@ describe("PanelLogin", () => {
     await mount();
     assert.equal(doc().querySelector(".min-w-sm"), null);
   });
+  it("shows a theme logo in the card, with alt text in the page language", async () => {
+    await mount({ logoUrl: "https://cdn.test/panel.png" });
+    const logo = doc().querySelector<HTMLImageElement>("main img");
+    assert.equal(logo?.getAttribute("src"), "https://cdn.test/panel.png");
+    assert.equal(logo?.alt, "Logo sklepu");
+    await mount({ logoUrl: "https://cdn.test/panel.png", locale: "en" });
+    const logos = doc().querySelectorAll<HTMLImageElement>("main img");
+    assert.equal(logos[logos.length - 1]?.alt, "Shop logo");
+  });
+
+  it("names the Bitsnap logo 'Bitsnap' when the shop has no logo", async () => {
+    await mount();
+    await settle();
+    assert.equal(doc().querySelector('[role="img"][aria-label="Bitsnap"]') != null, true);
+    assert.equal(doc().querySelector("main img"), null);
+  });
 });
