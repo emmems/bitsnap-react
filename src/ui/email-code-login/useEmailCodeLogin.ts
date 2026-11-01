@@ -213,7 +213,11 @@ export function useEmailCodeLogin<T = void>(
       cause: unknown,
       message?: string,
     ) => {
-      if (kind !== "wrongCode" && kind !== "invalidEmail") {
+      if (
+        kind !== "wrongCode" &&
+        kind !== "invalidEmail" &&
+        kind !== "alreadySent"
+      ) {
         latest.current.onFailure?.(kind, cause);
       }
       const notice = failureNotice(latest.current.texts, kind, retryIn);

@@ -245,6 +245,38 @@ describe("notifications LoginScreen", () => {
     assert.equal(buttonWith(/Wyślij ponownie/)!.disabled, true);
   });
 
+  it("moves to the code step with the 'already sent' note when the first send was throttled (sent: false)", async () => {
+    replies = [{ ok: true, sent: false, retryIn: 45 }];
+    await mount();
+    await toCodeStep();
+    assert.ok(codeInput(), "an earlier code is still valid: go and enter it");
+    assert.match(doc().body.textContent ?? "", /45 s/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (44|45) s/);
+    assert.equal(errors.length, 0, "not reported as an error");
+  });
+
+  it("keeps the typed code and the remaining countdown when a resend was throttled (sent: false)", async () => {
+    replies = [{ ok: true, retryIn: 1 }, { ok: true, sent: false, retryIn: 50 }];
+    await mount();
+    await toCodeStep();
+    await type(codeInput(), "123");
+    await settle(1200);
+    await React.act(async () => void buttonWith(/Wyślij kod ponownie/)!.click());
+    await settle();
+    assert.equal(requests.length, 2);
+    assert.equal(codeInput().value, "123", "typed code is kept");
+    assert.doesNotMatch(doc().body.textContent ?? "", /Wysłaliśmy nowy kod/);
+    assert.match(buttonWith(/Wyślij ponownie/)!.textContent ?? "", /za (49|50) s/);
+    assert.equal(errors.length, 0);
+  });
+
+  it("treats a response without sent (old server) as sent", async () => {
+    const adapter = createNotificationsAdapter(async () => ({ ok: true, retryIn: 60 }), "slug", DEFAULT_TEXTS);
+    assert.deepEqual(await adapter.send("a@b.co", { resend: false }), { ok: true, retryIn: 60 });
+    const throttled = createNotificationsAdapter(async () => ({ ok: true, sent: false, retryIn: 12 }), "slug", DEFAULT_TEXTS);
+    assert.deepEqual(await throttled.send("a@b.co", { resend: true }), { ok: false, kind: "alreadySent", retryIn: 12 });
+  });
+
   it("answers Unavailable with the generic copy, not the connection one", () => {
     assert.equal(notificationsFailureKind(new ConnectError("redis", Code.Unavailable)), "unknown");
   });

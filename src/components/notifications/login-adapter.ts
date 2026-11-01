@@ -27,6 +27,8 @@ export type VerifyUserEmailCall = (request: {
   accessToken?: string;
   userId?: string;
   retryIn?: number;
+  /** `false`: a throttled resend, nothing went out. Absent (old servers): sent. */
+  sent?: boolean;
 }>;
 
 /** Login texts of the notifications component mapped onto the shared ones. */
@@ -113,6 +115,15 @@ export function createNotificationsAdapter(
                 kind: "deliveryFailed",
                 message: resend ? texts.loginResendEmailError : texts.loginSendEmailError,
               };
+        }
+        if (response.sent === false) {
+          // Throttled: an earlier code is still valid and `retryIn` is the
+          // time left until a new one may be requested.
+          return {
+            ok: false,
+            kind: "alreadySent",
+            retryIn: response.retryIn || undefined,
+          };
         }
         return { ok: true, retryIn: response.retryIn || undefined };
       } catch (cause) {
