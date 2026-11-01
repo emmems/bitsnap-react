@@ -15,6 +15,7 @@ let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let PanelMessages: typeof import("./PanelMessages.tsx").default;
 let chatProjects: typeof import("./PanelMessages.tsx").chatProjects;
+let chatProjectIds: typeof import("./PanelMessages.tsx").chatProjectIds;
 let hasPanelChat: typeof import("../panel/chat-visibility.ts").hasPanelChat;
 let Header: typeof import("../panel/components/PanelProductHeader.tsx").default;
 let PanelProvider: typeof import("../panel/PanelProvider.tsx").PanelProvider;
@@ -24,7 +25,7 @@ let setPanelConfig: typeof import("../panel/config.ts").setPanelConfig;
 before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
-  ({ default: PanelMessages, chatProjects } = await import("./PanelMessages.tsx"));
+  ({ default: PanelMessages, chatProjects, chatProjectIds } = await import("./PanelMessages.tsx"));
   ({ hasPanelChat } = await import("../panel/chat-visibility.ts"));
   ({ default: Header } = await import("../panel/components/PanelProductHeader.tsx"));
   ({ PanelProvider } = await import("../panel/PanelProvider.tsx"));
@@ -221,6 +222,14 @@ describe("panel chat visibility", () => {
     const other = product({ projectId: "21", productType: UserProductType.COMMUNITY });
     assert.deepEqual(chatProjects([chatProduct, other, product({ projectId: "99", productType: UserProductType.FILE })]), ["18", "21"]);
     assert.deepEqual(chatProjects([], "fallback"), ["fallback"]);
+  });
+
+  it("maps the public project id to the numeric chat id of the chat products", () => {
+    const hashed = product({ projectId: "abc", chatProjectId: "18", productType: UserProductType.CHAT });
+    const file = product({ projectId: "def", chatProjectId: "99", productType: UserProductType.FILE });
+    const ids = chatProjectIds([hashed, file]);
+    assert.equal(ids.get("abc"), "18");
+    assert.equal(ids.has("def"), false);
   });
 
   it("shows Wiadomości in the panel navigation only when asked", async () => {

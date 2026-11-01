@@ -57,13 +57,23 @@ const isChatProduct = (product: UserProduct) =>
  * The projects whose chat the buyer may have: those of the CHAT and
  * COMMUNITY products, else the panel's project.
  *
- * `UserProduct.projectId` is what the panel knows of a project. The chat
- * service wants its numeric id (`X-Bitsnap-Project`); see the README.
+ * `UserProduct.projectId` is the public (hashed) id the cart uses; the chat
+ * service wants the numeric one (`X-Bitsnap-Project`), which Instapay sends as
+ * `chatProjectId` on CHAT and COMMUNITY products (see `chatProjectIds`).
  */
 export function chatProjects(products: UserProduct[], fallback?: string): string[] {
   const ids = [...new Set(products.filter(isChatProduct).map((p) => p.projectId).filter(Boolean))];
   if (ids.length > 0) return ids;
   return fallback ? [fallback] : [];
+}
+
+/** Public project id → numeric chat project id, from the chat products. */
+export function chatProjectIds(products: UserProduct[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const p of products) {
+    if (isChatProduct(p) && p.projectId && p.chatProjectId) map.set(p.projectId, p.chatProjectId);
+  }
+  return map;
 }
 
 /** The "Wiadomości" screen of the customer panel. */
@@ -80,12 +90,13 @@ export default function PanelMessages({
 }: PanelMessagesProps) {
   const texts = useMemo(() => getChatTexts(overrides, locale), [overrides, locale]);
   const projects = useMemo(() => chatProjects(products, projectID), [products, projectID]);
+  const chatIds = useMemo(() => chatProjectIds(products), [products]);
   const clients = useMemo(() => {
     const map = new Map<string, ChatClient>();
     for (const id of projects)
-      map.set(id, createChatClient({ projectId: id, token: accessToken, baseUrl: chatApiUrl }));
+      map.set(id, createChatClient({ projectId: chatIds.get(id) ?? id, token: accessToken, baseUrl: chatApiUrl }));
     return map;
-  }, [projects, accessToken, chatApiUrl]);
+  }, [projects, chatIds, accessToken, chatApiUrl]);
 
   const [loads, setLoads] = useState<Record<string, ProjectLoad>>({});
   const [generation, setGeneration] = useState(0);
