@@ -17,6 +17,10 @@ export type ChatBuyRequest = {
   reason: ConversationLock["reason"];
   /** Known for a locked channel (from the chat service). */
   priceCents?: number;
+  amount?: number;
+  email?: string;
+  code?: string;
+  turnstileToken?: string;
 };
 
 /** Props shared by `ChatThread` and `Channel`. */
@@ -103,12 +107,39 @@ function useWidgetClient(props: ChatWidgetBaseProps): ChatClient | null | undefi
 }
 
 function useBuy(props: ChatWidgetBaseProps) {
-  return async (lock: ConversationLock) => {
+  return async (lock: ConversationLock & { email?: string; code?: string; turnstileToken?: string }) => {
     const productId = props.buyProductId ?? lock.productId;
     if (!productId) return;
-    const request: ChatBuyRequest = { productId, reason: lock.reason, priceCents: lock.priceCents };
+    const request: ChatBuyRequest = { productId, reason: lock.reason, priceCents: lock.priceCents, ...(lock.amount != null ? { amount: lock.amount } : {}), ...(lock.email ? { email: lock.email } : {}), ...(lock.code ? { code: lock.code } : {}), ...(lock.turnstileToken != null ? { turnstileToken: lock.turnstileToken } : {}) };
     if (props.onBuy) {
       await props.onBuy(request);
+      return;
+    }
+    const commerceBase = (props.host ?? window.location.origin).replace(/\/+$/, "");
+    const isFreeClaim = lock.freeClaimLimit != null && (lock.priceType === "free" || (lock.priceType === "pay_what_you_want" && lock.minimumCents === 0 && request.amount === 0));
+    if (isFreeClaim && request.email && request.turnstileToken) {
+      const response = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/free-claim/request-code`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: request.email, turnstileToken: request.turnstileToken }),
+      });
+      const result = await response.json() as { code?: string };
+      if (!response.ok) throw new Error(result.code ?? "internal");
+      return;
+    }
+    if (isFreeClaim && request.email && request.code) {
+      const verify = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/free-claim/verify-code`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: request.email, code: request.code }),
+      });
+      const verified = await verify.json() as { success?: boolean; claimToken?: string };
+      if (!verify.ok || !verified.claimToken) throw new Error((verified as { code?: string }).code ?? "email-verification-required");
+      const bought = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/buy`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [{ id: productId, quantity: 1, amount: 0 }], details: { email: request.email }, claimToken: verified.claimToken }),
+      });
+      const result = await bought.json() as { success?: boolean; url?: string; code?: string };
+      if (!bought.ok || !result.url) throw new Error(result.code ?? "free-order-not-supported");
+      window.location.assign(result.url);
       return;
     }
     await addPackToCart({
@@ -116,6 +147,7 @@ function useBuy(props: ChatWidgetBaseProps) {
       productId,
       name: props.title,
       priceCents: lock.priceCents,
+      amount: lock.amount,
       host: props.host,
     });
   };

@@ -39,9 +39,9 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
     return () => { window.removeEventListener("message", onMessage); window.clearTimeout(timeout); };
   }, [action, onToken]);
   return <section className="grid gap-2" aria-live="polite">
-    <iframe title="Weryfikacja bezpieczeństwa Turnstile" src={src} className="min-h-24 w-full rounded-md border bg-white dark:bg-neutral-950" />
-    <button type="button" className="text-sm underline" onClick={() => window.open(src, "bitsnap-turnstile", "popup,width=520,height=680")}>Otwórz w nowym oknie</button>
-    {expired && <p role="alert" className="text-sm text-destructive">Weryfikacja wygasła. Spróbuj ponownie.</p>}
-    <button type="button" className="text-sm underline" onClick={() => { setExpired(false); onFailure?.(); }}>Odśwież weryfikację</button>
+    <iframe title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-white dark:bg-neutral-950" />
+    <button type="button" className="text-sm underline" onClick={() => window.open(src, "bitsnap-turnstile", "popup,width=520,height=680")}>{language === "en" ? "Open in a new window" : "Otwórz w nowym oknie"}</button>
+    {expired && <p role="alert" className="text-sm text-destructive">{language === "en" ? "The security check expired. Try again." : "Weryfikacja wygasła. Spróbuj ponownie."}</p>}
+    <button type="button" className="text-sm underline" onClick={() => { setExpired(false); onFailure?.(); }}>{language === "en" ? "Refresh the security check" : "Odśwież weryfikację"}</button>
   </section>;
 }

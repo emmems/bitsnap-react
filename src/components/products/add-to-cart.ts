@@ -7,7 +7,7 @@ import type { PublicListProduct } from "./fetch";
 export type CartableProduct = Pick<
   PublicListProduct,
   "id" | "cartItemId" | "name" | "price" | "currency"
->;
+> & { amount?: number };
 
 export type AddToCartTarget = {
   projectID: string;
@@ -83,6 +83,7 @@ export async function addProductToCart(
       name: product.name,
       price: product.price,
       currency: product.currency,
+      amount: product.amount,
       // Reported below from the list's own data.
       analytics: noopInstrument,
     },

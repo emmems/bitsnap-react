@@ -7,6 +7,7 @@ export type BuyPackInput = {
   productId: string;
   name?: string;
   priceCents?: number;
+  amount?: number;
   /** Backend origin of the cart, when not the default. */
   host?: string;
 };
@@ -25,6 +26,7 @@ export async function addPackToCart(input: BuyPackInput): Promise<void> {
       name: input.name ?? "",
       price: input.priceCents ?? 0,
       currency: "",
+      amount: input.amount,
     },
     { projectID: input.projectID, host: input.host, showCart: true },
   );

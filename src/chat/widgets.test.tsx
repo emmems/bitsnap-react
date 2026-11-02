@@ -130,6 +130,16 @@ function byText(container: Element, selector: string, text: string) {
   return [...container.querySelectorAll(selector)].find((el) => el.textContent?.trim() === text);
 }
 
+async function changeInput(input: HTMLInputElement, text: string) {
+  const setter = Object.getOwnPropertyDescriptor(page.win.HTMLInputElement.prototype, "value")!.set!;
+  await React.act(async () => {
+    setter.call(input, text);
+    input.dispatchEvent(new page.win.Event("input", { bubbles: true }));
+    input.dispatchEvent(new page.win.Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
 async function type(container: Element, text: string) {
   const area = container.querySelector("textarea")!;
   const setter = Object.getOwnPropertyDescriptor(page.win.HTMLTextAreaElement.prototype, "value")!.set!;
@@ -399,6 +409,43 @@ describe("Channel", () => {
     member_count: 42,
     created_at: "2026-10-01T00:00:00Z",
     ...extra,
+  });
+
+  it("offers a bounded PWYW amount and passes the selected minor-unit amount", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 2900, welcome: "Join",
+        price_type: "pay_what_you_want", price_min_cents: 1000, price_max_cents: 6000,
+      })),
+    );
+    const bought: unknown[] = [];
+    const container = await mount(
+      <widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" onBuy={(r) => void bought.push(r)} />,
+    );
+    const amount = container.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;
+    assert.equal(amount.min, "10");
+    assert.equal(amount.max, "60");
+    await changeInput(amount, "45.00");
+    await click(byText(container, "button", "Choose what you pay"));
+    assert.deepEqual(bought, [{ productId: "prodv2_club", reason: "no-access", priceCents: 2900, amount: 4500 }]);
+  });
+
+  it("renders email and challenge controls for free claims", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 0,
+        price_type: "free", free_claim_limit: 1,
+      })),
+    );
+    const container = await mount(
+      <widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" onBuy={() => {}} />,
+    );
+    const email = container.querySelector<HTMLInputElement>('input[type="email"]')!;
+    await changeInput(email, "buyer@example.test");
+    assert.ok(container.querySelector("iframe"));
+    assert.match(container.textContent!, /Send code/);
   });
 
   it("shows the lock with the welcome text and Kup dostęp without a grant", async () => {

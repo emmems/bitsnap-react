@@ -18,6 +18,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { cn } from "../lib/utils";
+import { TurnstileChallenge } from "../captcha/TurnstileChallenge";
 import {
   fill,
   formatChatDate,
@@ -43,7 +44,7 @@ export type ConversationViewProps = {
   title?: string;
   onBack?: () => void;
   /** The lock's buy action. Rejects to show the error. */
-  onBuy?: (lock: ConversationLock) => Promise<void> | void;
+  onBuy?: (lock: ConversationLock & { email?: string; code?: string; turnstileToken?: string }) => Promise<void> | void;
   className?: string;
 };
 
@@ -169,7 +170,7 @@ export function ConversationView({
       {c.status === "error" && <ErrorBody conversation={c} texts={texts} />}
       {c.status === "locked" && c.lock && (
         <div className="flex flex-1 flex-col justify-center overflow-y-auto p-4">
-          <LockCard lock={c.lock} kind={kind} texts={texts} onBuy={onBuy} prominent />
+          <LockCard lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} prominent />
         </div>
       )}
       {c.status === "ready" && (
@@ -192,7 +193,7 @@ export function ConversationView({
           )}
           {c.lock && (
             <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
-              <LockCard lock={c.lock} kind={kind} texts={texts} onBuy={onBuy} />
+              <LockCard lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} />
             </div>
           )}
           {reporting ? (
@@ -327,17 +328,30 @@ function LockCard({
   lock,
   kind,
   texts,
+  locale,
   onBuy,
   prominent,
 }: {
   lock: ConversationLock;
   kind: "thread" | "channel";
   texts: ChatTexts;
+  locale: string;
   onBuy?: ConversationViewProps["onBuy"];
   prominent?: boolean;
 }) {
   const [buying, setBuying] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState("");
+  const [amount, setAmount] = useState(lock.priceCents ?? 0);
+  const isPwyw = lock.priceType === "pay_what_you_want";
+  const min = lock.minimumCents ?? 0;
+  const max = lock.maximumCents ?? Number.MAX_SAFE_INTEGER;
+  const validAmount = Number.isInteger(amount) && amount >= min && amount <= max;
+  const isFreeClaim = lock.freeClaimLimit != null && (lock.priceType === "free" || (isPwyw && min === 0 && amount === 0));
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const english = locale.toLowerCase().startsWith("en");
   const [title, body] =
     lock.reason === "replies"
       ? [texts.lockRepliesTitle, texts.lockRepliesBody]
@@ -365,12 +379,30 @@ function LockCard({
       <div className="min-w-0 flex-1">
         <p className={cn("font-semibold", prominent ? "text-lg" : "text-sm")}>{title}</p>
         <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-300">{body}</p>
+        {isFreeClaim && (
+          <div className="mt-3 grid max-w-sm gap-2">
+            <label className="grid gap-1 text-sm">
+              <span>{english ? "Email" : "E-mail"}</span>
+              <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
+            </label>
+            {codeSent ? (
+              <label className="grid gap-1 text-sm"><span>{english ? "Email code" : "Kod z e-maila"}</span><input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" /></label>
+            ) : email.includes("@") ? <TurnstileChallenge action="free_chat_claim" locale={locale} onToken={setTurnstileToken} onFailure={() => setTurnstileToken(null)} /> : null}
+          </div>
+        )}
+        {isPwyw && (
+          <label className="mt-3 grid max-w-xs gap-1 text-sm">
+            <span>{english ? `Amount (${(min / 100).toFixed(2)}–${Number.isFinite(max) ? (max / 100).toFixed(2) : "∞"} PLN)` : `Kwota (${(min / 100).toFixed(2)}–${Number.isFinite(max) ? (max / 100).toFixed(2) : "∞"} zł)`}</span>
+            <input aria-label={english ? "Amount" : "Kwota"} inputMode="decimal" type="number" min={min / 100} max={Number.isFinite(max) ? max / 100 : undefined} step="0.01" value={(amount / 100).toFixed(2)} onChange={(event) => setAmount(Math.round(Number(event.currentTarget.value) * 100))} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
+            {!validAmount && <span role="alert" className="text-xs text-red-700 dark:text-red-400">{english ? "Enter an amount within the range." : "Kwota musi mieścić się w podanym zakresie."}</span>}
+          </label>
+        )}
         {lock.welcome && (
           <p className="mt-3 whitespace-pre-wrap text-sm">{lock.welcome}</p>
         )}
         {failed && (
           <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-400">
-            {texts.buyError}
+            {failed}
           </p>
         )}
       </div>
@@ -378,21 +410,26 @@ function LockCard({
         <button
           type="button"
           className={cn(primaryButton, "shrink-0")}
-          disabled={buying}
+          disabled={buying || (isPwyw && !validAmount) || (isFreeClaim && (!email.includes("@") || (!codeSent && turnstileToken === null) || (codeSent && !code)))}
           aria-busy={buying || undefined}
           onClick={async () => {
             setBuying(true);
-            setFailed(false);
+            setFailed("");
             try {
-              await onBuy!(lock);
-            } catch {
-              setFailed(true);
+              if (isFreeClaim) {
+                await onBuy!({ ...lock, email, ...(codeSent ? { code } : { turnstileToken }) });
+                if (!codeSent) setCodeSent(true);
+              } else {
+                await onBuy!({ ...lock, ...(isPwyw ? { amount } : {}) });
+              }
+            } catch (error) {
+              setFailed(chatBuyError(error, locale, texts.buyError));
             } finally {
               setBuying(false);
             }
           }}
         >
-          {buying ? texts.buying : action}
+          {buying ? texts.buying : isPwyw ? (english ? "Choose what you pay" : "Kup pakiet, płacąc, ile chcesz") : isFreeClaim ? (codeSent ? (english ? "Claim for free" : "Odbierz za darmo") : (english ? "Send code" : "Wyślij kod")) : action}
         </button>
       )}
     </div>
@@ -830,4 +867,25 @@ function ReportForm({
       </div>
     </form>
   );
+}
+
+function chatBuyError(error: unknown, locale: string, fallback: string): string {
+  const code = error instanceof Error ? error.message : "";
+  const en = locale.toLowerCase().startsWith("en");
+  const messages: Record<string, [string, string]> = {
+    "amount-below-minimum": ["Kwota jest niższa od minimalnej.", "The amount is below the minimum."],
+    "amount-above-maximum": ["Kwota przekracza maksymalną.", "The amount is above the maximum."],
+    "amount-below-gateway-minimum": ["Kwota jest za niska dla dostępnych płatności.", "The amount is too low for available payment methods."],
+    "amount-invalid": ["Podaj prawidłową kwotę.", "Enter a valid amount."],
+    "email-verification-required": ["Potwierdź adres e-mail, aby odebrać pakiet.", "Verify your email to claim this pack."],
+    "free-claim-exists": ["Ten adres e-mail wykorzystał już limit darmowych odbiorów.", "This email has reached the free claim limit."],
+    "free-order-not-supported": ["Nie można zrealizować tego darmowego zamówienia.", "This free order cannot be completed."],
+    "captcha-required": ["Potwierdź, że nie jesteś robotem.", "Complete the security check."],
+    "captcha-invalid": ["Weryfikacja wygasła. Spróbuj ponownie.", "The security check expired. Try again."],
+    "rate-limited": ["Zbyt wiele prób. Spróbuj ponownie za chwilę.", "Too many attempts. Try again shortly."],
+    "incorrect-code": ["Nieprawidłowy kod. Sprawdź wiadomość i spróbuj ponownie.", "The code is incorrect. Check your email and try again."],
+    "too-many-attempts": ["Poproś o nowy kod za kilka minut.", "Request a new code in a few minutes."],
+    unavailable: ["Weryfikacja jest chwilowo niedostępna.", "Verification is temporarily unavailable."],
+  };
+  return messages[code]?.[en ? 1 : 0] ?? fallback;
 }

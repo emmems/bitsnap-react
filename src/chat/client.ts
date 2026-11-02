@@ -28,7 +28,7 @@ export class ChatError extends Error {
   readonly status: number;
   /** `cooldown`: seconds to wait before the next post. */
   readonly retryAfter?: number;
-  /** Extra fields of the answer (`locked`: `product_id`, `price_cents`, `welcome`). */
+  /** Extra fields of the answer (`locked`: product, price type and bounds). */
   readonly data: Record<string, unknown>;
 
   constructor(

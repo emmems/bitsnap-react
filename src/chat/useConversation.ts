@@ -36,6 +36,11 @@ export type ConversationLock = {
   reason: "replies" | "expired" | "no-pack" | "no-access";
   productId?: string;
   priceCents?: number;
+  amount?: number;
+  priceType?: "one_time" | "pay_what_you_want" | "free";
+  minimumCents?: number;
+  maximumCents?: number;
+  freeClaimLimit?: number;
   welcome?: string;
 };
 
@@ -155,6 +160,10 @@ function lockedFrom(error: ChatError, reason: ConversationLock["reason"], produc
       ? error.data.product_id
       : productId,
     priceCents: Number.isFinite(price) && price > 0 ? price : undefined,
+    priceType: error.data.price_type === "free" || error.data.price_type === "pay_what_you_want" ? error.data.price_type : "one_time",
+    minimumCents: Number.isFinite(Number(error.data.price_min_cents)) ? Number(error.data.price_min_cents) : undefined,
+    maximumCents: Number.isFinite(Number(error.data.price_max_cents)) ? Number(error.data.price_max_cents) : undefined,
+    freeClaimLimit: Number.isFinite(Number(error.data.free_claim_limit)) ? Number(error.data.free_claim_limit) : undefined,
     welcome: typeof error.data.welcome === "string" ? error.data.welcome : undefined,
   };
 }

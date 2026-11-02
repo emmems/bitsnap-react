@@ -34,6 +34,8 @@ export namespace Bitsnap {
       name?: string;
       price?: number;
       currency?: string;
+      /** Buyer chosen pay-what-you-want amount, in minor units. */
+      amount?: number;
       /** Where `add_to_cart` is reported. Defaults to the mounted `<BitsnapCheckout>`. */
       analytics?: Instrument;
     },

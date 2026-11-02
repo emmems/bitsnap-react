@@ -63,6 +63,8 @@ type CartProduct = {
   price?: number;
   currency?: string;
   priceVersion?: string;
+  /** Buyer chosen pay-what-you-want amount, in minor units per item. */
+  amount?: number;
 
   /** Where `add_to_cart` is reported; defaults to the mounted `<BitsnapCheckout>`. */
   analytics?: Instrument;
@@ -438,6 +440,7 @@ const checkoutProduct = zod.object({
   productID: zod.string(),
   quantity: zod.number(),
   priceVersion: zod.string().optional(),
+  amount: zod.number().int().nonnegative().optional(),
   metadata: zod.record(zod.string(), zod.string().optional()).optional(),
   url: zod.string().optional(),
 });
@@ -474,6 +477,7 @@ export type LocalCartLine = {
   productID: string;
   quantity: number;
   priceVersion?: string;
+  amount?: number;
   metadata?: { [key: string]: string | undefined };
   url?: string;
 };
@@ -510,6 +514,7 @@ export function buildLocalCartUpload(
       id: line.productID,
       quantity: line.quantity,
       ...(line.priceVersion != null ? { priceVersion: line.priceVersion } : {}),
+      ...(line.amount != null ? { amount: line.amount } : {}),
     })),
     ...(checkout.country != null ? { countries: [checkout.country] } : {}),
     ...(checkout.couponCode != null ? { couponCode: checkout.couponCode } : {}),
@@ -631,6 +636,7 @@ async function addProducts(projectID: string, products: CartProduct[]) {
       productID: el.productID,
       quantity: el.quantity,
       priceVersion: latestProducts.find((product) => product.productID === el.productID)?.details?.pricing?.priceVersion,
+      amount: el.amount,
       metadata: el.metadata,
       url: cartItemURL(
         el.url,
