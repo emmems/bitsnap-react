@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseTurnstileMessage } from "./TurnstileChallenge";
+import { setHost } from "../panel/config";
+import { challengeOrigin, parseTurnstileMessage } from "./TurnstileChallenge";
 
 describe("Turnstile challenge protocol", () => {
+  it("uses the configured host origin for challenges and rejects production messages on staging", () => {
+    setHost("http://localhost:4321/path/");
+    try {
+      assert.equal(challengeOrigin(), "http://localhost:4321");
+      const message = { type: "bitsnap:turnstile", action: "free_chat_claim", token: "test" };
+      assert.equal(parseTurnstileMessage("https://bitsnap.pl", message, "free_chat_claim"), null);
+      assert.deepEqual(parseTurnstileMessage("http://localhost:4321", message, "free_chat_claim"), { kind: "token", token: "test" });
+      assert.equal(challengeOrigin("javascript:alert(1)"), "https://bitsnap.pl");
+    } finally { setHost(undefined as unknown as string); }
+  });
+
   it("accepts messages only from the Bitsnap origin and expected action/shape", () => {
     const accepted: string[] = [];
     const action = "panel_login";

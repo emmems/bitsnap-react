@@ -181,6 +181,7 @@ export function ChatThread(props: ChatThreadProps) {
   return (
     <div className="bitsnap-react h-full">
       <ConversationView
+        host={props.host}
         conversation={conversation}
         texts={texts}
         locale={locale}
@@ -215,6 +216,7 @@ export function Channel(props: ChannelProps) {
   return (
     <div className="bitsnap-react h-full">
       <ConversationView
+        host={props.host}
         conversation={conversation}
         texts={texts}
         locale={locale}

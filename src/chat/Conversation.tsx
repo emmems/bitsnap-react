@@ -46,6 +46,7 @@ export type ConversationViewProps = {
   /** The lock's buy action. Rejects to show the error. */
   onBuy?: (lock: ConversationLock & { email?: string; code?: string; turnstileToken?: string }) => Promise<void> | void;
   className?: string;
+  host?: string;
 };
 
 const focusRing =
@@ -63,6 +64,7 @@ const primaryButton = cn(
 
 /** The shared body of `ChatThread`, `Channel` and the panel screen. */
 export function ConversationView({
+  host,
   conversation: c,
   texts,
   locale,
@@ -170,7 +172,7 @@ export function ConversationView({
       {c.status === "error" && <ErrorBody conversation={c} texts={texts} />}
       {c.status === "locked" && c.lock && (
         <div className="flex flex-1 flex-col justify-center overflow-y-auto p-4">
-          <LockCard lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} prominent />
+          <LockCard host={host} lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} prominent />
         </div>
       )}
       {c.status === "ready" && (
@@ -193,7 +195,7 @@ export function ConversationView({
           )}
           {c.lock && (
             <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
-              <LockCard lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} />
+              <LockCard host={host} lock={c.lock} kind={kind} texts={texts} locale={locale} onBuy={onBuy} />
             </div>
           )}
           {reporting ? (
@@ -325,6 +327,7 @@ function ErrorBody({
 }
 
 function LockCard({
+  host,
   lock,
   kind,
   texts,
@@ -332,6 +335,7 @@ function LockCard({
   onBuy,
   prominent,
 }: {
+  host?: string;
   lock: ConversationLock;
   kind: "thread" | "channel";
   texts: ChatTexts;
@@ -399,7 +403,7 @@ function LockCard({
             </label>
             {codeSent ? (
               <label className="grid gap-1 text-sm"><span>{english ? "Email code" : "Kod z e-maila"}</span><input ref={codeInput} inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" /></label>
-            ) : email.includes("@") ? <TurnstileChallenge key={challengeAttempt} action="free_chat_claim" locale={locale} onToken={setTurnstileToken} onFailure={() => setTurnstileToken(null)} /> : null}
+            ) : email.includes("@") ? <TurnstileChallenge host={host} key={challengeAttempt} action="free_chat_claim" locale={locale} onToken={setTurnstileToken} onFailure={() => setTurnstileToken(null)} /> : null}
             {codeSent && <button type="button" disabled={buying || cooldown > 0} className="min-h-11 text-sm underline disabled:opacity-50" onClick={restart}>{english ? "Request a new code" : "Poproś o nowy kod"}{cooldown > 0 ? ` (${cooldown}s)` : ""}</button>}
           </div>
         )}

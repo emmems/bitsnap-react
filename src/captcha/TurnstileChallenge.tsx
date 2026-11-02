@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { getPanelConfig } from "../panel/config";
+
 export type TurnstileAction = "panel_login" | "free_chat_claim";
-const CHALLENGE_ORIGIN = "https://bitsnap.pl";
+export function challengeOrigin(host = getPanelConfig().host): string {
+  try {
+    const url = new URL(host || "https://bitsnap.pl");
+    if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
+  } catch { /* Invalid host falls back to production. */ }
+  return "https://bitsnap.pl";
+}
 const TOKEN_LIFETIME_MS = 5 * 60 * 1000;
 
-export function parseTurnstileMessage(origin: string, data: unknown, action: TurnstileAction):
+export function parseTurnstileMessage(origin: string, data: unknown, action: TurnstileAction, expectedOrigin = challengeOrigin()):
   | { kind: "token"; token: string }
   | { kind: "disabled" | "failure" }
   | null {
-  if (origin !== CHALLENGE_ORIGIN || !data || typeof data !== "object") return null;
+  if (origin !== expectedOrigin || !data || typeof data !== "object") return null;
   const message = data as Record<string, unknown>;
   if (message.type !== "bitsnap:turnstile" || message.action !== action) return null;
   if (message.disabled === true) return { kind: "disabled" };
@@ -19,9 +27,10 @@ export function parseTurnstileMessage(origin: string, data: unknown, action: Tur
 }
 
 /** Bitsnap-hosted Turnstile surface for merchants' own origins. */
-export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }: {
+export function TurnstileChallenge({ action, locale = "pl", host, onToken, onFailure }: {
   action: TurnstileAction;
   locale?: string;
+  host?: string;
   onToken(token: string): void;
   onFailure?(): void;
 }) {
@@ -34,11 +43,12 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
   const [attempt, setAttempt] = useState(0);
   const [expired, setExpired] = useState(false);
   const language = locale.toLowerCase().startsWith("en") ? "en" : "pl";
-  const src = useMemo(() => `${CHALLENGE_ORIGIN}/challenge?action=${encodeURIComponent(action)}&origin=${encodeURIComponent(window.location.origin)}&locale=${language}`, [action, language]);
+  const origin = challengeOrigin(host);
+  const src = useMemo(() => `${origin}/challenge?action=${encodeURIComponent(action)}&origin=${encodeURIComponent(window.location.origin)}&locale=${language}`, [action, language, origin]);
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (!event.source || (event.source !== iframe.current?.contentWindow && event.source !== popup.current)) return;
-      const result = parseTurnstileMessage(event.origin, event.data, action);
+      const result = parseTurnstileMessage(event.origin, event.data, action, origin);
       if (result?.kind === "failure") { clearExpiry(); callbacks.current.onFailure?.(); return; }
       // Captcha switched off: the empty token never expires.
       if (result?.kind === "disabled") { clearExpiry(); callbacks.current.onToken(""); return; }
@@ -51,7 +61,7 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
     };
     window.addEventListener("message", onMessage);
     return () => { window.removeEventListener("message", onMessage); clearExpiry(); popup.current?.close(); popup.current = null; };
-  }, [action, attempt]);
+  }, [action, attempt, origin]);
   return <section className="grid gap-2" aria-live="polite">
     <iframe ref={iframe} key={attempt} title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-background text-foreground" />
     <button type="button" className="text-sm underline" onClick={() => { popup.current = window.open(src, "bitsnap-turnstile", "popup,width=520,height=680"); }}>{language === "en" ? "Open in a new window" : "Otwórz w nowym oknie"}</button>

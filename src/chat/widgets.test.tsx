@@ -476,10 +476,13 @@ describe("Channel", () => {
       const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" />);
       await changeInput(container.querySelector<HTMLInputElement>('input[type="email"]')!, BUYER);
       const frame = container.querySelector("iframe")!;
-      const message = (source: Window | null) => page.win.dispatchEvent(new page.win.MessageEvent("message", { origin: "https://bitsnap.pl", source, data: { type: "bitsnap:turnstile", action: "free_chat_claim", disabled: true } }));
+      assert.equal(new URL(frame.src).origin, "https://commerce.example.test");
+      const message = (source: Window | null, origin = "https://commerce.example.test") => page.win.dispatchEvent(new page.win.MessageEvent("message", { origin, source, data: { type: "bitsnap:turnstile", action: "free_chat_claim", disabled: true } }));
       await React.act(async () => { message(page.win as unknown as Window); });
       const buy = byText(container, "button", "Choose what you pay") as HTMLButtonElement;
       assert.equal(buy.disabled, true, "unowned window cannot supply a challenge token");
+      await React.act(async () => { message(frame.contentWindow, "https://bitsnap.pl"); });
+      assert.equal(buy.disabled, true, "production messages cannot satisfy a staging challenge");
       await React.act(async () => { message(frame.contentWindow); });
       await click(buy);
       assert.equal(commerce.length, 1);
