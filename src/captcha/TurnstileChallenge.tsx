@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type TurnstileAction = "panel_login" | "free_chat_claim";
 const CHALLENGE_ORIGIN = "https://bitsnap.pl";
@@ -24,24 +24,30 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
   onToken(token: string): void;
   onFailure?(): void;
 }) {
+  const iframe = useRef<HTMLIFrameElement>(null);
+  const popup = useRef<Window | null>(null);
+  const callbacks = useRef({ onToken, onFailure });
+  callbacks.current = { onToken, onFailure };
+  const [attempt, setAttempt] = useState(0);
   const [expired, setExpired] = useState(false);
   const language = locale.toLowerCase().startsWith("en") ? "en" : "pl";
   const src = useMemo(() => `${CHALLENGE_ORIGIN}/challenge?action=${encodeURIComponent(action)}&origin=${encodeURIComponent(window.location.origin)}&locale=${language}`, [action, language]);
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      if (!event.source || (event.source !== iframe.current?.contentWindow && event.source !== popup.current)) return;
       const result = parseTurnstileMessage(event.origin, event.data, action);
-      if (result?.kind === "failure") { onFailure?.(); return; }
-      if (result?.kind === "disabled") { onToken(""); return; }
-      if (result?.kind === "token") onToken(result.token);
+      if (result?.kind === "failure") { callbacks.current.onFailure?.(); return; }
+      if (result?.kind === "disabled") { callbacks.current.onToken(""); return; }
+      if (result?.kind === "token") callbacks.current.onToken(result.token);
     };
     window.addEventListener("message", onMessage);
-    const timeout = window.setTimeout(() => setExpired(true), 5 * 60 * 1000);
-    return () => { window.removeEventListener("message", onMessage); window.clearTimeout(timeout); };
-  }, [action, onToken]);
+    const timeout = window.setTimeout(() => { setExpired(true); callbacks.current.onFailure?.(); }, 5 * 60 * 1000);
+    return () => { window.removeEventListener("message", onMessage); window.clearTimeout(timeout); popup.current?.close(); popup.current = null; };
+  }, [action, attempt]);
   return <section className="grid gap-2" aria-live="polite">
-    <iframe title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-white dark:bg-neutral-950" />
-    <button type="button" className="text-sm underline" onClick={() => window.open(src, "bitsnap-turnstile", "popup,width=520,height=680")}>{language === "en" ? "Open in a new window" : "Otwórz w nowym oknie"}</button>
+    <iframe ref={iframe} key={attempt} title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-background text-foreground" />
+    <button type="button" className="text-sm underline" onClick={() => { popup.current = window.open(src, "bitsnap-turnstile", "popup,width=520,height=680"); }}>{language === "en" ? "Open in a new window" : "Otwórz w nowym oknie"}</button>
     {expired && <p role="alert" className="text-sm text-destructive">{language === "en" ? "The security check expired. Try again." : "Weryfikacja wygasła. Spróbuj ponownie."}</p>}
-    <button type="button" className="text-sm underline" onClick={() => { setExpired(false); onFailure?.(); }}>{language === "en" ? "Refresh the security check" : "Odśwież weryfikację"}</button>
+    <button type="button" className="text-sm underline" onClick={() => { popup.current?.close(); popup.current = null; setExpired(false); setAttempt((n) => n + 1); onFailure?.(); }}>{language === "en" ? "Refresh the security check" : "Odśwież weryfikację"}</button>
   </section>;
 }

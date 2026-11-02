@@ -341,16 +341,28 @@ function LockCard({
 }) {
   const [buying, setBuying] = useState(false);
   const [failed, setFailed] = useState("");
-  const [amount, setAmount] = useState(lock.priceCents ?? 0);
+  const [amountText, setAmountText] = useState(String((lock.priceCents ?? 0) / 100));
+  const normalized = amountText.trim().replace(",", ".");
+  const amount = /^\d+(\.\d{0,2})?$/.test(normalized) ? Math.round(Number(normalized) * 100) : NaN;
   const isPwyw = lock.priceType === "pay_what_you_want";
   const min = lock.minimumCents ?? 0;
   const max = lock.maximumCents ?? Number.MAX_SAFE_INTEGER;
-  const validAmount = Number.isInteger(amount) && amount >= min && amount <= max;
+  const validAmount = Number.isInteger(amount) && amount >= min && amount <= max && (amount > 0 || lock.freeClaimLimit != null);
   const isFreeClaim = lock.freeClaimLimit != null && (lock.priceType === "free" || (isPwyw && min === 0 && amount === 0));
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+  const codeInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (codeSent) codeInput.current?.focus(); }, [codeSent]);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+  const restart = () => { setCodeSent(false); setCode(""); setTurnstileToken(null); setChallengeAttempt((n) => n + 1); setFailed(""); };
   const english = locale.toLowerCase().startsWith("en");
   const [title, body] =
     lock.reason === "replies"
@@ -383,18 +395,19 @@ function LockCard({
           <div className="mt-3 grid max-w-sm gap-2">
             <label className="grid gap-1 text-sm">
               <span>{english ? "Email" : "E-mail"}</span>
-              <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
+              <input type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.currentTarget.value); restart(); }} disabled={buying} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
             </label>
             {codeSent ? (
-              <label className="grid gap-1 text-sm"><span>{english ? "Email code" : "Kod z e-maila"}</span><input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" /></label>
-            ) : email.includes("@") ? <TurnstileChallenge action="free_chat_claim" locale={locale} onToken={setTurnstileToken} onFailure={() => setTurnstileToken(null)} /> : null}
+              <label className="grid gap-1 text-sm"><span>{english ? "Email code" : "Kod z e-maila"}</span><input ref={codeInput} inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.currentTarget.value)} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" /></label>
+            ) : email.includes("@") ? <TurnstileChallenge key={challengeAttempt} action="free_chat_claim" locale={locale} onToken={setTurnstileToken} onFailure={() => setTurnstileToken(null)} /> : null}
+            {codeSent && <button type="button" disabled={buying || cooldown > 0} className="min-h-11 text-sm underline disabled:opacity-50" onClick={restart}>{english ? "Request a new code" : "Poproś o nowy kod"}{cooldown > 0 ? ` (${cooldown}s)` : ""}</button>}
           </div>
         )}
         {isPwyw && (
           <label className="mt-3 grid max-w-xs gap-1 text-sm">
             <span>{english ? `Amount (${(min / 100).toFixed(2)}–${Number.isFinite(max) ? (max / 100).toFixed(2) : "∞"} PLN)` : `Kwota (${(min / 100).toFixed(2)}–${Number.isFinite(max) ? (max / 100).toFixed(2) : "∞"} zł)`}</span>
-            <input aria-label={english ? "Amount" : "Kwota"} inputMode="decimal" type="number" min={min / 100} max={Number.isFinite(max) ? max / 100 : undefined} step="0.01" value={(amount / 100).toFixed(2)} onChange={(event) => setAmount(Math.round(Number(event.currentTarget.value) * 100))} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
-            {!validAmount && <span role="alert" className="text-xs text-red-700 dark:text-red-400">{english ? "Enter an amount within the range." : "Kwota musi mieścić się w podanym zakresie."}</span>}
+            <input aria-label={english ? "Amount" : "Kwota"} inputMode="decimal" type="text" min={min / 100} max={Number.isFinite(max) ? max / 100 : undefined} step="0.01" value={amountText} onChange={(event) => setAmountText(event.currentTarget.value)} onBlur={() => { if (Number.isFinite(amount)) setAmountText((amount / 100).toFixed(2)); }} className="h-11 rounded-md border border-neutral-300 bg-white px-3 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50" />
+            {!validAmount && <span role="alert" className="text-xs text-red-700 dark:text-red-400">{english ? (amount === 0 && lock.freeClaimLimit == null ? "Free claims are unavailable. Enter a positive amount." : "Enter an amount within the range.") : (amount === 0 && lock.freeClaimLimit == null ? "Darmowy odbiór jest niedostępny. Wpisz kwotę większą od zera." : "Kwota musi mieścić się w podanym zakresie.")}</span>}
           </label>
         )}
         {lock.welcome && (
@@ -417,13 +430,14 @@ function LockCard({
             setFailed("");
             try {
               if (isFreeClaim) {
-                await onBuy!({ ...lock, email, ...(codeSent ? { code } : { turnstileToken }) });
-                if (!codeSent) setCodeSent(true);
+                await onBuy!({ ...lock, ...(isPwyw ? { amount } : {}), email, ...(codeSent ? { code } : { turnstileToken }) });
+                if (!codeSent) { setCodeSent(true); setCooldown(60); }
               } else {
                 await onBuy!({ ...lock, ...(isPwyw ? { amount } : {}) });
               }
             } catch (error) {
               setFailed(chatBuyError(error, locale, texts.buyError));
+              if (!codeSent) { setTurnstileToken(null); setChallengeAttempt((n) => n + 1); }
             } finally {
               setBuying(false);
             }
@@ -883,8 +897,8 @@ function chatBuyError(error: unknown, locale: string, fallback: string): string 
     "captcha-required": ["Potwierdź, że nie jesteś robotem.", "Complete the security check."],
     "captcha-invalid": ["Weryfikacja wygasła. Spróbuj ponownie.", "The security check expired. Try again."],
     "rate-limited": ["Zbyt wiele prób. Spróbuj ponownie za chwilę.", "Too many attempts. Try again shortly."],
-    "incorrect-code": ["Nieprawidłowy kod. Sprawdź wiadomość i spróbuj ponownie.", "The code is incorrect. Check your email and try again."],
-    "too-many-attempts": ["Poproś o nowy kod za kilka minut.", "Request a new code in a few minutes."],
+    "incorrect-code": ["Nieprawidłowy kod. Sprawdź wiadomość i spróbuj ponownie.", "The code is incorrect. Check your email and try again."],
+    "too-many-attempts": ["Poproś o nowy kod za kilka minut.", "Request a new code in a few minutes."],
     unavailable: ["Weryfikacja jest chwilowo niedostępna.", "Verification is temporarily unavailable."],
   };
   return messages[code]?.[en ? 1 : 0] ?? fallback;

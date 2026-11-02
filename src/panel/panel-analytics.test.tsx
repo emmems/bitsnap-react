@@ -85,6 +85,7 @@ const settle = (ms = 40) => React.act(async () => {
   await new Promise((r) => setTimeout(r, ms));
   page.win.dispatchEvent(new page.win.MessageEvent("message", {
     origin: "https://bitsnap.pl",
+      source: page.win.document.querySelector("iframe")?.contentWindow ?? null,
     data: { type: "bitsnap:turnstile", action: "panel_login", disabled: true },
   }));
 });

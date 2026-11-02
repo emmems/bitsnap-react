@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getLocale } from "../components/checkout/locale";
 import { getPanelConfig } from "../panel/config";
 import { getPanelSession } from "../panel/session-storage";
@@ -107,6 +107,7 @@ function useWidgetClient(props: ChatWidgetBaseProps): ChatClient | null | undefi
 }
 
 function useBuy(props: ChatWidgetBaseProps) {
+  const claim = useRef<{ key: string; token: string; expires: number } | null>(null);
   return async (lock: ConversationLock & { email?: string; code?: string; turnstileToken?: string }) => {
     const productId = props.buyProductId ?? lock.productId;
     if (!productId) return;
@@ -115,9 +116,10 @@ function useBuy(props: ChatWidgetBaseProps) {
       await props.onBuy(request);
       return;
     }
-    const commerceBase = (props.host ?? window.location.origin).replace(/\/+$/, "");
+    const commerceBase = (props.host ?? getPanelConfig().host ?? "https://bitsnap.pl").replace(/\/+$/, "");
     const isFreeClaim = lock.freeClaimLimit != null && (lock.priceType === "free" || (lock.priceType === "pay_what_you_want" && lock.minimumCents === 0 && request.amount === 0));
-    if (isFreeClaim && request.email && request.turnstileToken) {
+    if (isFreeClaim && request.email && request.turnstileToken != null) {
+      claim.current = null;
       const response = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/free-claim/request-code`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: request.email, turnstileToken: request.turnstileToken }),
@@ -127,15 +129,20 @@ function useBuy(props: ChatWidgetBaseProps) {
       return;
     }
     if (isFreeClaim && request.email && request.code) {
-      const verify = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/free-claim/verify-code`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: request.email, code: request.code }),
-      });
-      const verified = await verify.json() as { success?: boolean; claimToken?: string };
-      if (!verify.ok || !verified.claimToken) throw new Error((verified as { code?: string }).code ?? "email-verification-required");
+      const key = JSON.stringify([commerceBase, props.projectID, productId, request.email, request.code]);
+      if (!claim.current || claim.current.key !== key || claim.current.expires <= Date.now()) {
+        claim.current = null;
+        const verify = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/free-claim/verify-code`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: request.email, code: request.code }),
+        });
+        const verified = await verify.json() as { claimToken?: string; code?: string; expiresIn?: number };
+        if (!verify.ok || !verified.claimToken) throw new Error(verified.code ?? "email-verification-required");
+        claim.current = { key, token: verified.claimToken, expires: Date.now() + (verified.expiresIn ?? 600) * 1000 };
+      }
       const bought = await fetch(`${commerceBase}/api/integrations/${encodeURIComponent(props.projectID)}/public-commerce/buy`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: [{ id: productId, quantity: 1, amount: 0 }], details: { email: request.email }, claimToken: verified.claimToken }),
+        body: JSON.stringify({ items: [{ id: productId, quantity: 1, amount: 0 }], details: { email: request.email }, claimToken: claim.current.token }),
       });
       const result = await bought.json() as { success?: boolean; url?: string; code?: string };
       if (!bought.ok || !result.url) throw new Error(result.code ?? "free-order-not-supported");

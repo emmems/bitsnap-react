@@ -431,6 +431,130 @@ describe("Channel", () => {
     assert.deepEqual(bought, [{ productId: "prodv2_club", reason: "no-access", priceCents: 2900, amount: 4500 }]);
   });
 
+  it("keeps decimal text editable, accepts commas, and rejects unavailable zero claims", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 100,
+        price_type: "pay_what_you_want", price_min_cents: 0, price_max_cents: 6000,
+      })),
+    );
+    const bought: unknown[] = [];
+    const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" onBuy={(r) => void bought.push(r)} />);
+    const amount = container.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;
+    await changeInput(amount, "12,");
+    assert.equal(amount.value, "12,");
+    await changeInput(amount, "12,50");
+    await click(byText(container, "button", "Choose what you pay"));
+    assert.equal((bought[0] as { amount: number }).amount, 1250);
+    for (const value of ["", "invalid", "0"]) {
+      await changeInput(amount, value);
+      assert.equal((byText(container, "button", "Choose what you pay") as HTMLButtonElement).disabled, true);
+    }
+    assert.match(container.textContent!, /Free claims are unavailable/);
+  });
+
+  it("sends zero PWYW claims with disabled Turnstile to the configured host and reuses a verified token", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 0,
+        price_type: "pay_what_you_want", price_min_cents: 0, free_claim_limit: 1,
+      })),
+    );
+    const { setHost } = await import("../panel/config");
+    setHost("https://commerce.example.test");
+    const originalFetch = globalThis.fetch;
+    const commerce: { url: string; body: any }[] = [];
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      commerce.push({ url, body: JSON.parse(init.body as string) });
+      if (url.endsWith("request-code")) return json(200, { success: true, retryIn: 60 });
+      if (url.endsWith("verify-code")) return json(200, { claimToken: "verified", expiresIn: 600 });
+      return json(503, { code: "unavailable" });
+    }) as typeof fetch;
+    try {
+      const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" />);
+      await changeInput(container.querySelector<HTMLInputElement>('input[type="email"]')!, BUYER);
+      const frame = container.querySelector("iframe")!;
+      const message = (source: Window | null) => page.win.dispatchEvent(new page.win.MessageEvent("message", { origin: "https://bitsnap.pl", source, data: { type: "bitsnap:turnstile", action: "free_chat_claim", disabled: true } }));
+      await React.act(async () => { message(page.win as unknown as Window); });
+      const buy = byText(container, "button", "Choose what you pay") as HTMLButtonElement;
+      assert.equal(buy.disabled, true, "unowned window cannot supply a challenge token");
+      await React.act(async () => { message(frame.contentWindow); });
+      await click(buy);
+      assert.equal(commerce.length, 1);
+      assert.equal(commerce[0].url, "https://commerce.example.test/api/integrations/tstProj123/public-commerce/free-claim/request-code");
+      assert.deepEqual(commerce[0].body, { email: BUYER, turnstileToken: "" });
+      const code = container.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]')!;
+      assert.equal(page.win.document.activeElement, code);
+      assert.equal((byText(container, "button", "Request a new code (60s)") as HTMLButtonElement).disabled, true);
+      await changeInput(code, "424242");
+      await click(buy);
+      await click(buy);
+      assert.equal(commerce.filter((r) => r.url.endsWith("verify-code")).length, 1);
+      const buys = commerce.filter((r) => r.url.endsWith("/buy"));
+      assert.equal(buys.length, 2);
+      assert.deepEqual(buys[0].body, { items: [{ id: "prodv2_club", quantity: 1, amount: 0 }], details: { email: BUYER }, claimToken: "verified" });
+      await changeInput(container.querySelector<HTMLInputElement>('input[type="email"]')!, "other@example.test");
+      assert.equal(container.querySelector('input[autocomplete="one-time-code"]'), null);
+      assert.ok(container.querySelector("iframe"));
+    } finally { globalThis.fetch = originalFetch; setHost(undefined as unknown as string); }
+  });
+
+  it("remounts the security frame on refresh and after a request failure", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 0, price_type: "free", free_claim_limit: 1,
+      })),
+    );
+    const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" onBuy={() => { throw new Error("unavailable"); }} />);
+    await changeInput(container.querySelector<HTMLInputElement>('input[type="email"]')!, BUYER);
+    const frame = container.querySelector("iframe")!;
+    await click(byText(container, "button", "Refresh the security check"));
+    const refreshed = container.querySelector("iframe")!;
+    assert.notEqual(frame, refreshed);
+    await React.act(async () => { page.win.dispatchEvent(new page.win.MessageEvent("message", { origin: "https://bitsnap.pl", source: refreshed.contentWindow, data: { type: "bitsnap:turnstile", action: "free_chat_claim", token: "fresh" } })); });
+    await click(byText(container, "button", "Send code"));
+    assert.notEqual(container.querySelector("iframe"), refreshed);
+    assert.equal((byText(container, "button", "Send code") as HTMLButtonElement).disabled, true);
+  });
+
+  it("invalidates expired challenges and offers a fresh code after the resend cooldown", async () => {
+    routes.push(
+      on("GET", "/v1/me", () => json(200, me({ threads: [] }))),
+      on("GET", /^\/v1\/threads\/c1\/messages/, () => json(403, {
+        error: "locked", product_id: "prodv2_club", price_cents: 0, price_type: "free", free_claim_limit: 1,
+      })),
+    );
+    const realTimeout = page.win.setTimeout;
+    let tick: (() => void) | undefined;
+    let expire: (() => void) | undefined;
+    page.win.setTimeout = ((callback: () => void, delay: number) => {
+      if (delay === 1000) { tick = callback; return -1; }
+      if (delay === 5 * 60 * 1000) { expire = callback; return -2; }
+      return realTimeout(callback, delay);
+    }) as typeof page.win.setTimeout;
+    try {
+      const container = await mount(<widgets.Channel projectID="tstProj123" client={client()} channelId="c1" locale="en" onBuy={(r) => { if (r.code) throw new Error("too-many-attempts"); }} />);
+      await changeInput(container.querySelector<HTMLInputElement>('input[type="email"]')!, BUYER);
+      const token = async () => React.act(async () => { page.win.dispatchEvent(new page.win.MessageEvent("message", { origin: "https://bitsnap.pl", source: container.querySelector("iframe")!.contentWindow, data: { type: "bitsnap:turnstile", action: "free_chat_claim", token: "fresh" } })); });
+      await token();
+      assert.equal((byText(container, "button", "Send code") as HTMLButtonElement).disabled, false);
+      await React.act(async () => expire!());
+      assert.equal((byText(container, "button", "Send code") as HTMLButtonElement).disabled, true);
+      await click(byText(container, "button", "Refresh the security check"));
+      await token();
+      await click(byText(container, "button", "Send code"));
+      await changeInput(container.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]')!, "424242");
+      await click(byText(container, "button", "Claim for free"));
+      for (let i = 0; i < 60; i++) await React.act(async () => tick!());
+      await click(byText(container, "button", "Request a new code"));
+      assert.equal(container.querySelector('input[autocomplete="one-time-code"]'), null);
+      assert.ok(container.querySelector("iframe"));
+    } finally { page.win.setTimeout = realTimeout; }
+  });
+
   it("renders email and challenge controls for free claims", async () => {
     routes.push(
       on("GET", "/v1/me", () => json(200, me({ threads: [] }))),

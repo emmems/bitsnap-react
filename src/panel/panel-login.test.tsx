@@ -99,6 +99,7 @@ const settle = (ms = 40) =>
     // The hosted challenge reports this when the server kill switch is off.
     page.win.dispatchEvent(new page.win.MessageEvent("message", {
       origin: "https://bitsnap.pl",
+      source: page.win.document.querySelector("iframe")?.contentWindow ?? null,
       data: { type: "bitsnap:turnstile", action: "panel_login", disabled: true },
     }));
   });
