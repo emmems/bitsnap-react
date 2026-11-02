@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export type TurnstileAction = "panel_login" | "free_chat_claim";
 const CHALLENGE_ORIGIN = "https://bitsnap.pl";
+const TOKEN_LIFETIME_MS = 5 * 60 * 1000;
 
 export function parseTurnstileMessage(origin: string, data: unknown, action: TurnstileAction):
   | { kind: "token"; token: string }
@@ -28,6 +29,8 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
   const popup = useRef<Window | null>(null);
   const callbacks = useRef({ onToken, onFailure });
   callbacks.current = { onToken, onFailure };
+  const expiry = useRef<number | undefined>(undefined);
+  const clearExpiry = () => { window.clearTimeout(expiry.current); expiry.current = undefined; };
   const [attempt, setAttempt] = useState(0);
   const [expired, setExpired] = useState(false);
   const language = locale.toLowerCase().startsWith("en") ? "en" : "pl";
@@ -36,13 +39,18 @@ export function TurnstileChallenge({ action, locale = "pl", onToken, onFailure }
     const onMessage = (event: MessageEvent) => {
       if (!event.source || (event.source !== iframe.current?.contentWindow && event.source !== popup.current)) return;
       const result = parseTurnstileMessage(event.origin, event.data, action);
-      if (result?.kind === "failure") { callbacks.current.onFailure?.(); return; }
-      if (result?.kind === "disabled") { callbacks.current.onToken(""); return; }
-      if (result?.kind === "token") callbacks.current.onToken(result.token);
+      if (result?.kind === "failure") { clearExpiry(); callbacks.current.onFailure?.(); return; }
+      // Captcha switched off: the empty token never expires.
+      if (result?.kind === "disabled") { clearExpiry(); callbacks.current.onToken(""); return; }
+      if (result?.kind === "token") {
+        // A Turnstile token lives 5 minutes from when it was issued.
+        clearExpiry();
+        expiry.current = window.setTimeout(() => { expiry.current = undefined; setExpired(true); callbacks.current.onFailure?.(); }, TOKEN_LIFETIME_MS);
+        callbacks.current.onToken(result.token);
+      }
     };
     window.addEventListener("message", onMessage);
-    const timeout = window.setTimeout(() => { setExpired(true); callbacks.current.onFailure?.(); }, 5 * 60 * 1000);
-    return () => { window.removeEventListener("message", onMessage); window.clearTimeout(timeout); popup.current?.close(); popup.current = null; };
+    return () => { window.removeEventListener("message", onMessage); clearExpiry(); popup.current?.close(); popup.current = null; };
   }, [action, attempt]);
   return <section className="grid gap-2" aria-live="polite">
     <iframe ref={iframe} key={attempt} title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-background text-foreground" />
