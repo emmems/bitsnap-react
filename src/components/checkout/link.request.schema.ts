@@ -84,6 +84,8 @@ export const linkRequestSchema = zod.object({
       id: zod.string(),
       quantity: zod.number().min(1),
       priceVersion: zod.string().optional(),
+      /** Buyer-chosen pay-what-you-want amount, in minor units per item. */
+      amount: zod.number().int().nonnegative().optional(),
 
       name: zod.string().optional(),
       description: zod.string().optional(),

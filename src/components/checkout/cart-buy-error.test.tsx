@@ -187,3 +187,14 @@ describe("createPaymentURL and createCheckout errors", () => {
 });
 
 process.on("exit", teardownReactPage);
+
+describe("cartLinkRequest", () => {
+  it("forwards the buyer's pay-what-you-want amount to /buy", async () => {
+    const { cartLinkRequest } = await import("./CartProvider.tsx");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const checkout = { products: [{ productID: "prodv2_x_default", quantity: 1, amount: 1500 }, { productID: "prodv2_y", quantity: 2 }] } as any;
+    const request = cartLinkRequest(checkout, "pl");
+    assert.equal(request?.items[0]?.amount, 1500);
+    assert.equal("amount" in (request?.items[1] ?? {}), false);
+  });
+});

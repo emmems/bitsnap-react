@@ -756,7 +756,7 @@ function notifyLocalCartChanged(): void {
 }
 
 /** The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when it is empty. */
-function cartLinkRequest(
+export function cartLinkRequest(
   checkout: Checkout,
   locale: string,
 ): LinkRequest | undefined {
@@ -784,6 +784,8 @@ function cartLinkRequest(
         id: el.productID,
         quantity: el.quantity,
         priceVersion: el.priceVersion,
+        // The buyer's pay-what-you-want amount, in minor units per item.
+        ...(el.amount != null ? { amount: el.amount } : {}),
       };
     }),
     askForNote: true,
