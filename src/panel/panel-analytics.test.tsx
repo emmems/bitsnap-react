@@ -81,7 +81,13 @@ afterEach(async () => {
   resetTracker();
 });
 
-const settle = (ms = 40) => React.act(async () => void (await new Promise((r) => setTimeout(r, ms))));
+const settle = (ms = 40) => React.act(async () => {
+  await new Promise((r) => setTimeout(r, ms));
+  page.win.dispatchEvent(new page.win.MessageEvent("message", {
+    origin: "https://bitsnap.pl",
+    data: { type: "bitsnap:turnstile", action: "panel_login", disabled: true },
+  }));
+});
 
 async function mount(element: React.ReactElement) {
   const container = page.win.document.createElement("div");

@@ -1,5 +1,6 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { TurnstileChallenge } from "../../captcha/TurnstileChallenge";
 import {
   InstrumentProvider,
   useInstrument,
@@ -76,6 +77,14 @@ const PanelLoginForm = ({
   locale?: string;
   logo: LoginLogoOptions;
 }) => {
+  const [challengeVisible, setChallengeVisible] = useState(false);
+  const challengeWaiter = useRef<((token: string | null) => void) | undefined>(undefined);
+  const captchaToken = useRef("");
+  const beforeSend = useMemo(() => () => new Promise<boolean>((resolve) => {
+    setChallengeVisible(true);
+    const timer = window.setTimeout(() => { challengeWaiter.current = undefined; setChallengeVisible(false); resolve(false); }, 5 * 60 * 1000);
+    challengeWaiter.current = (token) => { window.clearTimeout(timer); challengeWaiter.current = undefined; setChallengeVisible(false); captchaToken.current = token ?? ""; resolve(token !== null); };
+  }), []);
   const instrument = useInstrumentContext();
   const { mutateAsync: loginUserAsync } = useMutation(
     rpcProvider.publicApi.userPanelLogin,
@@ -88,7 +97,8 @@ const PanelLoginForm = ({
     () => ({
       async send(email) {
         try {
-          const response = await loginUserAsync({ email });
+          const response = await loginUserAsync({ email, turnstileToken: captchaToken.current });
+          captchaToken.current = "";
           if (response.result.case === "success") {
             return {
               ok: true,
@@ -133,6 +143,7 @@ const PanelLoginForm = ({
   const login = useEmailCodeLogin<PanelLoginResult>({
     adapter,
     texts,
+    beforeSend,
     storageKey: pendingLoginKey("panel", projectID, host),
     onVerified: ({ accessToken }, email) => {
       instrument.track("panel_login", {});
@@ -177,6 +188,7 @@ const PanelLoginForm = ({
             emailInputId="email"
             codeInputId="verify-code"
           />
+          {challengeVisible && <TurnstileChallenge action="panel_login" locale={locale} onToken={(token) => challengeWaiter.current?.(token)} onFailure={() => challengeWaiter.current?.(null)} />}
         </CardContent>
       </Card>
     </main>

@@ -94,7 +94,14 @@ afterEach(async () => {
 });
 
 const settle = (ms = 40) =>
-  React.act(async () => void (await new Promise((resolve) => setTimeout(resolve, ms))));
+  React.act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    // The hosted challenge reports this when the server kill switch is off.
+    page.win.dispatchEvent(new page.win.MessageEvent("message", {
+      origin: "https://bitsnap.pl",
+      data: { type: "bitsnap:turnstile", action: "panel_login", disabled: true },
+    }));
+  });
 const doc = () => page.win.document;
 const emailInput = () => doc().querySelector<HTMLInputElement>('input[type="email"]')!;
 const codeInput = () => doc().querySelector<HTMLInputElement>("#verify-code")!;

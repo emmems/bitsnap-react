@@ -55,6 +55,8 @@ export type EmailCodeTexts = {
   emailNotFound: string;
   deliveryFailed: string;
   deliveryUnavailable: string;
+  captchaRequired: string;
+  captchaInvalid: string;
   network: string;
   generic: string;
 };
@@ -95,6 +97,8 @@ export const EMAIL_CODE_TEXT_TABLES: LocaleTables<EmailCodeTextKey> = {
     deliveryFailed: "Nie udało się wysłać kodu. Spróbuj ponownie.",
     deliveryUnavailable:
       "Nie możemy teraz wysłać kodu na ten adres. Spróbuj później.",
+    captchaRequired: "Potwierdź, że jesteś człowiekiem, aby wysłać kod.",
+    captchaInvalid: "Nie udało się zweryfikować. Spróbuj ponownie.",
     network: "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.",
     generic: "Coś poszło nie tak. Spróbuj ponownie.",
   },
@@ -131,6 +135,8 @@ export const EMAIL_CODE_TEXT_TABLES: LocaleTables<EmailCodeTextKey> = {
     deliveryFailed: "We could not send the code. Please try again.",
     deliveryUnavailable:
       "We cannot send a code to this address right now. Try again later.",
+    captchaRequired: "Complete the security check before requesting a code.",
+    captchaInvalid: "Verification failed. Please try again.",
     network: "Cannot reach the server. Check your connection and try again.",
     generic: "Something went wrong. Please try again.",
   },

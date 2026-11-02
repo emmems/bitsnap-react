@@ -20,6 +20,10 @@ export function panelFailureKind(failure: FailureMessage): FailureKind {
       return "tooManyAttempts";
     case FailureMessage.RATE_LIMITED:
       return "rateLimited";
+    case FailureMessage.CAPTCHA_REQUIRED:
+      return "captchaRequired";
+    case FailureMessage.CAPTCHA_INVALID:
+      return "captchaInvalid";
     case FailureMessage.DELIVERY_FAILED:
       return "deliveryFailed";
     case FailureMessage.DELIVERY_METHOD_UNAVAILABLE:

@@ -19,6 +19,8 @@ export type FailureKind =
   | "alreadySent"
   | "deliveryFailed"
   | "deliveryUnavailable"
+  | "captchaRequired"
+  | "captchaInvalid"
   | "network"
   | "unknown";
 
@@ -113,6 +115,10 @@ function describeFailure(
       return { kind: "error", text: texts.deliveryFailed };
     case "deliveryUnavailable":
       return { kind: "error", text: texts.deliveryUnavailable };
+    case "captchaRequired":
+      return { kind: "error", text: texts.captchaRequired };
+    case "captchaInvalid":
+      return { kind: "error", text: texts.captchaInvalid };
     case "network":
       return { kind: "error", text: texts.network };
     default:
@@ -130,6 +136,8 @@ export type UseEmailCodeLoginOptions<T> = {
   onVerified?: (value: T, email: string) => void;
   /** Called for failures worth reporting (not a mistyped code or e-mail). */
   onFailure?: (kind: FailureKind, cause?: unknown) => void;
+  /** Optional interactive gate before the send-code RPC. */
+  beforeSend?: () => Promise<boolean>;
 };
 
 export type EmailCodeLogin = ReturnType<typeof useEmailCodeLogin>;
@@ -278,6 +286,13 @@ export function useEmailCodeLogin<T = void>(
       busyRef.current = true;
       setBusy(mode);
       setNotice(undefined);
+
+      if (latest.current.beforeSend && !(await latest.current.beforeSend())) {
+        busyRef.current = false;
+        setBusy(undefined);
+        setNotice(failureNotice(latest.current.texts, "captchaInvalid"));
+        return;
+      }
 
       let outcome: SendOutcome;
       try {
