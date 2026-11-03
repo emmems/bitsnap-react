@@ -26,7 +26,7 @@ export type LocalMessageState = {
   uploadProgress?: number;
 };
 
-export type ConversationMessage = ChatMessage & { local?: LocalMessageState };
+export type ConversationMessage = ChatMessage & { local?: LocalMessageState; retryFile?: File };
 
 /**
  * Why the buyer sees the lock: `replies` (no creator replies left, writing
@@ -131,7 +131,7 @@ export function mergeMessages(
     if (message.status === "pending") {
       // A pending answer never overwrites a stored copy.
       if (existing && !existing.local) continue;
-      byId.set(message.id, { ...message, local: existing?.local ?? { state: "pending" } });
+      byId.set(message.id, { ...message, retryFile: existing?.retryFile, local: existing?.local ?? { state: "pending" } });
       continue;
     }
     if (existing?.local && existing.local.state !== "pending" && existing.local.state !== "unconfirmed") {
@@ -421,6 +421,7 @@ export function useConversation(
         threadId,
         authorEmail: me ?? "",
         body: text,
+        retryFile: attachment,
         ...(attachment ? { attachmentName: attachment.name, attachmentSize: attachment.size, attachmentContentType: attachment.type, attachmentKind: attachment.type.startsWith("image/") ? "image" : "file" } : {}),
         createdAt: new Date().toISOString(),
         pinned: false,
@@ -480,7 +481,7 @@ export function useConversation(
       // new id.
       const uncertain = message.local?.state !== "rejected" || message.local.keepId === true;
       discard(id);
-      await send(message.body, undefined, uncertain ? id : undefined);
+      await send(message.body, message.retryFile, uncertain ? id : undefined);
     },
     [discard, send],
   );

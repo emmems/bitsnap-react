@@ -54,6 +54,7 @@ export type ChatTexts = {
   file: string;
   removeAttachment: string;
   uploading: string;
+  attachmentLoadFailed: string;
   you: string;
   creator: string;
   systemLabel: string;
@@ -170,6 +171,7 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     file: "Plik",
     removeAttachment: "Usuń załącznik",
     uploading: "Wysyłanie pliku",
+    attachmentLoadFailed: "Nie udało się wczytać — ponów",
     you: "Ty",
     creator: "Twórca",
     systemLabel: "Wiadomość automatyczna",
@@ -285,6 +287,7 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     file: "File",
     removeAttachment: "Remove attachment",
     uploading: "Uploading file",
+    attachmentLoadFailed: "Could not load — retry",
     you: "You",
     creator: "Creator",
     systemLabel: "Automatic message",

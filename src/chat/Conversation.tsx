@@ -194,11 +194,6 @@ export function ConversationView({
       )}
       {c.status === "ready" && (
         <>
-          {kind === "thread" && c.thread?.blocked && (
-            <p role="status" className="border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-sm text-neutral-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300">
-              {texts.blockedNotice}
-            </p>
-          )}
           <MessageList
             conversation={c}
             texts={texts}
@@ -555,6 +550,10 @@ function MessageList({
       role="log"
       aria-live="polite"
       aria-relevant="additions"
+      onLoadCapture={() => {
+        const el = scroller.current;
+        if (el && stick.current) scrollToBottom(el, false);
+      }}
       onScroll={(event) => {
         const el = event.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -637,14 +636,34 @@ function MessageRow({
   const [actions, setActions] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState<string>();
+  const [attachmentError, setAttachmentError] = useState(false);
+  const [attachmentVersion, setAttachmentVersion] = useState(0);
+  const attachmentExpiresAt = useRef(0);
+  const retryAttachment = () => { setAttachmentUrl(undefined); setAttachmentError(false); setAttachmentVersion((value) => value + 1); };
+  const openAttachment = async (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (attachmentUrl && Date.now() < attachmentExpiresAt.current) return;
+    event.preventDefault();
+    // Open synchronously so a refreshed URL is not blocked as a popup.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    try {
+      const url = await getAttachmentURL(message);
+      attachmentExpiresAt.current = Date.now() + 50_000;
+      setAttachmentUrl(url);
+      if (tab) tab.location.href = url;
+    } catch { tab?.close(); setAttachmentError(true); }
+  };
   const local = message.local;
 
   useEffect(() => {
-    if (!message.attachmentKey || message.deleted) return;
+    if (!message.attachmentKey || message.deleted || message.local) return;
     let cancelled = false;
-    void getAttachmentURL(message).then((url) => { if (!cancelled) setAttachmentUrl(url); }).catch(() => undefined);
+    setAttachmentError(false);
+    void getAttachmentURL(message).then((url) => {
+      if (!cancelled) { attachmentExpiresAt.current = Date.now() + 50_000; setAttachmentUrl(url); }
+    }).catch(() => { if (!cancelled) setAttachmentError(true); });
     return () => { cancelled = true; };
-  }, [message.attachmentKey, message.deleted, getAttachmentURL]);
+  }, [message.attachmentKey, message.deleted, !!message.local, getAttachmentURL, attachmentVersion]);
 
   if (message.system) {
     return (
@@ -685,14 +704,16 @@ function MessageRow({
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
               {!message.deleted && message.attachmentName && (
                 message.attachmentKind === "image" ? (
-                  attachmentUrl ? <a href={attachmentUrl} target="_blank" rel="noreferrer"><img src={attachmentUrl} alt={message.attachmentName} className="mt-2 max-h-48 rounded-lg object-cover" /></a>
-                    : <p className="mt-1 text-xs">{message.attachmentName}</p>
+                  attachmentError ? <button type="button" onClick={retryAttachment} className="mt-2 text-xs underline">{texts.attachmentLoadFailed}</button>
+                    : attachmentUrl ? <a href={attachmentUrl} onClick={openAttachment} target="_blank" rel="noreferrer"><img src={attachmentUrl} onError={() => { if (Date.now() >= attachmentExpiresAt.current) retryAttachment(); else { setAttachmentUrl(undefined); setAttachmentError(true); } }} alt={message.attachmentName} className="mt-2 max-h-48 rounded-lg object-cover" /></a>
+                    : <div role="status" aria-label={texts.loading} className="mt-2 h-32 w-48 animate-pulse rounded-lg bg-current/10 motion-reduce:animate-none" />
                 ) : (
-                  <a href={attachmentUrl} download={message.attachmentName} className="mt-2 flex max-w-56 items-center gap-2 rounded-lg border border-neutral-300/60 px-2 py-1.5 text-xs dark:border-neutral-700" aria-disabled={!attachmentUrl}>
+                  <a href={attachmentUrl ?? "#"} onClick={openAttachment} download={message.attachmentName} className="mt-2 flex max-w-56 items-center gap-2 rounded-lg border border-neutral-300/60 px-2 py-1.5 text-xs dark:border-neutral-700" >
                     <Paperclip className="size-3.5 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1 truncate">{message.attachmentName}</span><span>{formatBytes(message.attachmentSize)}</span>
                   </a>
                 )
               )}
+              {attachmentError && message.attachmentKind !== "image" && <button type="button" onClick={retryAttachment} className="mt-1 text-xs underline">{texts.attachmentLoadFailed}</button>}
               {message.attachmentName && local?.state === "pending" && local.uploadProgress != null && <p className="mt-1 text-[11px] opacity-75">{texts.uploading} {local.uploadProgress}%</p>}
             </>
           )}
