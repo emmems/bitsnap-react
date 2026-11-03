@@ -126,6 +126,21 @@ export type ChatTexts = {
   errorNotFound: string;
   errorUnavailable: string;
   errorGeneric: string;
+  paymentRequestPay: string;
+  paymentRequestChooseAmount: string;
+  paymentRequestPaid: string;
+  paymentRequestExpired: string;
+  paymentRequestCancelled: string;
+  paymentRequestValidUntil: string;
+  paymentRequestRepliesOne: string;
+  paymentRequestRepliesFew: string;
+  paymentRequestRepliesMany: string;
+  paymentRequestExtensionOne: string;
+  paymentRequestExtensionFew: string;
+  paymentRequestExtensionMany: string;
+  paymentRequestRange: string;
+  paymentRequestFallback: string;
+  paymentRequestPreview: string;
 };
 
 export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
@@ -245,6 +260,21 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     errorNotFound: "Nie znaleziono tej rozmowy.",
     errorUnavailable: "Czat jest chwilowo niedostępny. Spróbuj za chwilę.",
     errorGeneric: "Nie udało się wczytać rozmowy.",
+    paymentRequestPay: "Zapłać {amount}",
+    paymentRequestChooseAmount: "Wybierz kwotę i zapłać",
+    paymentRequestPaid: "Opłacone",
+    paymentRequestExpired: "Prośba wygasła",
+    paymentRequestCancelled: "Prośba anulowana",
+    paymentRequestValidUntil: "Ważna do {date}",
+    paymentRequestRepliesOne: "+{count} odpowiedź",
+    paymentRequestRepliesFew: "+{count} odpowiedzi",
+    paymentRequestRepliesMany: "+{count} odpowiedzi",
+    paymentRequestExtensionOne: "+{count} dzień ważności",
+    paymentRequestExtensionFew: "+{count} dni ważności",
+    paymentRequestExtensionMany: "+{count} dni ważności",
+    paymentRequestRange: "od {min} do {max}",
+    paymentRequestFallback: "Prośba o płatność — odśwież czat, aby ją zobaczyć",
+    paymentRequestPreview: "Prośba o płatność",
   },
   en: {
     inboxHeading: "Messages",
@@ -361,6 +391,21 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     errorNotFound: "This conversation was not found.",
     errorUnavailable: "Chat is unavailable right now. Try again in a moment.",
     errorGeneric: "The conversation could not be loaded.",
+    paymentRequestPay: "Pay {amount}",
+    paymentRequestChooseAmount: "Choose an amount and pay",
+    paymentRequestPaid: "Paid",
+    paymentRequestExpired: "Request expired",
+    paymentRequestCancelled: "Request cancelled",
+    paymentRequestValidUntil: "Valid until {date}",
+    paymentRequestRepliesOne: "+{count} reply",
+    paymentRequestRepliesFew: "+{count} replies",
+    paymentRequestRepliesMany: "+{count} replies",
+    paymentRequestExtensionOne: "+{count} day of validity",
+    paymentRequestExtensionFew: "+{count} days of validity",
+    paymentRequestExtensionMany: "+{count} days of validity",
+    paymentRequestRange: "from {min} to {max}",
+    paymentRequestFallback: "Payment request — refresh chat to see it",
+    paymentRequestPreview: "Payment request",
   },
 };
 

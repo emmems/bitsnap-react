@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Clock,
+  Check,
   Lock,
   MoreHorizontal,
   Paperclip,
@@ -20,6 +21,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { cn } from "../lib/utils";
+import { formatMoney } from "../components/returns/money";
 import { TurnstileChallenge } from "../captcha/TurnstileChallenge";
 import {
   fill,
@@ -699,6 +701,8 @@ function MessageRow({
         >
           {message.deleted ? (
             texts.deletedPlaceholder
+          ) : message.kind === "payment_request" ? (
+            <PaymentRequestCard message={message} mine={mine} texts={texts} locale={locale} />
           ) : (
             <>
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
@@ -809,6 +813,53 @@ function MessageRow({
         </div>
       )}
     </div>
+  );
+}
+
+export function PaymentRequestCard({ message, mine, texts, locale }: {
+  message: ChatMessage;
+  mine: boolean;
+  texts: ChatTexts;
+  locale: string;
+}) {
+  const request = message.paymentRequest;
+  if (!request || message.paymentRequestInvalid) {
+    return <article aria-label={texts.paymentRequestFallback} className="min-w-0 max-w-full text-sm">{texts.paymentRequestFallback}</article>;
+  }
+  const isExpired = request.status === "expired" || (request.status === "pending" && Date.parse(request.expiresAt) <= Date.now());
+  const status = isExpired ? "expired" : request.status;
+  const amount = request.amountMode === "exact"
+    ? formatMoney(request.amountMinor, request.currency, locale)
+    : fill(texts.paymentRequestRange, {
+      min: formatMoney(request.minAmountMinor ?? 0, request.currency, locale),
+      max: formatMoney(request.maxAmountMinor ?? 0, request.currency, locale),
+    });
+  const pluralText = (count: number, one: string, few: string, many: string) => {
+    let category: Intl.LDMLPluralRule = "other";
+    try { category = new Intl.PluralRules(locale).select(count); } catch { /* fallback form */ }
+    return fill(category === "one" ? one : category === "few" ? few : many, { count });
+  };
+  const statusLabel = status === "paid" ? texts.paymentRequestPaid : status === "expired" ? texts.paymentRequestExpired : status === "cancelled" ? texts.paymentRequestCancelled : undefined;
+  return (
+    <article aria-label={request.title} className="w-full min-w-0 max-w-full rounded-lg border border-neutral-300 bg-white p-3 text-left text-neutral-900 shadow-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100">
+      <h3 className="break-words text-sm font-semibold">{request.title}</h3>
+      {request.description && <p className="mt-1 max-h-24 overflow-hidden whitespace-pre-wrap break-words text-xs text-neutral-600 dark:text-neutral-300">{request.description}</p>}
+      <p className="mt-2 break-words text-base font-semibold">{amount}</p>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-300">
+        <li>{pluralText(request.extraReplies, texts.paymentRequestRepliesOne, texts.paymentRequestRepliesFew, texts.paymentRequestRepliesMany)}</li>
+        {request.extendExpiryDays > 0 && <li>{pluralText(request.extendExpiryDays, texts.paymentRequestExtensionOne, texts.paymentRequestExtensionFew, texts.paymentRequestExtensionMany)}</li>}
+      </ul>
+      {status === "pending" && <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">{fill(texts.paymentRequestValidUntil, { date: formatChatDate(request.expiresAt, locale) })}</p>}
+      {statusLabel ? (
+        <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+          {status === "paid" && <Check className="size-3.5" aria-hidden="true" />}{statusLabel}
+        </p>
+      ) : !mine && status === "pending" ? (
+        <button type="button" onClick={() => window.open(request.paymentUrl, "_blank", "noopener,noreferrer")} className={cn("mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400", focusRing)}>
+          {request.amountMode === "exact" ? fill(texts.paymentRequestPay, { amount }) : texts.paymentRequestChooseAmount}
+        </button>
+      ) : null}
+    </article>
   );
 }
 

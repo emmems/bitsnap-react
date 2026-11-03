@@ -16,7 +16,7 @@ import {
   repliesLeftText,
   type ChatTexts,
 } from "./texts";
-import type { ChatMe } from "./types";
+import type { ChatMe, ChatMessage } from "./types";
 import { Channel, ChatThread, type ChatBuyRequest } from "./widgets";
 
 const BitsnapCheckout = lazy(() => import("../components/checkout/BitsnapCart"));
@@ -28,6 +28,15 @@ export type PanelMessagesSelection = {
   thread?: string;
   channel?: string;
 };
+
+export function chatMessagePreview(message: ChatMessage | undefined, texts: ChatTexts): string {
+  if (!message) return texts.noMessagesYet;
+  if (message.deleted) return texts.deletedPlaceholder;
+  if (message.kind === "payment_request") {
+    return `${texts.paymentRequestPreview}: ${message.paymentRequest?.title ?? texts.paymentRequestFallback}`;
+  }
+  return message.body;
+}
 
 export type PanelMessagesProps = {
   accessToken: string;
@@ -316,7 +325,7 @@ function Inbox({ projects, loads, clients, products, texts, locale, selection, o
               {projectName && <span className="truncate text-xs text-neutral-500 dark:text-neutral-400">{projectName}</span>}
               <span className="flex items-center gap-2">
                 <span className="line-clamp-1 flex-1 text-sm text-neutral-600 dark:text-neutral-300">
-                  {last ? (last.deleted ? texts.deletedPlaceholder : last.body) : texts.noMessagesYet}
+                  {chatMessagePreview(last, texts)}
                 </span>
                 {thread.unread > 0 && (
                   <span

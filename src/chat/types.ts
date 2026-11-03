@@ -30,6 +30,11 @@ export type ChatMessage = {
   threadId: string;
   authorEmail: string;
   body: string;
+  /** Missing on older servers; unknown wire kinds are rendered as text. */
+  kind: "text" | "payment_request";
+  paymentRequest?: ChatPaymentRequest;
+  /** The wire kind was payment_request but its snapshot failed validation. */
+  paymentRequestInvalid?: boolean;
   attachmentKey?: string;
   attachmentKind?: string;
   attachmentName?: string;
@@ -43,6 +48,24 @@ export type ChatMessage = {
   system: boolean;
   /** `"pending"` in the answer of a send: queued, not stored yet. */
   status?: "pending";
+};
+
+/** Immutable buyer-visible snapshot attached to a chat payment request. */
+export type ChatPaymentRequest = {
+  requestId: string;
+  title: string;
+  description: string;
+  amountMode: "exact" | "pwyw";
+  amountMinor: number;
+  minAmountMinor: number | null;
+  maxAmountMinor: number | null;
+  currency: string;
+  extraReplies: number;
+  extendExpiryDays: number;
+  paymentUrl: string;
+  status: "pending" | "paid" | "expired" | "cancelled";
+  expiresAt: string;
+  paidAt: string | null;
 };
 
 export type ChatAttachment = {
@@ -158,6 +181,7 @@ export type ChatRealtimeToken = {
 /** Live events on the thread or channel subject. */
 export type ChatRealtimeEvent =
   | { type: "message.created"; message: ChatMessage }
+  | { type: "message.updated"; message: ChatMessage }
   | { type: "message.rejected"; id: string; reason: string }
   | { type: "message.deleted"; id: string }
   | { type: "message.pinned"; id: string }

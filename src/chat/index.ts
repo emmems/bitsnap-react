@@ -46,6 +46,7 @@ export {
   type ChatLiveMode,
   type ChatMe,
   type ChatMessage,
+  type ChatPaymentRequest,
   type ChatMessagePage,
   type ChatPack,
   type ChatPackEntitlement,

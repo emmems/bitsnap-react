@@ -146,6 +146,18 @@ export function mergeMessages(
   });
 }
 
+/** Applies an authoritative status update without changing message order. */
+export function replaceUpdatedMessage(
+  current: ConversationMessage[],
+  message: ChatMessage,
+): ConversationMessage[] {
+  const index = current.findIndex((item) => item.id === message.id);
+  if (index < 0) return current;
+  const next = [...current];
+  next[index] = { ...message, local: undefined };
+  return next;
+}
+
 /** The lock of a pack thread that the buyer can read. */
 export function threadLock(thread: ChatThreadSummary): ConversationLock | undefined {
   if (thread.kind !== "pack") return undefined;
@@ -328,6 +340,10 @@ export function useConversation(
         switch (event.type) {
           case "message.created":
             return { ...s, messages: mergeMessages(s.messages, [event.message]) };
+          case "message.updated": {
+            const messages = replaceUpdatedMessage(s.messages, event.message);
+            return messages === s.messages ? s : { ...s, messages };
+          }
           case "message.rejected":
             return {
               ...s,
@@ -421,6 +437,7 @@ export function useConversation(
         threadId,
         authorEmail: me ?? "",
         body: text,
+        kind: "text",
         retryFile: attachment,
         ...(attachment ? { attachmentName: attachment.name, attachmentSize: attachment.size, attachmentContentType: attachment.type, attachmentKind: attachment.type.startsWith("image/") ? "image" : "file" } : {}),
         createdAt: new Date().toISOString(),
