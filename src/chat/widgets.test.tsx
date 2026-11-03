@@ -154,6 +154,87 @@ const thread = (props: Partial<import("./widgets.tsx").ChatThreadProps> = {}) =>
 );
 
 describe("ChatThread", () => {
+  for (const source of ["realtime", "history"] as const) {
+    it(`refreshes pack state once when a payment becomes paid via ${source}`, async () => {
+      let paid = false;
+      const card = () => msg("payment", CREATOR, "", {
+        kind: "payment_request",
+        payment_request: {
+          request_id: "r1", title: "Consultation", description: null, amount_mode: "exact", amount_minor: 2500,
+          min_amount_minor: null, max_amount_minor: null, currency: "PLN", extra_replies: 2, extend_expiry_days: 3,
+          payment_url: "https://x/l/1", status: paid ? "paid" : "pending", expires_at: "2099-01-01T00:00:00Z", paid_at: null,
+        },
+      });
+      let deliver: ((message: unknown) => void) | undefined;
+      const nats: import("./realtime").NatsModule = {
+        jwtAuthenticator: () => ({}),
+        wsconnect: async () => ({
+          subscribe: (_subject, { callback }) => {
+            deliver = (message) => callback(null, { data: new TextEncoder().encode(JSON.stringify(message)) });
+            return { unsubscribe() {} };
+          },
+          closed: () => new Promise(() => {}),
+          close: async () => {},
+        }),
+      };
+      routes.push(
+        on("GET", "/v1/me", () => json(200, me({ threads: [packThread(paid ? {
+          replies_total: 7, replies_left: 2, expires_at: "2099-01-01T00:00:00Z", composer_locked: false,
+        } : {
+          replies_total: 5, replies_left: 0, expires_at: "2000-01-01T00:00:00Z", composer_locked: true,
+        })] }))),
+        on("GET", /^\/v1\/threads\/t1\/messages/, () => json(200, { messages: [card()], has_more: false })),
+      );
+      if (source === "realtime") {
+        routes.push(on("POST", "/v1/realtime/token", () => json(200, {
+          jwt: "jwt", expires_at: "2099-01-01T00:00:00Z", subjects: ["chat.project.18.thread.t1"], servers: ["wss://nats.test"],
+        })));
+      }
+      const container = await mount(thread({ loadNats: async () => nats, pollIntervalMs: 20 }));
+      assert.ok(container.querySelector("[data-testid=chat-lock]"), "expired pack starts locked");
+      paid = true;
+      if (source === "realtime") {
+        assert.ok(deliver, "live subscription connected");
+        await React.act(async () => deliver!({ type: "message.updated", message: card() }));
+      }
+      await settle(100); // Flush the polled status before the refresh debounce starts.
+      await settle(1700);
+      assert.equal(requests.filter((r) => r.path === "/v1/me").length, 2, "one refresh after the initial load");
+      assert.equal(container.querySelector("[data-testid=chat-lock]"), null, "payment unlocks composer");
+      assert.match(container.textContent!, /Zostały 2 odpowiedzi/);
+      assert.equal(container.querySelector("textarea")?.disabled, false);
+      if (source === "realtime") {
+        await React.act(async () => deliver!({ type: "message.updated", message: card() }));
+      }
+      await settle(1600);
+      assert.equal(requests.filter((r) => r.path === "/v1/me").length, 2, "repeated paid snapshots do not refresh again");
+    });
+  }
+
+  it("refreshes pack state when the first history page already shows a paid request", async () => {
+    let meCalls = 0;
+    routes.push(
+      // The first read is stale (locked); the payment settled before history loaded.
+      on("GET", "/v1/me", () => json(200, me({ threads: [packThread(meCalls++ === 0 ? {
+        replies_total: 5, replies_left: 0, expires_at: "2000-01-01T00:00:00Z", composer_locked: true,
+      } : {
+        replies_total: 7, replies_left: 2, expires_at: "2099-01-01T00:00:00Z", composer_locked: false,
+      })] }))),
+      on("GET", /^\/v1\/threads\/t1\/messages/, () => json(200, { messages: [msg("payment", CREATOR, "", {
+        kind: "payment_request",
+        payment_request: {
+          request_id: "r1", title: "Consultation", description: "", amount_mode: "exact", amount_minor: 2500,
+          min_amount_minor: null, max_amount_minor: null, currency: "PLN", extra_replies: 2, extend_expiry_days: 0,
+          payment_url: "https://x/l/1", status: "paid", expires_at: "2099-01-01T00:00:00Z", paid_at: "2026-11-03T10:00:00Z",
+        },
+      })], has_more: false })),
+    );
+    const container = await mount(thread());
+    await settle(1700);
+    assert.equal(requests.filter((r) => r.path === "/v1/me").length, 2, "one refresh for the first paid card");
+    assert.equal(container.querySelector("[data-testid=chat-lock]"), null, "payment unlocks composer");
+  });
+
   it("shows the history, the pack state and the creator's promise", async () => {
     routes.push(
       on("GET", "/v1/me", () => json(200, me())),

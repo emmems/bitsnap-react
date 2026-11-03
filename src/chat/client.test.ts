@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ChatError, createChatClient, parseRealtimeEvent } from "./client.ts";
+import { ChatError, createChatClient, mapMessage, parseRealtimeEvent } from "./client.ts";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: unknown };
 
@@ -85,6 +85,30 @@ describe("chat client requests", () => {
     assert.equal(me.entitlements.channels[0].channelId, "c1");
     assert.equal(me.channels[0].whoCanPost, "members");
     assert.equal(me.channels[0].memberCount, 12);
+  });
+
+  it("maps payment request snapshots defensively and supports old text messages", () => {
+    const payment = mapMessage({
+      id: "pay1", thread_id: "t1", author_email: "creator@x.test", body: "", kind: "payment_request",
+      payment_request: {
+        request_id: "r1", title: "Review", description: "A review", amount_mode: "exact", amount_minor: 2500,
+        min_amount_minor: null, max_amount_minor: null, currency: "PLN", extra_replies: 2,
+        extend_expiry_days: 3, payment_url: "https://bitsnap.pl/l/x", status: "pending",
+        expires_at: "2026-12-01T00:00:00Z", paid_at: null,
+      }, created_at: "2026-11-01T10:00:00Z",
+    });
+    assert.equal(payment.kind, "payment_request");
+    assert.equal(payment.paymentRequest?.amountMinor, 2500);
+    assert.equal(mapMessage({ id: "old", body: "Hello" }).kind, "text");
+    const malformed = mapMessage({ id: "bad", kind: "payment_request", payment_request: { title: "incomplete" } });
+    assert.equal(malformed.paymentRequestInvalid, true);
+    assert.equal(malformed.paymentRequest, undefined);
+  });
+
+  it("parses message.updated and ignores malformed updates", () => {
+    const event = parseRealtimeEvent({ type: "message.updated", message: { id: "m1", thread_id: "t", kind: "text", body: "new" } });
+    assert.equal(event?.type, "message.updated");
+    assert.equal(event?.type === "message.updated" ? event.message.body : "", "new");
   });
 
   it("opens a pack thread with POST /v1/threads {product_id}", async () => {

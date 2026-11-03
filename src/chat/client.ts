@@ -280,6 +280,8 @@ export function parseRealtimeEvent(raw: unknown): ChatRealtimeEvent | null {
   switch (raw.type) {
     case "message.created":
       return { type: "message.created", message: mapMessage(raw) };
+    case "message.updated":
+      return { type: "message.updated", message: mapMessage(isRecord(raw.message) ? raw.message : raw) };
     case "message.rejected":
       return { type: "message.rejected", id: eventId, reason: str(raw.reason) };
     case "message.deleted":
@@ -320,11 +322,15 @@ function time(value: unknown): string | null {
 
 export function mapMessage(raw: unknown): ChatMessage {
   const m = isRecord(raw) ? raw : {};
+  const paymentRequest = m.kind === "payment_request" ? mapPaymentRequest(m.payment_request) : undefined;
   return {
     id: str(m.id),
     threadId: str(m.thread_id),
     authorEmail: str(m.author_email),
     body: str(m.body),
+    kind: m.kind === "payment_request" ? "payment_request" : "text",
+    ...(paymentRequest ? { paymentRequest } : {}),
+    ...(m.kind === "payment_request" && !paymentRequest ? { paymentRequestInvalid: true } : {}),
     attachmentKey: optStr(m.attachment_key),
     attachmentKind: optStr(m.attachment_kind),
     attachmentName: optStr(m.attachment_name),
@@ -335,6 +341,47 @@ export function mapMessage(raw: unknown): ChatMessage {
     deleted: m.deleted === true,
     system: m.system === true,
     ...(m.status === "pending" ? { status: "pending" as const } : {}),
+  };
+}
+
+function mapPaymentRequest(raw: unknown): ChatMessage["paymentRequest"] {
+  if (!isRecord(raw)) return undefined;
+  const nullableNum = (value: unknown): number | null => value == null ? null : (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : NaN);
+  const minAmountMinor = nullableNum(raw.min_amount_minor);
+  const maxAmountMinor = nullableNum(raw.max_amount_minor);
+  const amountMinor = raw.amount_minor;
+  const extraReplies = raw.extra_replies;
+  const extendExpiryDays = raw.extend_expiry_days;
+  const validUrl = typeof raw.payment_url === "string" && /^https:\/\//i.test(raw.payment_url);
+  if (
+    typeof raw.request_id !== "string" || !raw.request_id ||
+    typeof raw.title !== "string" || (raw.description !== null && typeof raw.description !== "string") ||
+    (raw.amount_mode !== "exact" && raw.amount_mode !== "pwyw") ||
+    typeof amountMinor !== "number" || !Number.isFinite(amountMinor) || amountMinor < 0 ||
+    Number.isNaN(minAmountMinor) || Number.isNaN(maxAmountMinor) ||
+    (raw.amount_mode === "pwyw" && (minAmountMinor == null || maxAmountMinor == null || minAmountMinor > maxAmountMinor)) ||
+    typeof raw.currency !== "string" || !/^[A-Z]{3}$/.test(raw.currency) ||
+    typeof extraReplies !== "number" || !Number.isFinite(extraReplies) || extraReplies < 0 ||
+    typeof extendExpiryDays !== "number" || !Number.isFinite(extendExpiryDays) || extendExpiryDays < 0 ||
+    !validUrl || typeof raw.expires_at !== "string" || !Number.isFinite(Date.parse(raw.expires_at)) ||
+    !["pending", "paid", "expired", "cancelled"].includes(String(raw.status)) ||
+    (raw.paid_at != null && typeof raw.paid_at !== "string")
+  ) return undefined;
+  return {
+    requestId: raw.request_id,
+    title: raw.title,
+    description: raw.description ?? "",
+    amountMode: raw.amount_mode,
+    amountMinor,
+    minAmountMinor,
+    maxAmountMinor,
+    currency: raw.currency,
+    extraReplies,
+    extendExpiryDays,
+    paymentUrl: raw.payment_url as string,
+    status: raw.status as NonNullable<ChatMessage["paymentRequest"]>["status"],
+    expiresAt: raw.expires_at as string,
+    paidAt: raw.paid_at as string | null,
   };
 }
 
