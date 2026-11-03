@@ -1,6 +1,8 @@
 import {
   DEFAULT_CHAT_API_URL,
+  DEFAULT_CHAT_ATTACHMENTS_URL,
   type ChatChannelSummary,
+  type ChatAttachment,
   type ChatMe,
   type ChatMessage,
   type ChatMessagePage,
@@ -53,6 +55,8 @@ export type ChatClientOptions = {
   token: string;
   /** Base URL of the chat service. Defaults to `https://chat.bitsnap.pl`. */
   baseUrl?: string;
+  /** Bitsnap app host for private attachment upload and read endpoints. */
+  attachmentsUrl?: string;
   /** Replaces `fetch` (tests, server rendering). */
   fetch?: typeof fetch;
 };
@@ -72,8 +76,10 @@ export type ChatClient = {
   /** Queues a message. The service answers 202 with `status: "pending"`. */
   send(
     threadId: string,
-    input: { body: string; clientId?: string },
+    input: { body: string; clientId?: string; attachment?: ChatAttachment },
   ): Promise<ChatSendResult>;
+  uploadAttachment(threadId: string, file: File, progress: (value: number) => void): Promise<ChatAttachment>;
+  attachmentURL(threadId: string, message: ChatMessage): Promise<string>;
   deleteMessage(threadId: string, messageId: string): Promise<void>;
   mute(threadId: string, muted: boolean): Promise<void>;
   report(input: {
@@ -93,6 +99,8 @@ export type ChatClient = {
 
 export function createChatClient(options: ChatClientOptions): ChatClient {
   const baseUrl = (options.baseUrl || DEFAULT_CHAT_API_URL).replace(/\/+$/, "");
+  const localOrigin = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname) ? window.location.origin : undefined;
+  const attachmentBase = (options.attachmentsUrl ?? localOrigin ?? DEFAULT_CHAT_ATTACHMENTS_URL).replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((...args) => fetch(...args));
 
   async function call(
@@ -168,6 +176,13 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
         {
           body: input.body,
           ...(input.clientId ? { client_id: input.clientId } : {}),
+          ...(input.attachment ? {
+            attachment_key: input.attachment.key,
+            attachment_kind: input.attachment.kind,
+            attachment_name: input.attachment.filename,
+            attachment_size: input.attachment.size,
+            attachment_content_type: input.attachment.contentType,
+          } : {}),
         },
       );
       const res = isRecord(json) ? json : {};
@@ -175,6 +190,44 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
         message: mapMessage(res.message),
         thread: mapThreadState(res.thread),
       };
+    },
+    async uploadAttachment(threadId, file, progress) {
+      const requestAttachment = async <T,>(path: string, body: unknown): Promise<T> => {
+        const response = await doFetch(`${attachmentBase}/api/chat/attachments/${path}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${options.token}`, "X-Bitsnap-Project": options.projectId, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        let data: Record<string, unknown> = {};
+        try { data = await response.json() as Record<string, unknown>; } catch { /* parsed as request error below */ }
+        if (!response.ok) throw new ChatError(typeof data.error === "string" ? data.error : "request_failed", response.status, data);
+        return data as T;
+      };
+      const ticket = await requestAttachment<{ key: string; uploadURL: string }>("upload", {
+        project_id: options.projectId, thread_id: threadId, filename: file.name, content_type: file.type, size: file.size,
+      });
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", ticket.uploadURL);
+        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)); };
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ChatError("upload_failed", xhr.status));
+        xhr.onerror = () => reject(new ChatError("network", 0));
+        xhr.send(file);
+      });
+      const done = await requestAttachment<{ key: string; kind: "image" | "file"; filename: string; size: number; content_type: string }>("complete", {
+        project_id: options.projectId, thread_id: threadId, key: ticket.key, filename: file.name, content_type: file.type, size: file.size,
+      });
+      return { key: done.key, kind: done.kind, filename: done.filename, size: done.size, contentType: done.content_type };
+    },
+    async attachmentURL(threadId, message) {
+      if (!message.attachmentKey) throw new ChatError("invalid_attachment", 400);
+      const query = new URLSearchParams({ project_id: options.projectId, thread_id: threadId, key: message.attachmentKey, filename: message.attachmentName ?? "attachment", size: String(message.attachmentSize ?? 0) });
+      const response = await doFetch(`${attachmentBase}/api/chat/attachments/read?${query}`, { headers: { Authorization: `Bearer ${options.token}`, "X-Bitsnap-Project": options.projectId } });
+      let data: Record<string, unknown> = {};
+      try { data = await response.json() as Record<string, unknown>; } catch { /* parsed as request error below */ }
+      if (!response.ok || typeof data.url !== "string") throw new ChatError(typeof data.error === "string" ? data.error : "request_failed", response.status, data);
+      return data.url;
     },
     async deleteMessage(threadId, messageId) {
       await call(
@@ -274,6 +327,9 @@ export function mapMessage(raw: unknown): ChatMessage {
     body: str(m.body),
     attachmentKey: optStr(m.attachment_key),
     attachmentKind: optStr(m.attachment_kind),
+    attachmentName: optStr(m.attachment_name),
+    attachmentSize: num(m.attachment_size),
+    attachmentContentType: optStr(m.attachment_content_type),
     createdAt: str(m.created_at),
     pinned: m.pinned === true,
     deleted: m.deleted === true,
@@ -318,6 +374,7 @@ export function mapThread(raw: unknown): ChatThreadSummary {
     lastMessage: isRecord(t.last_message) ? mapMessage(t.last_message) : undefined,
     unread: num(t.unread),
     productId: optStr(t.product_id),
+    blocked: t.blocked === true,
     packs: arr(t.packs).map(mapPack),
     muted: t.muted === true,
   };

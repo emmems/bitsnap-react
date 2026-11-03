@@ -38,9 +38,11 @@ export { addPackToCart, type BuyPackInput } from "./buy";
 export { CHAT_TEXT_TABLES, getChatTexts, type ChatTexts } from "./texts";
 export {
   DEFAULT_CHAT_API_URL,
+  DEFAULT_CHAT_ATTACHMENTS_URL,
   DEFAULT_CHAT_REALTIME_URL,
   type ChatChannelEntitlement,
   type ChatChannelSummary,
+  type ChatAttachment,
   type ChatLiveMode,
   type ChatMe,
   type ChatMessage,

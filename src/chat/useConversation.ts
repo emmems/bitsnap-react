@@ -23,6 +23,7 @@ export type LocalMessageState = {
   retryAfter?: number;
   /** An earlier send of this message may have been queued: retries keep its id. */
   keepId?: boolean;
+  uploadProgress?: number;
 };
 
 export type ConversationMessage = ChatMessage & { local?: LocalMessageState };
@@ -61,9 +62,10 @@ export type ConversationState = {
 };
 
 export type ConversationActions = {
-  send(body: string): Promise<void>;
+  send(body: string, attachment?: File): Promise<void>;
   /** Sends a failed or refused message again. */
   retry(id: string): Promise<void>;
+  getAttachmentURL(message: ChatMessage): Promise<string>;
   /** Removes a message that was not stored. */
   discard(id: string): void;
   deleteMessage(id: string): Promise<void>;
@@ -409,16 +411,17 @@ export function useConversation(
     setState((s) => ({ ...s, messages: s.messages.map((m) => (m.id === id ? patch(m) : m)) }));
 
   const send = useCallback(
-    async (body: string, reuseId?: string) => {
+    async (body: string, attachment?: File, reuseId?: string) => {
       const text = body.trim();
       const { threadId, me } = stateRef.current;
-      if (!client || !threadId || !text) return;
+      if (!client || !threadId || (!text && !attachment)) return;
       const id = reuseId ?? newMessageId();
       const optimistic: ConversationMessage = {
         id,
         threadId,
         authorEmail: me ?? "",
         body: text,
+        ...(attachment ? { attachmentName: attachment.name, attachmentSize: attachment.size, attachmentContentType: attachment.type, attachmentKind: attachment.type.startsWith("image/") ? "image" : "file" } : {}),
         createdAt: new Date().toISOString(),
         pinned: false,
         deleted: false,
@@ -428,7 +431,9 @@ export function useConversation(
       };
       setState((s) => ({ ...s, messages: [...s.messages, optimistic] }));
       try {
-        const result = await client.send(threadId, { body: text, clientId: id });
+        const uploaded = attachment ? await client.uploadAttachment(threadId, attachment, (uploadProgress) => updateMessage(id, (message) => ({ ...message, local: { ...message.local, state: "pending", uploadProgress } }))) : undefined;
+        if (uploaded) updateMessage(id, (message) => ({ ...message, attachmentKey: uploaded.key, attachmentKind: uploaded.kind, attachmentName: uploaded.filename, attachmentSize: uploaded.size, attachmentContentType: uploaded.contentType, local: { state: "pending" } }));
+        const result = await client.send(threadId, { body: text, clientId: id, ...(uploaded ? { attachment: uploaded } : {}) });
         setState((s) => ({
           ...s,
           messages: mergeMessages(s.messages, [{ ...result.message, id }]),
@@ -475,7 +480,7 @@ export function useConversation(
       // new id.
       const uncertain = message.local?.state !== "rejected" || message.local.keepId === true;
       discard(id);
-      await send(message.body, uncertain ? id : undefined);
+      await send(message.body, undefined, uncertain ? id : undefined);
     },
     [discard, send],
   );
@@ -496,6 +501,12 @@ export function useConversation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [client],
   );
+
+  const getAttachmentURL = useCallback(async (message: ChatMessage) => {
+    const threadId = stateRef.current.threadId;
+    if (!client || !threadId) throw new ChatError("not_found", 404);
+    return client.attachmentURL(threadId, message);
+  }, [client]);
 
   const report = useCallback(
     async (input: { messageId?: string; reason: ChatReportReason; note?: string }) => {
@@ -536,5 +547,5 @@ export function useConversation(
 
   const reload = useCallback(() => setGeneration((g) => g + 1), []);
 
-  return { ...state, send, retry, discard, deleteMessage, report, setMuted, loadOlder, reload };
+  return { ...state, send, retry, getAttachmentURL, discard, deleteMessage, report, setMuted, loadOlder, reload };
 }

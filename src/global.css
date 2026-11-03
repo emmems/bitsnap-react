@@ -122,3 +122,18 @@
         @apply bg-background text-foreground;
     }
 }
+@keyframes bitsnap-chat-message-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-preview-enter { animation: bitsnap-chat-message-enter 180ms ease-out both; }
+@keyframes bitsnap-chat-preview-exit {
+  to { opacity: 0; transform: translateY(4px); }
+}
+.chat-preview-exit { animation: bitsnap-chat-preview-exit 140ms ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitsnap-chat-message-enter { animation: none !important; }
+  .chat-preview-enter { animation: none !important; }
+  .chat-preview-exit { animation: none !important; }
+}

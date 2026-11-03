@@ -6,7 +6,9 @@ import {
   MoreHorizontal,
   Paperclip,
   Pin,
+  Plus,
   SendHorizontal,
+  X,
 } from "lucide-react";
 import {
   useEffect,
@@ -27,7 +29,7 @@ import {
   repliesLeftText,
   type ChatTexts,
 } from "./texts";
-import type { ChatReportReason } from "./types";
+import type { ChatMessage, ChatReportReason } from "./types";
 import type {
   ConversationActions,
   ConversationLock,
@@ -51,6 +53,21 @@ export type ConversationViewProps = {
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-500";
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function formatBytes(bytes = 0): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function scrollToBottom(element: HTMLElement, smooth: boolean) {
+  if (typeof element.scrollTo === "function") element.scrollTo({ top: element.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  else element.scrollTop = element.scrollHeight;
+}
 
 const quietButton = cn(
   "inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800",
@@ -177,6 +194,11 @@ export function ConversationView({
       )}
       {c.status === "ready" && (
         <>
+          {kind === "thread" && c.thread?.blocked && (
+            <p role="status" className="border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-sm text-neutral-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300">
+              {texts.blockedNotice}
+            </p>
+          )}
           <MessageList
             conversation={c}
             texts={texts}
@@ -478,16 +500,57 @@ function MessageList({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const paintedHistory = useRef(false);
+  const knownIds = useRef<Set<string> | null>(null);
+  const knownOldestAt = useRef<string | null>(null);
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
+  const [newMessages, setNewMessages] = useState(false);
   const count = c.messages.length;
   const lastId = c.messages[count - 1]?.id;
 
+  useEffect(() => {
+    if (c.status !== "ready") return;
+    const ids = new Set(c.messages.map((message) => message.id));
+    const previous = knownIds.current;
+    knownIds.current = ids;
+    const oldest = c.messages.reduce<string | null>((at, message) => at == null || message.createdAt < at ? message.createdAt : at, null);
+    const priorOldest = knownOldestAt.current;
+    knownOldestAt.current = oldest;
+    if (!previous) return; // Initial history is already on screen.
+    const added = c.messages.filter((message) => !previous.has(message.id) && (priorOldest == null || message.createdAt >= priorOldest));
+    if (!added.length || c.loadingOlder) return;
+    setNewIds((current) => new Set([...current, ...added.map((message) => message.id)]));
+    if (stick.current) setNewMessages(false);
+    else setNewMessages(true);
+  }, [c.messages, c.loadingOlder]);
+
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (stick.current) {
+      const reduced = prefersReducedMotion();
+      scrollToBottom(el, !reduced && paintedHistory.current);
+    }
+    paintedHistory.current = true;
   }, [count, lastId]);
 
   return (
-    <div
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {newMessages && (
+        <button
+          type="button"
+          onClick={() => {
+            const el = scroller.current;
+            if (el) scrollToBottom(el, !prefersReducedMotion());
+            stick.current = true;
+            setNewMessages(false);
+          }}
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white shadow-md dark:bg-neutral-100 dark:text-neutral-900"
+        >
+          {texts.newMessages ?? "Nowe wiadomości ↓"}
+        </button>
+      )}
+      <div
       ref={scroller}
       role="log"
       aria-live="polite"
@@ -496,7 +559,7 @@ function MessageList({
         const el = event.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
       }}
-      className="flex flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4"
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4"
     >
       {c.hasMore && (
         <button
@@ -530,6 +593,8 @@ function MessageList({
           kind={kind}
           texts={texts}
           locale={locale}
+          getAttachmentURL={c.getAttachmentURL}
+          animateEntry={newIds.has(message.id)}
           onDelete={() => c.deleteMessage(message.id)}
           onReport={() => onReport(message.id)}
           onRetry={() => void c.retry(message.id)}
@@ -537,6 +602,7 @@ function MessageList({
           onEdit={() => onEdit(message)}
         />
       ))}
+      </div>
     </div>
   );
 }
@@ -547,6 +613,8 @@ function MessageRow({
   kind,
   texts,
   locale,
+  getAttachmentURL,
+  animateEntry = false,
   onDelete,
   onReport,
   onRetry,
@@ -558,6 +626,8 @@ function MessageRow({
   kind: "thread" | "channel";
   texts: ChatTexts;
   locale: string;
+  getAttachmentURL: (message: ChatMessage) => Promise<string>;
+  animateEntry?: boolean;
   onDelete: () => Promise<void>;
   onReport: () => void;
   onRetry: () => void;
@@ -566,7 +636,15 @@ function MessageRow({
 }) {
   const [actions, setActions] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState<string>();
   const local = message.local;
+
+  useEffect(() => {
+    if (!message.attachmentKey || message.deleted) return;
+    let cancelled = false;
+    void getAttachmentURL(message).then((url) => { if (!cancelled) setAttachmentUrl(url); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [message.attachmentKey, message.deleted, getAttachmentURL]);
 
   if (message.system) {
     return (
@@ -585,12 +663,12 @@ function MessageRow({
     <div
       data-message-id={message.id}
       data-state={local?.state ?? (message.deleted ? "deleted" : "stored")}
-      className={cn("group flex max-w-[85%] flex-col gap-1 sm:max-w-[75%]", mine ? "items-end self-end" : "items-start self-start")}
+      className={cn("group flex max-w-[85%] flex-col gap-1 sm:max-w-[75%]", animateEntry && "motion-safe:animate-[bitsnap-chat-message-enter_190ms_ease-out]", mine ? "items-end self-end" : "items-start self-start")}
     >
       <div className={cn("flex items-end gap-1", mine && "flex-row-reverse")}>
         <div
           className={cn(
-            "min-w-0 rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
+            "min-w-0 rounded-2xl px-3.5 py-2 text-sm leading-relaxed transition-opacity duration-200 ease-out motion-reduce:transition-none",
             message.deleted
               ? "border border-dashed border-neutral-300 bg-transparent italic text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
               : mine
@@ -605,12 +683,17 @@ function MessageRow({
           ) : (
             <>
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
-              {message.attachmentKey && (
-                <span className="mt-1 inline-flex items-center gap-1 text-xs opacity-80">
-                  <Paperclip className="size-3.5" aria-hidden="true" />
-                  {texts.attachment}
-                </span>
+              {!message.deleted && message.attachmentName && (
+                message.attachmentKind === "image" ? (
+                  attachmentUrl ? <a href={attachmentUrl} target="_blank" rel="noreferrer"><img src={attachmentUrl} alt={message.attachmentName} className="mt-2 max-h-48 rounded-lg object-cover" /></a>
+                    : <p className="mt-1 text-xs">{message.attachmentName}</p>
+                ) : (
+                  <a href={attachmentUrl} download={message.attachmentName} className="mt-2 flex max-w-56 items-center gap-2 rounded-lg border border-neutral-300/60 px-2 py-1.5 text-xs dark:border-neutral-700" aria-disabled={!attachmentUrl}>
+                    <Paperclip className="size-3.5 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1 truncate">{message.attachmentName}</span><span>{formatBytes(message.attachmentSize)}</span>
+                  </a>
+                )
               )}
+              {message.attachmentName && local?.state === "pending" && local.uploadProgress != null && <p className="mt-1 text-[11px] opacity-75">{texts.uploading} {local.uploadProgress}%</p>}
             </>
           )}
         </div>
@@ -709,6 +792,7 @@ function MessageRow({
 }
 
 function composerBlock(c: ConversationState, kind: "thread" | "channel", texts: ChatTexts): string | undefined {
+  if (kind === "thread" && c.thread?.blocked) return texts.blockedNotice;
   if (kind === "thread" && c.thread?.composerLocked) return texts.composerExpired;
   if (kind === "channel" && c.channel) {
     if (c.channel.role === "muted") return texts.composerMuted;
@@ -733,7 +817,34 @@ function Composer({
 }) {
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const previewRemoveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File>();
+  const [previewLeaving, setPreviewLeaving] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [accept, setAccept] = useState(".pdf,.zip,.txt,.docx,.xlsx");
   const blocked = composerBlock(c, kind, texts);
+
+  useEffect(() => () => {
+    if (previewRemoveTimer.current) clearTimeout(previewRemoveTimer.current);
+  }, []);
+
+  const chooseFile = (file: File) => {
+    if (previewRemoveTimer.current) clearTimeout(previewRemoveTimer.current);
+    previewRemoveTimer.current = null;
+    setPreviewLeaving(false);
+    setSelectedFile(file);
+  };
+
+  const removeFile = () => {
+    if (!selectedFile || previewLeaving) return;
+    setPreviewLeaving(true);
+    previewRemoveTimer.current = setTimeout(() => {
+      setSelectedFile(undefined);
+      setPreviewLeaving(false);
+      previewRemoveTimer.current = null;
+    }, 140);
+  };
 
   useLayoutEffect(() => {
     const el = area.current;
@@ -753,9 +864,11 @@ function Composer({
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text && !selectedFile) return;
     setDraft("");
-    void c.send(text);
+    setSelectedFile(undefined);
+    void c.send(text, selectedFile);
+    requestAnimationFrame(() => area.current?.focus());
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -770,7 +883,24 @@ function Composer({
       {c.messages.length === 0 && (
         <p className="pb-2 text-xs text-neutral-500 dark:text-neutral-400">{texts.privacyNote}</p>
       )}
+      {selectedFile && (
+        <div className={cn("mb-2 flex max-w-sm items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100", previewLeaving ? "chat-preview-exit" : "chat-preview-enter")}>
+          <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
+          <span className="text-neutral-500 dark:text-neutral-400">{formatBytes(selectedFile.size)}</span>
+          <button type="button" aria-label={texts.removeAttachment} onClick={removeFile} disabled={previewLeaving} className="rounded p-1 hover:bg-neutral-200 disabled:cursor-default dark:hover:bg-neutral-800"><X className="size-3.5" /></button>
+        </div>
+      )}
       <div className="flex items-end gap-2">
+        <div className="relative">
+          <button type="button" aria-label={texts.addAttachment} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className={cn(quietButton, "h-11 w-11 justify-center px-0 transition-transform duration-150 motion-safe:active:scale-95 motion-reduce:transition-none")}>
+            <Plus className="size-5" aria-hidden="true" />
+          </button>
+          {menuOpen && <div role="menu" className="absolute bottom-full left-0 z-20 mb-2 min-w-36 rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+            <button type="button" role="menuitem" className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => { setAccept("image/jpeg,image/png,image/webp,image/gif"); if (fileInput.current) { fileInput.current.accept = "image/jpeg,image/png,image/webp,image/gif"; fileInput.current.click(); } setMenuOpen(false); }}>{texts.photo}</button>
+            <button type="button" role="menuitem" className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => { setAccept(".pdf,.zip,.txt,.docx,.xlsx"); if (fileInput.current) { fileInput.current.accept = ".pdf,.zip,.txt,.docx,.xlsx"; fileInput.current.click(); } setMenuOpen(false); }}>{texts.file}</button>
+          </div>}
+          <input ref={fileInput} hidden type="file" accept={accept} onChange={(event) => { const file = event.target.files?.[0]; if (file) chooseFile(file); event.currentTarget.value = ""; }} />
+        </div>
         <label htmlFor={id} className="sr-only">
           {texts.composerLabel}
         </label>
@@ -787,8 +917,8 @@ function Composer({
         <button
           type="submit"
           aria-label={texts.send}
-          disabled={draft.trim().length === 0}
-          className={cn(primaryButton, "w-11 px-0")}
+          disabled={draft.trim().length === 0 && !selectedFile}
+          className={cn(primaryButton, "w-11 px-0 transition-[transform,opacity] duration-150 ease-out motion-safe:active:scale-95 disabled:scale-100 motion-reduce:transition-none")}
         >
           <SendHorizontal className="size-5" aria-hidden="true" />
         </button>
