@@ -41,6 +41,8 @@ export type ChatWidgetBaseProps = {
   token?: string;
   /** Chat service base URL. Defaults to `https://chat.bitsnap.pl`. */
   apiUrl?: string;
+  /** Bitsnap app host serving private chat attachment APIs (defaults to the page origin). */
+  attachmentsUrl?: string;
   /** NATS WebSocket URL overriding the one of the realtime token. */
   realtimeUrl?: string;
   /** Bitsnap host of the panel session (`setHost`), when not the default. */
@@ -102,8 +104,8 @@ function useWidgetClient(props: ChatWidgetBaseProps): ChatClient | null | undefi
     if (props.client) return props.client;
     if (token === null) return null;
     if (!token) return undefined;
-    return createChatClient({ projectId, token, baseUrl: props.apiUrl });
-  }, [props.client, token, projectId, props.apiUrl]);
+    return createChatClient({ projectId, token, baseUrl: props.apiUrl, attachmentsUrl: props.attachmentsUrl });
+  }, [props.client, token, projectId, props.apiUrl, props.attachmentsUrl]);
 }
 
 function useBuy(props: ChatWidgetBaseProps) {

@@ -47,6 +47,14 @@ export type ChatTexts = {
   emptyChannel: string;
   privacyNote: string;
   loadOlder: string;
+  newMessages: string;
+  blockedNotice: string;
+  addAttachment: string;
+  photo: string;
+  file: string;
+  removeAttachment: string;
+  uploading: string;
+  attachmentLoadFailed: string;
   you: string;
   creator: string;
   systemLabel: string;
@@ -156,6 +164,14 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     privacyNote:
       "Wiadomości czyta druga strona rozmowy. Bitsnap przechowuje je przez 90 dni.",
     loadOlder: "Wcześniejsze wiadomości",
+    newMessages: "Nowe wiadomości ↓",
+    blockedNotice: "Twórca zablokował możliwość wysyłania wiadomości w tej rozmowie.",
+    addAttachment: "Dodaj załącznik",
+    photo: "Zdjęcie",
+    file: "Plik",
+    removeAttachment: "Usuń załącznik",
+    uploading: "Wysyłanie pliku",
+    attachmentLoadFailed: "Nie udało się wczytać — ponów",
     you: "Ty",
     creator: "Twórca",
     systemLabel: "Wiadomość automatyczna",
@@ -264,6 +280,14 @@ export const CHAT_TEXT_TABLES: LocaleTables<keyof ChatTexts> = {
     privacyNote:
       "The other side of the conversation reads your messages. Bitsnap keeps them for 90 days.",
     loadOlder: "Earlier messages",
+    newMessages: "New messages ↓",
+    blockedNotice: "The creator has blocked you from sending messages in this conversation.",
+    addAttachment: "Add attachment",
+    photo: "Photo",
+    file: "File",
+    removeAttachment: "Remove attachment",
+    uploading: "Uploading file",
+    attachmentLoadFailed: "Could not load — retry",
     you: "You",
     creator: "Creator",
     systemLabel: "Automatic message",

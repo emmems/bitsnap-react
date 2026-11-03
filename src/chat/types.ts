@@ -6,6 +6,8 @@
 
 /** Default base URL of the chat service. */
 export const DEFAULT_CHAT_API_URL = "https://chat.bitsnap.pl";
+/** Bitsnap API that authenticates callers before signing private attachment URLs. */
+export const DEFAULT_CHAT_ATTACHMENTS_URL = "https://bitsnap.pl";
 
 /** Default NATS WebSocket URL, used when the realtime token lists no server. */
 export const DEFAULT_CHAT_REALTIME_URL =
@@ -30,6 +32,9 @@ export type ChatMessage = {
   body: string;
   attachmentKey?: string;
   attachmentKind?: string;
+  attachmentName?: string;
+  attachmentSize?: number;
+  attachmentContentType?: string;
   createdAt: string;
   pinned: boolean;
   /** Soft deleted: the body is empty. */
@@ -38,6 +43,14 @@ export type ChatMessage = {
   system: boolean;
   /** `"pending"` in the answer of a send: queued, not stored yet. */
   status?: "pending";
+};
+
+export type ChatAttachment = {
+  key: string;
+  kind: "image" | "file";
+  filename: string;
+  size: number;
+  contentType: string;
 };
 
 /** The state of a conversation for the caller (`ThreadView` on the wire). */
@@ -55,6 +68,8 @@ export type ChatThreadSummary = {
   expiresAt: string | null;
   /** The caller cannot write: every pack has expired. */
   composerLocked: boolean;
+  /** The creator blocked this buyer from posting. */
+  blocked?: boolean;
   productId?: string;
   /** The creator's promise in hours ("odpowiedź w ciągu 48 h"), 0 for none. */
   responseHours: number;
