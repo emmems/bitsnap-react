@@ -324,6 +324,18 @@ export function useConversation(
     }, 1500);
   }, [client]);
 
+  // Both realtime updates and reconciled history use the same entitlement refresh.
+  const previousMessages = useRef<ConversationMessage[]>([]);
+  useEffect(() => {
+    const previous = previousMessages.current;
+    previousMessages.current = state.messages;
+    if (state.messages.some((message) =>
+      message.paymentRequest?.status === "paid" && previous.some((old) =>
+        old.id === message.id && old.paymentRequest && old.paymentRequest.status !== "paid",
+      ),
+    )) refreshThread();
+  }, [state.messages, refreshThread]);
+
   // --- live -------------------------------------------------------------
   const poll = useCallback(async () => {
     const { threadId } = stateRef.current;

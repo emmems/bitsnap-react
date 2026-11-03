@@ -43,6 +43,22 @@ async function render(msg: ChatMessage, mine = false) {
 }
 
 describe("payment request card", () => {
+  it("maps the Instapay snapshot with null description and amount bounds", () => {
+    const mapped = mapMessage({
+      id: "m1", thread_id: "t1", author_email: "creator@example.test", body: "", kind: "payment_request",
+      payment_request: {
+        request_id: "r1", title: "Consultation", description: null, amount_mode: "exact", amount_minor: 2500,
+        min_amount_minor: null, max_amount_minor: null, currency: "PLN", extra_replies: 2, extend_expiry_days: 0,
+        payment_url: "https://x/l/1", status: "pending", expires_at: "2099-01-01T00:00:00Z", paid_at: null,
+      },
+    });
+    assert.equal(mapped.paymentRequestInvalid, undefined);
+    assert.equal(mapped.paymentRequest?.description, "");
+    assert.equal(mapped.paymentRequest?.minAmountMinor, null);
+    assert.equal(mapped.paymentRequest?.maxAmountMinor, null);
+    assert.equal(mapped.paymentRequest?.amountMinor, 2500);
+  });
+
   it("replaces an updated message by id, ignores unknown ids, and previews the title", () => {
     const original = message();
     const updated = { ...original, paymentRequest: { ...original.paymentRequest!, status: "paid" as const } };

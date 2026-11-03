@@ -355,7 +355,7 @@ function mapPaymentRequest(raw: unknown): ChatMessage["paymentRequest"] {
   const validUrl = typeof raw.payment_url === "string" && /^https:\/\//i.test(raw.payment_url);
   if (
     typeof raw.request_id !== "string" || !raw.request_id ||
-    typeof raw.title !== "string" || typeof raw.description !== "string" ||
+    typeof raw.title !== "string" || (raw.description !== null && typeof raw.description !== "string") ||
     (raw.amount_mode !== "exact" && raw.amount_mode !== "pwyw") ||
     typeof amountMinor !== "number" || !Number.isFinite(amountMinor) || amountMinor < 0 ||
     Number.isNaN(minAmountMinor) || Number.isNaN(maxAmountMinor) ||
@@ -370,7 +370,7 @@ function mapPaymentRequest(raw: unknown): ChatMessage["paymentRequest"] {
   return {
     requestId: raw.request_id,
     title: raw.title,
-    description: raw.description,
+    description: raw.description ?? "",
     amountMode: raw.amount_mode,
     amountMinor,
     minAmountMinor,
