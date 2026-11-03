@@ -325,15 +325,17 @@ export function useConversation(
   }, [client]);
 
   // Both realtime updates and reconciled history use the same entitlement refresh.
-  const previousMessages = useRef<ConversationMessage[]>([]);
+  // A paid request seen for the first time (also in the first history page:
+  // it may have been paid after the thread state was read) refreshes once.
+  const seenPaid = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const previous = previousMessages.current;
-    previousMessages.current = state.messages;
-    if (state.messages.some((message) =>
-      message.paymentRequest?.status === "paid" && previous.some((old) =>
-        old.id === message.id && old.paymentRequest && old.paymentRequest.status !== "paid",
-      ),
-    )) refreshThread();
+    let fresh = false;
+    for (const message of state.messages) {
+      if (message.paymentRequest?.status !== "paid" || seenPaid.current.has(message.id)) continue;
+      seenPaid.current.add(message.id);
+      fresh = true;
+    }
+    if (fresh) refreshThread();
   }, [state.messages, refreshThread]);
 
   // --- live -------------------------------------------------------------
