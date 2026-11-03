@@ -203,7 +203,7 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
         if (!response.ok) throw new ChatError(typeof data.error === "string" ? data.error : "request_failed", response.status, data);
         return data as T;
       };
-      const ticket = await requestAttachment<{ key: string; uploadURL: string }>("upload", {
+      const ticket = await requestAttachment<{ key: string; uploadURL: string; uploadTicket: string }>("upload", {
         project_id: options.projectId, thread_id: threadId, filename: file.name, content_type: file.type, size: file.size,
       });
       await new Promise<void>((resolve, reject) => {
@@ -216,7 +216,7 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
         xhr.send(file);
       });
       const done = await requestAttachment<{ key: string; kind: "image" | "file"; filename: string; size: number; content_type: string }>("complete", {
-        project_id: options.projectId, thread_id: threadId, key: ticket.key, filename: file.name, content_type: file.type, size: file.size,
+        project_id: options.projectId, thread_id: threadId, key: ticket.key, upload_ticket: ticket.uploadTicket, filename: file.name, content_type: file.type, size: file.size,
       });
       return { key: done.key, kind: done.kind, filename: done.filename, size: done.size, contentType: done.content_type };
     },
