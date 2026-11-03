@@ -279,7 +279,7 @@ const ProductsComponent = ({
   const reveal = (product?: UserProduct) => {
     setSelectedProduct(product);
     setParams({
-      product: product ? product.accessId || product.productId : undefined,
+      product: product ? panelProductKey(product) : undefined,
       state: "products",
     });
   };
@@ -355,7 +355,7 @@ const ProductsComponent = ({
           return (
             <button
               type="button"
-              key={product.accessId || product.productId}
+              key={panelProductKey(product)}
               onClick={() => handleSelectedProduct(product)}
               className="flex min-h-11 min-w-0 flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white text-left text-neutral-900 transition-colors hover:border-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-50 dark:hover:border-neutral-500"
             >
@@ -392,11 +392,24 @@ const ProductsComponent = ({
 };
 
 /** Resolve current IDs and old protobuf JSON links against the buyer's library. */
+/**
+ * The id of a library item in the panel's URL: its type and its access id
+ * (e.g. `audio-bv`). Access ids come from a separate table per product type,
+ * so an audiobook and a course can share one; the type keeps them apart.
+ */
+export function panelProductKey(product: UserProduct): string {
+  const type = UserProductType[product.productType]?.toLowerCase() ?? "product";
+  return `${type}-${product.accessId || product.productId}`;
+}
+
 export function resolvePanelProduct(
   value: string | undefined,
   products: UserProduct[],
 ): UserProduct | undefined {
   if (!value) return undefined;
+  const keyed = products.find((product) => panelProductKey(product) === value);
+  if (keyed) return keyed;
+  // Links from before `panelProductKey`: a bare access id or product id.
   const match = products.find(
     (product) =>
       (product.accessId || product.productId) === value ||
@@ -405,10 +418,13 @@ export function resolvePanelProduct(
   if (match) return match;
   try {
     const legacy = fromJsonString(UserProductSchema, value);
-    return products.find((product) =>
-      legacy.accessId
-        ? product.accessId === legacy.accessId
-        : product.productId === legacy.productId,
+    return products.find(
+      (product) =>
+        (legacy.accessId
+          ? product.accessId === legacy.accessId
+          : product.productId === legacy.productId) &&
+        (legacy.productType === UserProductType.UNKNOWN ||
+          product.productType === legacy.productType),
     );
   } catch {
     return undefined;

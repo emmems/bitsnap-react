@@ -318,7 +318,7 @@ describe("library cards and product links", () => {
     assert.match(card.parentElement!.className, /grid-cols-2/);
     // Native buttons supply Enter/Space activation in browsers; jsdom click invokes that same handler.
     await React.act(async () => card.click());
-    assert.equal(selected[0].product, "acc-0");
+    assert.equal(selected[0].product, "file-acc-0");
   });
 
   it("accepts old protobuf JSON links and rejects malformed or unowned products", async () => {
@@ -331,6 +331,29 @@ describe("library cards and product links", () => {
     assert.equal(resolvePanelProduct(toJsonString(UserProductSchema, product), [product]), product);
     assert.equal(resolvePanelProduct("{invalid", [product]), undefined);
     assert.equal(resolvePanelProduct('{"accessId":"other"}', [product]), undefined);
+  });
+
+  it("keeps an audiobook and a course with the same access id apart", async () => {
+    const { resolvePanelProduct, panelProductKey } = await import("./components/PanelProductGrid");
+    const { UserProductSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    const course = create(UserProductSchema, { accessId: "bv", productId: "c", productName: "Lessons", productType: UserProductType.COURSE });
+    const audio = create(UserProductSchema, { accessId: "bv", productId: "a", productName: "Book", productType: UserProductType.AUDIO });
+    assert.equal(panelProductKey(audio), "audio-bv");
+    assert.equal(panelProductKey(course), "course-bv");
+    assert.equal(resolvePanelProduct(panelProductKey(audio), [course, audio]), audio);
+    assert.equal(resolvePanelProduct(panelProductKey(course), [audio, course]), course);
+  });
+
+  it("opens the audiobook, not a course sharing its access id", async () => {
+    products = () => proto(UserPanelGetProductsResponseSchema, { result: { case: "success", value: { products: [
+      { accessId: "bv", productName: "Lessons", productType: UserProductType.COURSE },
+      { accessId: "bv", productName: "Book", productType: UserProductType.AUDIO },
+    ] } } });
+    const opened: string[] = [];
+    const container = await mountGrid({ openCourse: id => opened.push(id) });
+    const audio = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Book"))!;
+    await React.act(async () => audio.click());
+    assert.deepEqual(opened, []);
   });
 
   it("labels each type and opens courses directly", async () => {
