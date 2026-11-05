@@ -377,4 +377,6 @@ Rules:
 Tests: `npm test` (unit), `pnpm test:catalog-ssr` (builds, then renders the
 list on the server from `initialData`), `pnpm test:course-ssr` (builds, then
 renders the course view on the server). Never run `pnpm build:publish` unless
-asked to release: it publishes to npm.
+asked to release: it publishes to npm. Releases normally go out through the
+`Publish` workflow (`.github/workflows/publish.yml`) when a `v*` tag is pushed;
+it authenticates with npm trusted publishing, so no token is involved.
