@@ -1,5 +1,6 @@
 import {
   TransportProvider,
+  useInfiniteQuery as uiq,
   useMutation as um,
   useQuery as uq,
 } from "@connectrpc/connect-query";
@@ -30,6 +31,7 @@ export const rpcProvider = {
 
 export const useQuery = uq;
 export const useMutation = um;
+export const useInfiniteQuery = uiq;
 
 let customHost: string | undefined;
 

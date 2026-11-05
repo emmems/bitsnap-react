@@ -318,6 +318,26 @@ never put in a URL or body.
   conflict/pending retention, price remount, duplicate clicks, remount, SSR) and
   `test/consumer/express-usage.tsx` (public types).
 
+## Order history in the panel (`OrderHistory`)
+
+The panel's order view (`PublicOrderPage`) shows "Historia zamówienia" of the
+buyer's own order inside the status card. Code in `src/panel/order-history/`.
+
+- Data: `PublicApiService.GetOrderHistory` (`project_id`, the panel session as
+  `access_token`, `order_id` = `GetOrders` `OrderSummary.id`, `page_token`,
+  `page_size` 10). Newest first; "Pokaż więcej" follows `next_page_token`.
+- `lines.ts` builds each sentence from `kind` + `params` with the panel's own
+  texts (`texts.ts`, pl/en); `summary_key` is the dashboard's and is ignored.
+  Order statuses use `orderStatusLabel` (`src/panel/texts.ts`), return
+  statuses the returns texts. An unknown kind is skipped (`null`); an empty
+  param uses the sentence variant without it, so no raw key, "undefined" or
+  empty brackets. Only an https `link_url` becomes the invoice link.
+- Quiet by design: no session, no entries, a failure answer, an error or an
+  older server (UNIMPLEMENTED) render nothing, with no retry and no toast.
+- Colours are the card tokens (`bg-muted`, `text-muted-foreground`), so the
+  block follows the card in light and dark mode.
+- Tests: `src/panel/order-history.test.tsx` (fetch mocked by path).
+
 ## Course view (`PanelCourse`)
 
 The customer panel opens a purchased course inside the panel (no redirect to

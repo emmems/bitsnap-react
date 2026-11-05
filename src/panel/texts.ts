@@ -41,6 +41,10 @@ export type PanelTexts = {
   statusCompleted: string;
   statusProcessing: string;
   statusRefunded: string;
+  statusCreated: string;
+  statusSent: string;
+  statusIssue: string;
+  statusReturned: string;
 };
 
 const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
@@ -82,7 +86,11 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "statusCancelled": "Anulowane",
     "statusCompleted": "Zakończone",
     "statusProcessing": "Przetwarzane",
-    "statusRefunded": "Zwrócone"
+    "statusRefunded": "Zwrócone",
+    "statusCreated": "Utworzone",
+    "statusSent": "Wysłane",
+    "statusIssue": "Wymaga uwagi",
+    "statusReturned": "Zwrócone"
   },
   en: {
     "returnsNavLabel": "Returns",
@@ -122,11 +130,40 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "statusCancelled": "Cancelled",
     "statusCompleted": "Completed",
     "statusProcessing": "Processing",
-    "statusRefunded": "Refunded"
+    "statusRefunded": "Refunded",
+    "statusCreated": "Created",
+    "statusSent": "Shipped",
+    "statusIssue": "Needs attention",
+    "statusReturned": "Returned"
   },
 };
 
 /** Panel strings for the library locale (`setLocale`), Polish by default. */
 export function getPanelTexts(locale: string = getLocale()): PanelTexts {
   return pickLocaleTable(PANEL_TEXT_TABLES, locale);
+}
+
+const ORDER_STATUS_TEXT_KEYS: Record<string, keyof PanelTexts> = {
+  draft: "statusDraft",
+  created: "statusCreated",
+  unpaid: "statusUnpaid",
+  paid: "statusPaid",
+  overdue: "statusOverdue",
+  cancelled: "statusCancelled",
+  canceled: "statusCancelled",
+  completed: "statusCompleted",
+  processing: "statusProcessing",
+  refunded: "statusRefunded",
+  sent: "statusSent",
+  issue: "statusIssue",
+  returned: "statusReturned",
+};
+
+/** Label of a raw lowercase order status code, `undefined` for an unknown one. */
+export function orderStatusLabel(
+  status: string,
+  texts: PanelTexts = getPanelTexts(),
+): string | undefined {
+  const key = ORDER_STATUS_TEXT_KEYS[status.trim().toLowerCase()];
+  return key == null ? undefined : texts[key];
 }

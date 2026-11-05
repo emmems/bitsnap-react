@@ -16,6 +16,15 @@ export const getOrder = PublicApiService.method.getOrder;
 export const getOrders = PublicApiService.method.getOrders;
 
 /**
+ * Short history of the buyer's OWN order for the customer panel (paid, e-mail with access sent,
+ * access granted, invoice issued, shipped, refund, return status). Read only. Another buyer's
+ * order, or one the panel order list does not show, is ORDER_NOT_FOUND.
+ *
+ * @generated from rpc public_api.v1.PublicApiService.GetOrderHistory
+ */
+export const getOrderHistory = PublicApiService.method.getOrderHistory;
+
+/**
  * @generated from rpc public_api.v1.PublicApiService.GetOrderRetryUrl
  */
 export const getOrderRetryUrl = PublicApiService.method.getOrderRetryUrl;

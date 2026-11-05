@@ -16,6 +16,7 @@ import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { Textarea } from "../../ui/textarea";
 
+import { OrderHistory } from "../order-history/OrderHistory";
 import { usePanelConfig } from "../PanelProvider";
 
 interface Props {
@@ -282,6 +283,8 @@ function PublicOrderPageContent({
                 Zamówienie złożone {formatDate(order.createdAt)}
               </p>
             </div>
+
+            <OrderHistory orderId={orderID} />
 
             <div className="border-t pt-4">
               <h3 className="mb-3 font-semibold">Dane klienta</h3>

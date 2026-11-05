@@ -1,5 +1,5 @@
 import { getLocale } from "../../components/checkout/locale";
-import { getPanelTexts } from "../texts";
+import { getPanelTexts, orderStatusLabel } from "../texts";
 import { Button } from "../../ui/button";
 import { rpcProvider, useQuery } from "../../rpc-provider";
 import { Skeleton } from "../../ui/skeleton";
@@ -41,16 +41,6 @@ function PanelOrderHistory({
   accessToken,
 }: PanelOrderHistoryComponentProps) {
   const texts = getPanelTexts();
-  const statusLabel: Record<string, string> = {
-    draft: texts.statusDraft,
-    unpaid: texts.statusUnpaid,
-    paid: texts.statusPaid,
-    overdue: texts.statusOverdue,
-    cancelled: texts.statusCancelled,
-    completed: texts.statusCompleted,
-    processing: texts.statusProcessing,
-    refunded: texts.statusRefunded,
-  };
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
@@ -135,7 +125,7 @@ function PanelOrderHistory({
                     <p
                       className={`text-xs font-medium ${statusColor[order.status] ?? "text-neutral-400"}`}
                     >
-                      {statusLabel[order.status] ?? order.status}
+                      {orderStatusLabel(order.status, texts) ?? order.status}
                     </p>
                   </div>
                 </div>
