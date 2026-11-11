@@ -7,7 +7,7 @@ import packageJson from './package.json' with { type: 'json' };
  * When you add an entry to the package.json "files" field, a subfolder will be automatically created with a package.json pointing to that file
  */
 
-export const subpathNames = packageJson.files.filter(k => k !== 'dist');
+export const subpathNames = [...packageJson.files.filter(k => k !== 'dist'), 'contact'];
 
 export const subpathFoldersBarrel = [];
 

@@ -380,3 +380,22 @@ renders the course view on the server). Never run `pnpm build:publish` unless
 asked to release: it publishes to npm. Releases normally go out through the
 `Publish` workflow (`.github/workflows/publish.yml`) when a `v*` tag is pushed;
 it authenticates with npm trusted publishing, so no token is involved.
+
+## Contact form (`bitsnap-react/contact`, since 1.24.0)
+
+Import `ContactForm` or `useContactForm` from the contact subpath. Pass the public
+`projectID`, never a secret. Fetches use `/api/contact/v1/{projectID}/form` and
+`/inquiries`; no checkout globals or authentication are needed. Add the merchant
+origin to Bitsnap settings → allowed domains before testing an external embed.
+
+Use inline by default, modal with a button `trigger`, or floating with `launcher`.
+The seller configuration is authoritative: fields props only hide optional fields,
+topics only narrow/reorder seller options. Product context is a read-only chip.
+Seller success/promise/consent strings win over local defaults. Consent permits
+only escaped text and HTTPS markdown links. Disabled forms render nothing.
+
+Keep typed values on failure; reuse the per-form idempotency key for retries.
+Call `reset` for another inquiry. For headless UI, render field errors accessibly,
+focus the first invalid field and run captcha only when the config requires it.
+Appearance uses `theme`, `tokens`, `elements` and `data-bitsnap-contact-slot`.
+Tests live in `src/components/contact/contact.test.tsx` and are in `pnpm test`.

@@ -107,6 +107,7 @@ export default defineConfig((overrideOptions) => {
       errors: "src/errors.ts",
       models: "src/models.ts",
       returns: "src/returns/index.ts",
+      contact: "src/contact/index.ts",
       catalog: "src/catalog/index.ts",
       course: "src/course/index.ts",
       chat: "src/chat/index.ts",

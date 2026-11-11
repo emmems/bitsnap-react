@@ -1667,3 +1667,71 @@ BitsnapConsent.projectKey;             // the bare public project key the banner
 ### Google Consent Mode v2
 
 If `gtag` or `dataLayer` exists (or `data-gcm="on"`), the script sets `consent default` (everything denied except `security_storage`, `wait_for_update: 500`) before anything else, and `consent update` after each choice: analytics → `analytics_storage`, marketing → `ad_storage`, `ad_user_data`, `ad_personalization`, preferences → `functionality_storage`, `personalization_storage`.
+
+## Contact form
+
+Since 1.24.0, import this standalone module from `bitsnap-react/contact`.
+It needs only a public project ID; never pass an API key. Seller settings supply
+the enabled fields, topics, consent and confirmation copy.
+
+```tsx
+import { ContactForm } from "bitsnap-react/contact";
+
+// Inline: full-width fields, inheriting your website's font.
+<ContactForm projectID="PROJECT_ID" locale="pl" />
+
+// Modal: a real button opens an accessible, focus-trapped dialog.
+<ContactForm projectID="PROJECT_ID" mode="modal"
+  trigger={<button type="button">Ask about this product</button>}
+  product={{ id: "PRODUCT_ID", name: "My course" }} />
+
+// Floating launcher, positioned above the lower edge of the viewport.
+<ContactForm projectID="PROJECT_ID" mode="floating"
+  launcher={{ label: "Contact us", position: "bottom-right" }} />
+```
+
+| Prop | Type / behavior |
+| --- | --- |
+| `projectID` | Required public project ID |
+| `host` | Backend origin; defaults to `https://bitsnap.pl` |
+| `mode` | `inline` (default), `modal`, `floating` |
+| `open`, `onOpenChange` | Controlled dialog state and change callback |
+| `trigger` | React element used as dialog trigger; use a real button |
+| `launcher` | Optional `label`, `position`: `bottom-right` or `bottom-left` |
+| `product` | `{ id, name? }`, read-only context when the seller allows it |
+| `prefill` | Initial `name`, `email`, `orderNumber`, `topic` |
+| `fields` | Boolean map; `false` hides only optional, enabled seller fields |
+| `topics` | Subset/reordering of seller topic strings; unknown entries ignored |
+| `locale` | Polish or English (`en`/`en-*`); defaults to seller locale |
+| `texts` | Partial `ContactTexts` overrides; `title: ""` omits the inline heading when the host supplies one; seller success, consent and promise win |
+| `appearance` | Theme, token and slot overrides (below) |
+| `onSubmitted` | Called with `{ inquiryId, status: "received" }` |
+| `onError` | Called with typed `ContactFailure` (`code`, optional `fields`, `status`, `retryAfter`) |
+
+The seller must add the embedding domain in Bitsnap settings → allowed domains.
+A rejected origin shows a neutral visitor message and a developer console warning.
+Disabled/unknown forms render nothing and call `onError`. Submission errors keep
+entered values and explain that the message was not saved. Retry reuses the same
+idempotency key; reset or a newly opened dialog starts another form.
+
+Appearance is scoped to `data-bitsnap-contact`, with no required stylesheet import:
+
+```tsx
+<ContactForm projectID="PROJECT_ID" appearance={{
+  theme: "auto", // light | dark | auto (system preference)
+  tokens: { accent: "#234b35", accentForeground: "#ffffff", radius: "6px" },
+  elements: { button: { className: "my-button", style: { fontWeight: 600 } } }
+}} />
+```
+
+Tokens: `background`, `foreground`, `mutedForeground`, `border`, `accent`,
+`accentForeground`, `error`, `radius`. Each slot accepts `className` and `style`:
+`root`, `field`, `label`, `input`, `textarea`, `select`, `consent`, `button`,
+`promise`, `product`, `success`, `error`, `launcher`, `dialog`. Target slots through
+`data-bitsnap-contact-slot`. Dialog styling is applied inside its portal too.
+
+For custom UI, `useContactForm({ projectID, ... })` exposes `config`, `values`,
+`errors`, `error`, `status`, `setValue`, `submit`, `reset`. Status is `idle`,
+`loading`, `ready`, `submitting`, `success`, `error` or `unavailable`. Render
+Turnstile only when `config.captcha.required`; put its token in `captchaToken`.
+The injectable `fetch` option supports testing both the hook and REST client.
