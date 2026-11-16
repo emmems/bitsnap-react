@@ -72,6 +72,25 @@
         color: var(--bitsnap-products-muted-foreground, #71717a);
     }
 
+    /* Card rating (`showRating`): amber star, average in the text colour,
+       the count muted. The dark theme gets a lighter amber. */
+    [data-bitsnap-products] [data-bitsnap-products-slot="rating"] {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="ratingStar"] {
+        color: var(--bitsnap-products-rating-star, #b45309);
+    }
+
+    [data-bitsnap-products].dark [data-bitsnap-products-slot="ratingStar"] {
+        color: var(--bitsnap-products-rating-star, #fbbf24);
+    }
+
+    [data-bitsnap-products] [data-bitsnap-products-slot="ratingCount"] {
+        color: var(--bitsnap-products-muted-foreground, #71717a);
+    }
+
     [data-bitsnap-products] [data-bitsnap-products-slot="error"],
     [data-bitsnap-products] [data-bitsnap-products-slot="message"] {
         color: var(--bitsnap-products-error, #dc2626);

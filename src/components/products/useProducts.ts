@@ -31,6 +31,12 @@ export type UseProductsOptions = {
    * of the props fetch again.
    */
   initialData?: ProductListData;
+  /**
+   * Ask the backend for each product's `rating` (`?rating=1` on every page
+   * request) and, in `ProductList`, show it on the cards. Off by default.
+   * `initialData` should then come from a request with ratings too.
+   */
+  showRating?: boolean;
 };
 
 export type UseProductsResult = {
@@ -63,6 +69,7 @@ type Snapshot = {
  */
 export function useProducts(options: UseProductsOptions): UseProductsResult {
   const { projectID, locale, search, initialData } = options;
+  const rating = options.showRating === true;
   // The library host is a mutable global; read it once so a later
   // `setCustomHost` does not change the query of a mounted list.
   const [defaultHost] = useState(() => HOST);
@@ -76,6 +83,7 @@ export function useProducts(options: UseProductsOptions): UseProductsResult {
     locale ?? null,
     search?.trim() ?? null,
     pageSize,
+    rating,
   ]);
 
   const [pageState, setPageState] = useState({ queryKey, page: 1 });
@@ -115,6 +123,7 @@ export function useProducts(options: UseProductsOptions): UseProductsResult {
         search,
         limit: pageSize,
         offset: (page - 1) * pageSize,
+        rating,
       },
       controller.signal,
     ).then(
@@ -137,8 +146,8 @@ export function useProducts(options: UseProductsOptions): UseProductsResult {
     );
 
     return () => controller.abort();
-    // `requestKey` carries projectID, host, locale, search, pageSize, page and
-    // the reload counter.
+    // `requestKey` carries projectID, host, locale, search, pageSize, rating,
+    // page and the reload counter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, isCurrent]);
 

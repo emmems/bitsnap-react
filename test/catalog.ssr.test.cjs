@@ -181,3 +181,22 @@ test("renderItem replaces the card content", () => {
   assert.match(html, /Blue shirt for 129,00\s*zł/);
   assert.doesNotMatch(html, /Dodaj do koszyka/);
 });
+
+test("showRating renders the card rating on the server; rating survives the schema", () => {
+  const data = {
+    totalCount: 2,
+    items: [product({ rating: { average: 4.8, count: 12 } }), product({ id: "p2", uniqueSlug: "hoodie" })],
+  };
+  assert.deepEqual(BitsnapModels.ProductListResponseSchema.parse(data), data);
+
+  const html = withoutFetch(() =>
+    renderToString(React.createElement(ProductList, { projectID: "project-a", showRating: true, initialData: data })),
+  );
+  assert.match(html, /<span class="sr-only">Ocena 4,8 na 5, 12 opinii<\/span>/);
+  assert.equal(html.match(/data-bitsnap-products-slot="rating"/g).length, 1);
+
+  const off = withoutFetch(() =>
+    renderToString(React.createElement(ProductList, { projectID: "project-a", initialData: data })),
+  );
+  assert.doesNotMatch(off, /rating|Ocena/);
+});

@@ -15,6 +15,8 @@ export type ProductListQuery = {
   search?: string;
   limit: number;
   offset: number;
+  /** Ask for `rating` on the products (`?rating=1`). */
+  rating?: boolean;
 };
 
 export class ProductListError extends Error {
@@ -54,6 +56,10 @@ export function buildProductListURL(query: ProductListQuery): string {
   const search = query.search?.trim();
   if (search) {
     params.set("search", search);
+  }
+  if (query.rating === true) {
+    // The backend turns ratings on only for the exact value "1".
+    params.set("rating", "1");
   }
 
   const host = normalizeHost(query.host);

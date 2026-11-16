@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, SVGProps } from "react";
 import { cn } from "@/src/lib/utils";
 import {
   InstrumentProvider,
@@ -29,6 +29,7 @@ import {
 import { clampPageSize, type PublicListProduct } from "./fetch";
 import { formatProductPrice } from "./format";
 import { createImpressionTracker } from "./impressions";
+import { formatProductRating } from "./rating";
 import {
   fillProductListText,
   resolveProductListTexts,
@@ -91,6 +92,7 @@ type ListContext = {
   appearance: ResolvedProductListAppearance;
   texts: ProductListTexts;
   locale: string;
+  showRating: boolean;
 };
 
 const ProductListContext = createContext<ListContext | undefined>(undefined);
@@ -206,7 +208,7 @@ function ProductCard({
   onAdd: () => Promise<void>;
   renderItem?: ProductListProps["renderItem"];
 }) {
-  const { texts, locale } = useListContext();
+  const { texts, locale, showRating } = useListContext();
   const analytics = useContext(CardAnalyticsContext);
   const element = useRef<HTMLLIElement>(null);
   useEffect(() => {
@@ -229,7 +231,24 @@ function ProductCard({
   const body = useSlot("body", "flex flex-1 flex-col gap-1 p-4");
   const name = useSlot("name", "text-base font-medium leading-snug");
   const description = useSlot("description", "line-clamp-2 text-sm");
-  const price = useSlot("price", "mt-auto pt-2 text-base font-semibold");
+  const rating = showRating
+    ? formatProductRating(product.rating, locale, texts)
+    : null;
+  // The rating sits right above the price, and the two are pushed to the
+  // bottom of the card together, so names and prices line up across a row
+  // whether a card has a rating or not.
+  const price = useSlot(
+    "price",
+    rating != null
+      ? "pt-1 text-base font-semibold"
+      : "mt-auto pt-2 text-base font-semibold",
+  );
+  const ratingSlot = useSlot(
+    "rating",
+    "mt-auto flex items-center gap-1 pt-2 text-sm leading-none",
+  );
+  const ratingStar = useSlot("ratingStar", "shrink-0");
+  const ratingCount = useSlot("ratingCount");
   const comparePrice = useSlot("comparePrice", "ml-2 text-sm font-normal");
   const badge = useSlot(
     "badge",
@@ -300,6 +319,16 @@ function ProductCard({
           {product.shortDescription ? (
             <p {...description}>{product.shortDescription}</p>
           ) : null}
+          {rating != null ? (
+            <p {...ratingSlot}>
+              <span className="sr-only">{rating.label}</span>
+              <StarIcon {...ratingStar} />
+              <span aria-hidden="true">{rating.average}</span>
+              <span {...ratingCount} aria-hidden="true">
+                ({rating.count})
+              </span>
+            </p>
+          ) : null}
           <p {...price}>
             {product.priceFrom
               ? fillProductListText(texts.priceFrom, { price: formattedPrice })
@@ -342,6 +371,22 @@ function ProductCard({
         )}
       </div>
     </li>
+  );
+}
+
+function StarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 2.5l2.94 5.96 6.58.96-4.76 4.64 1.12 6.55L12 17.52l-5.88 3.09 1.12-6.55L2.48 9.42l6.58-.96z" />
+    </svg>
   );
 }
 
@@ -627,6 +672,7 @@ export function ProductList({
   analytics,
   ...options
 }: ProductListProps) {
+  const showRating = options.showRating === true;
   const instrument: Instrument = useInstrument(
     options.projectID,
     analytics,
@@ -642,8 +688,13 @@ export function ProductList({
     [locale, texts],
   );
   const context = useMemo(
-    () => ({ appearance: resolvedAppearance, texts: resolvedTexts, locale }),
-    [resolvedAppearance, resolvedTexts, locale],
+    () => ({
+      appearance: resolvedAppearance,
+      texts: resolvedTexts,
+      locale,
+      showRating,
+    }),
+    [resolvedAppearance, resolvedTexts, locale, showRating],
   );
   const root = getProductListSlotAppearance(resolvedAppearance, "root");
 

@@ -210,6 +210,9 @@ Rules:
   that adds the item; only `http`/`https` are kept (`cartItemURL`). The
   `ADD_TO_CART` postMessage accepts `url` too. `ProductList`'s default action
   passes `productHref(product)`.
+- Rating (since 1.25.0): `showRating` adds `rating=1` to every list request
+  (pass `initialData` fetched with `&rating=1`) and shows "★ 4,8 (12)" on cards
+  with `rating`; cards without one show nothing. Off by default.
 - Styling: `appearance={{ theme, tokens, elements }}`, scoped to
   `[data-bitsnap-products]`. Texts: `texts`, Polish and English defaults by
   `locale`.

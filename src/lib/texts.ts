@@ -14,15 +14,20 @@ export type LocaleTables<Key extends string> = {
 };
 
 /**
- * Picks the table for a locale. Any locale starting with `en` (case
- * insensitive, so `en`, `en-US`, `EN-gb`) gets English; everything else,
- * including unknown locales, gets the Polish default.
+ * The text language of a locale. Any locale starting with `en` (case
+ * insensitive, so `en`, `en-US`, `EN-gb`) is English; everything else,
+ * including unknown locales, is the Polish default.
  */
+export function pickLocaleLanguage(locale: string): keyof LocaleTables<string> {
+  return locale.toLowerCase().startsWith("en") ? "en" : "pl";
+}
+
+/** Picks the table for a locale's language (`pickLocaleLanguage`). */
 export function pickLocaleTable<Key extends string>(
   tables: LocaleTables<Key>,
   locale: string,
 ): TextTable<Key> {
-  return locale.toLowerCase().startsWith("en") ? tables.en : tables.pl;
+  return tables[pickLocaleLanguage(locale)];
 }
 
 /**

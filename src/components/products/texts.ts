@@ -7,7 +7,9 @@ import {
 /**
  * Every string `ProductList` renders. Pass a partial object through the
  * `texts` prop to override any of them, whatever the locale. Placeholders
- * (`{price}`, `{page}`, `{pageCount}`) are filled by the component.
+ * are filled by the component: `{price}`, `{page}`, `{pageCount}`, and for
+ * the rating `{average}` (formatted average), `{count}` (number of reviews)
+ * and `{reviews}` (in `ratingLabel`: the filled `reviews*` text, "12 opinii").
  */
 export type ProductListTexts = {
   /** "Add to cart" button of products that can be bought straight from the list. */
@@ -34,6 +36,20 @@ export type ProductListTexts = {
   priceFrom: string;
   /** Screen reader label of the struck-through regular price. */
   originalPrice: string;
+  /**
+   * Screen reader label of a card's rating (`showRating`). `{average}` is the
+   * formatted average and `{reviews}` one of the `reviews*` texts.
+   */
+  ratingLabel: string;
+  /**
+   * Number of reviews by plural form (`Intl.PluralRules`); `{count}` is filled
+   * in. English uses `reviewsOne` and `reviewsOther`; Polish also `reviewsFew`
+   * ("2 opinie") and `reviewsMany` ("5 opinii").
+   */
+  reviewsOne: string;
+  reviewsFew: string;
+  reviewsMany: string;
+  reviewsOther: string;
   /** Accessible label of the loading skeleton. */
   loading: string;
   /** Shown when the shop has no products (or none matches the search). */
@@ -66,6 +82,11 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     model3dLabel: "3D model",
     priceFrom: "from {price}",
     originalPrice: "Original price",
+    ratingLabel: "Rated {average} out of 5, {reviews}",
+    reviewsOne: "{count} review",
+    reviewsFew: "{count} reviews",
+    reviewsMany: "{count} reviews",
+    reviewsOther: "{count} reviews",
     loading: "Loading products",
     empty: "There are no products to show.",
     error: "Could not load the products.",
@@ -88,6 +109,11 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     model3dLabel: "Model 3D",
     priceFrom: "od {price}",
     originalPrice: "Cena przed obniżką",
+    ratingLabel: "Ocena {average} na 5, {reviews}",
+    reviewsOne: "{count} opinia",
+    reviewsFew: "{count} opinie",
+    reviewsMany: "{count} opinii",
+    reviewsOther: "{count} opinii",
     loading: "Ładowanie produktów",
     empty: "Brak produktów do wyświetlenia.",
     error: "Nie udało się załadować produktów.",

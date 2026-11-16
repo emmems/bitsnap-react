@@ -53,6 +53,11 @@ export type ProductListAppearanceTokens = {
   badgeForeground?: string;
   /** Corner radius of cards, images and buttons. */
   radius?: string;
+  /**
+   * Star of the card rating (`showRating`). Not in the presets, so the list
+   * root keeps its variables; the stylesheet uses amber per theme.
+   */
+  ratingStar?: string;
 };
 
 /**
@@ -71,6 +76,9 @@ export const PRODUCT_LIST_SLOT_NAMES = [
   "description",
   "price",
   "comparePrice",
+  "rating",
+  "ratingStar",
+  "ratingCount",
   "badge",
   "model3dBadge",
   "actions",
@@ -132,6 +140,7 @@ export const PRODUCT_LIST_TOKEN_VARIABLES = {
   badgeBackground: "--bitsnap-products-badge-background",
   badgeForeground: "--bitsnap-products-badge-foreground",
   radius: "--bitsnap-products-radius",
+  ratingStar: "--bitsnap-products-rating-star",
 } as const;
 
 export type ProductListTokenName = keyof typeof PRODUCT_LIST_TOKEN_VARIABLES;
