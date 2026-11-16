@@ -75,6 +75,27 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.25.0
+
+- **`ProductList`: review rating on cards.** New opt-in prop `showRating`
+  (default `false`; also on `useProducts`). The list then asks for
+  `?rating=1` and cards of products with reviews show "★ 4,8 (12)" with one
+  accessible label. See [Rating on cards](#rating-on-cards-showrating-since-1250).
+- **`BitsnapModels.PublicListProductSchema`** accepts an optional
+  `rating: { average, count }` (average 0-5, count an integer ≥ 1;
+  `PublicListProductRatingSchema`). 1.24.0 stripped it. A malformed rating is
+  dropped (`rating` is `undefined`); the item and the rest of the list still
+  parse. `PublicListProductRatingSchema` itself stays strict.
+- New token `ratingStar`, slots `rating`, `ratingStar`, `ratingCount`, texts
+  `ratingLabel` and `reviewsOne/Few/Many/Other`. Without `showRating` the list
+  renders exactly as in 1.24.0.
+- **Type change:** `ProductListTexts` gained 5 required keys (`ratingLabel`,
+  `reviewsOne`, `reviewsFew`, `reviewsMany`, `reviewsOther`) and
+  `ProductListSlotName` gained `rating`, `ratingStar`, `ratingCount`. Code that
+  builds a complete (non-`Partial`) `ProductListTexts` object or a `Record`
+  over the slot names must add them; `Partial<ProductListTexts>` for `texts`
+  and partial `elements` are unaffected.
+
 ## 1.18.0
 
 Customer panel changes after 1.17.0 (`BitsnapPanel` / `PanelPage`, course,
@@ -767,6 +788,7 @@ import { ProductList, useProducts } from "bitsnap-react/catalog";
 | `renderItem`    | `(product, context) => ReactNode` replaces the content of a card (`context` has `href`, `price`).    |
 | `onAddToCart`   | `(product) => void \| Promise<void>`. Replaces the default add to cart.                              |
 | `showCartOnAdd` | Open the cart drawer after the default add to cart. Defaults to `true`.                              |
+| `showRating`    | Show the product's review rating on cards and ask for it (`?rating=1`). Defaults to `false`. Since 1.25.0. |
 | `className`     | Class of the root element.                                                                           |
 
 Prices are in minor units (grosze, cents), as everywhere else in the library.
@@ -793,6 +815,27 @@ cart link back to the product page.
 Products with variants or a subscription link to the product page ("Wybierz" /
 "Zobacz"). Pass `onAddToCart` to do something else, for example to use your own
 cart.
+
+### Rating on cards (`showRating`, since 1.25.0)
+
+```tsx
+<ProductList projectID="your-project-id" showRating initialData={firstPageWithRatings} />
+```
+
+With `showRating` every request of the list (the first page without
+`initialData`, pagination, search, retry) adds `rating=1`, and the backend adds
+`rating: { average, count }` to products with at least one published review
+(`average` has one decimal, 0 to 5; `count` is at least 1). Fetch `initialData`
+with `&rating=1` too, or the first page has no stars. A card with a rating shows
+a star, the average and the count, "★ 4,8 (12)" (decimal comma for Polish,
+point for English), right above the price; a card without one shows nothing.
+Screen readers hear one sentence, "Ocena 4,8 na 5, 12 opinii" / "Rated 4.8 out
+of 5, 12 reviews" (texts `ratingLabel`, `reviewsOne`, `reviewsFew`,
+`reviewsMany`, `reviewsOther`, plural forms by `Intl.PluralRules`); the star and
+the numbers are `aria-hidden`. The star is amber (lighter in the dark theme),
+set it with the `ratingStar` token; slots `rating`, `ratingStar`,
+`ratingCount`. Without `showRating` nothing changes: no `rating` parameter and
+the same markup as 1.24.0, even when the data carries `rating`.
 
 ### Server rendering
 
@@ -824,10 +867,10 @@ fetches the first page. The component never reads `window` while rendering.
 Tokens: `fontFamily`, `fontSize`, `background`, `surface`, `foreground`,
 `mutedForeground`, `border`, `buttonBackground`, `buttonForeground`,
 `buttonHoverBackground`, `hoverSurface`, `focusRing`, `error`, `badgeBackground`,
-`badgeForeground`, `radius`. Slots (`PRODUCT_LIST_SLOT_NAMES`, also exposed as
+`badgeForeground`, `radius`, `ratingStar`. Slots (`PRODUCT_LIST_SLOT_NAMES`, also exposed as
 `data-bitsnap-products-slot`): `root`, `grid`, `card`, `cardLink`, `image`,
 `imagePlaceholder`, `body`, `name`, `description`, `price`, `comparePrice`,
-`badge`, `model3dBadge`, `actions`, `addToCartButton`, `selectButton`, `message`, `pagination`,
+`rating`, `ratingStar`, `ratingCount`, `badge`, `model3dBadge`, `actions`, `addToCartButton`, `selectButton`, `message`, `pagination`,
 `paginationButton`, `pageIndicator`, `emptyState`, `error`, `retryButton`,
 `skeleton`. All rules are scoped to `[data-bitsnap-products]`.
 

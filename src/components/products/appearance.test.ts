@@ -30,7 +30,9 @@ describe("resolveProductListAppearance", () => {
         string
       >;
       for (const token of Object.keys(PRODUCT_LIST_TOKEN_VARIABLES)) {
-        if (token === "fontFamily" || token === "fontSize") {
+        // ratingStar is left out of the presets so the root style of a list
+        // without ratings stays as it was (the stylesheet has the defaults).
+        if (token === "fontFamily" || token === "fontSize" || token === "ratingStar") {
           continue;
         }
         assert.ok(preset[token], `${theme} preset is missing ${token}`);

@@ -115,6 +115,14 @@ export namespace BitsnapModels {
     typeof PublicListProductImageSchema
   >;
 
+  export const PublicListProductRatingSchema = z.object({
+    average: z.number().min(0).max(5),
+    count: z.number().int().min(1),
+  });
+  export type PublicListProductRating = z.infer<
+    typeof PublicListProductRatingSchema
+  >;
+
   /**
    * One card of the public product catalog
    * (`GET /api/integrations/{projectID}/public-commerce/product-list`).
@@ -147,6 +155,14 @@ export namespace BitsnapModels {
      * (the card shows a "3D" badge). Older backends omit it.
      */
     has3d: z.boolean().optional(),
+    /**
+     * Published reviews: the average (one decimal, 0-5) and how many there
+     * are (at least one). Sent only when the list is asked with `?rating=1`
+     * (`ProductList` `showRating`) and only for products with reviews.
+     * Older backends omit it. A malformed rating is dropped (`undefined`)
+     * instead of failing the whole item, and with it the list.
+     */
+    rating: PublicListProductRatingSchema.optional().catch(undefined),
   });
   export type PublicListProduct = z.infer<typeof PublicListProductSchema>;
 
