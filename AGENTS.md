@@ -350,6 +350,9 @@ buyer's own order inside the status card. Code in `src/panel/order-history/`.
   panel session as `access_token`); saves with `UpdateNotificationSettings`
   (`enabled_methods`, empty `modifications`, `newsletter_subscribed`), then
   reads again (switching e-mail off may withdraw the newsletter server-side).
+  While saves run the switches show what was sent; only the read of the
+  latest save puts them back on the server's answer (an earlier save's read
+  must not flip a switch back).
 - Newsletter switch only when `newsletter_subscribed` is present: true = on
   (switching off sends `newsletter_subscribed: false`), false = off and
   disabled with the "sign up again" hint (`newsletter_signup_url`, http(s)

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { getLocale } from "../../components/checkout/locale";
 import { NotificationMethod } from "../../gen/proto/public/v1/public_api_pb";
 import { rpcProvider, useMutation, useQuery } from "../../rpc-provider";
@@ -76,11 +76,14 @@ export function NotificationSettings({
   );
 
   const details = query.data;
-  const [methods, setMethods] = useState<NotificationMethod[]>([]);
+  // The switches follow the server's answer, except while the customer's own
+  // saves are in flight: then they show what was sent. A read that started
+  // before the latest save (the refetch of an earlier one) cannot flip a switch
+  // back, and there is no all-off frame before the first answer is copied.
+  const [sent, setSent] = useState<NotificationMethod[] | null>(null);
+  const lastSave = useRef(0);
+  const methods = sent ?? details?.enabledMethods ?? [];
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
-  useEffect(() => {
-    if (details) setMethods(details.enabledMethods);
-  }, [details]);
 
   if (!enabled || query.isError) return <>{fallback}</>;
   if (!details) {
@@ -104,7 +107,8 @@ export function NotificationSettings({
 
   async function save(next: NotificationMethod[], newsletterSubscribed?: boolean) {
     const previous = methods;
-    setMethods(next);
+    const saveNo = ++lastSave.current;
+    setSent(next);
     setStatus("idle");
     try {
       await update({
@@ -117,11 +121,17 @@ export function NotificationSettings({
       setStatus("saved");
     } catch (error) {
       console.warn("[bitsnap] cannot save the notification settings", error);
-      setMethods(previous);
+      setSent(previous);
       setStatus("error");
-    } finally {
-      // The newsletter may have changed with the e-mail switch.
-      void query.refetch();
+    }
+    // The newsletter may have changed with the e-mail switch. The switches go
+    // back to the server's answer only with the read of the latest save: an
+    // earlier save's read (or one cancelled by a later refetch) changes nothing.
+    try {
+      const fresh = await query.refetch();
+      if (saveNo === lastSave.current && fresh.isSuccess) setSent(null);
+    } catch {
+      // Keep what is shown; the next save reads again.
     }
   }
 

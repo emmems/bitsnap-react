@@ -240,6 +240,84 @@ describe("panel notification settings: the channels", () => {
   });
 });
 
+describe("panel notification settings: reads racing the saves", () => {
+  it("a read from an earlier save that lands during the next save does not flip the switch back", async () => {
+    // The server's state; each read answers what it was when the read arrived, after `readDelay`.
+    let server = [EMAIL];
+    let readDelay = 0;
+    let saveDelay = 0;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.endsWith("/GetNotificationSettingsDetails")) {
+        const snapshot = [...server];
+        details = () => settings({ enabledMethods: snapshot });
+        const delay = readDelay;
+        const answer = await realFetch(input, init);
+        await new Promise((r) => setTimeout(r, delay));
+        return answer;
+      }
+      if (url.endsWith("/UpdateNotificationSettings")) {
+        await new Promise((r) => setTimeout(r, saveDelay));
+        const answer = await realFetch(input, init);
+        server = [...saves[saves.length - 1]!.enabledMethods];
+        return answer;
+      }
+      return realFetch(input, init);
+    }) as typeof fetch;
+
+    const container = await mount();
+    const checked = (label: string) => switchFor(container, label).getAttribute("aria-checked");
+    assert.equal(checked("E-mail"), "true");
+
+    // Save 1 (SMS on) answers at once; its read is slow and answers [EMAIL, SMS].
+    readDelay = 120;
+    await React.act(async () => switchFor(container, "SMS").click());
+    await settle(10);
+    assert.equal(saves.length, 1);
+    // Save 2 (push on) starts while that read is still running and takes longer.
+    saveDelay = 250;
+    readDelay = 0;
+    await React.act(async () => switchFor(container, "Powiadomienia na telefon").click());
+    await settle(170);
+    assert.ok(reads.length >= 2, "the read of save 1 has landed");
+    assert.equal(checked("Powiadomienia na telefon"), "true", "the earlier read must not switch push off");
+    assert.equal(checked("SMS"), "true");
+
+    await settle(300);
+    await settle();
+    assert.equal(saves.length, 2);
+    assert.deepEqual([...saves[1]!.enabledMethods].sort(), [EMAIL, SMS, PUSH].sort());
+    assert.equal(checked("Powiadomienia na telefon"), "true");
+    assert.equal(checked("SMS"), "true");
+    assert.equal(checked("E-mail"), "true");
+  });
+
+  it("the switches show the server's answer from their first frame (no all-off flash)", async () => {
+    details = () => settings({ enabledMethods: [EMAIL, SMS] });
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const flips: string[] = [];
+    const observer = new page.win.MutationObserver((records) => {
+      for (const record of records) {
+        if (record.attributeName === "aria-checked") {
+          flips.push(`${(record.target as Element).id}: ${record.oldValue} -> ${(record.target as Element).getAttribute("aria-checked")}`);
+        }
+      }
+    });
+    observer.observe(container, { subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ["aria-checked"] });
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () => root.render(<PanelProvider analytics={false}><NotificationSettings /></PanelProvider>));
+    await settle();
+    await settle();
+    observer.disconnect();
+    assert.equal(switchFor(container, "E-mail").getAttribute("aria-checked"), "true");
+    assert.equal(switchFor(container, "SMS").getAttribute("aria-checked"), "true");
+    assert.deepEqual(flips, [], "a switch was drawn off and then turned on");
+  });
+});
+
 describe("panel notification settings: nothing to show", () => {
   it("renders nothing without a panel session (and does not ask)", async () => {
     page.win.localStorage.clear();
