@@ -85,6 +85,19 @@ export const pushSendDeviceToken = PublicApiService.method.pushSendDeviceToken;
 export const pushEvent = PublicApiService.method.pushEvent;
 
 /**
+ * Creator (seller) push: the phone of a Clerk user logged into the mobile app's Panel tab.
+ * Authenticated ONLY with `Authorization: Bearer <Clerk session JWT>`; see docs/mobile-creator-push.md.
+ *
+ * @generated from rpc public_api.v1.PublicApiService.PushRegisterCreatorDevice
+ */
+export const pushRegisterCreatorDevice = PublicApiService.method.pushRegisterCreatorDevice;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.PushUnregisterCreatorDevice
+ */
+export const pushUnregisterCreatorDevice = PublicApiService.method.pushUnregisterCreatorDevice;
+
+/**
  * iOS SHOP methods
  *
  * @generated from rpc public_api.v1.PublicApiService.ShouldShopProducts
@@ -233,6 +246,11 @@ export const getPublicOrderDetails = PublicApiService.method.getPublicOrderDetai
  * @generated from rpc public_api.v1.PublicApiService.AddPublicOrderComment
  */
 export const addPublicOrderComment = PublicApiService.method.addPublicOrderComment;
+
+/**
+ * @generated from rpc public_api.v1.PublicApiService.GetProductTestimonials
+ */
+export const getProductTestimonials = PublicApiService.method.getProductTestimonials;
 
 /**
  * Testimonials

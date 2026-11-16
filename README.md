@@ -75,6 +75,27 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.26.0
+
+- **Panel: the shop's notification settings.** "Konto" (and the
+  `state=notifications` screen) shows the channels the shop offers (e-mail,
+  SMS, phone) as switches, saved through `UpdateNotificationSettings` with the
+  panel session. When the customer's address has a confirmed newsletter
+  subscription in the shop, a "Newsletter sklepu" / "Shop newsletter" switch
+  shows too: switching it off unsubscribes; once withdrawn it stays off and
+  links to the shop's site, because signing up again needs the shop's
+  confirmation e-mail. Switching e-mail off also unsubscribes from the
+  newsletter (the server's rule). Without a confirmed subscription, or with an
+  older Bitsnap server, the newsletter switch is not shown; when the shop has
+  no notification settings, the section is not shown.
+- `public/v1/public_api` regenerated: `newsletterSubscribed` on
+  `UpdateNotificationSettingsRequest` and `newsletterSubscribed` /
+  `newsletterSignupUrl` on `GetNotificationSettingsDetailsResponse` (plus the
+  server's newer messages). No breaking changes.
+- The notifications component's "manage my data" box (after its e-mail-code
+  login) failed to save and to unsubscribe; that was fixed on the Bitsnap
+  server, so it works in this and earlier versions alike.
+
 ## 1.25.0
 
 - **`ProductList`: review rating on cards.** New opt-in prop `showRating`

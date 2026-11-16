@@ -341,6 +341,25 @@ buyer's own order inside the status card. Code in `src/panel/order-history/`.
   block follows the card in light and dark mode.
 - Tests: `src/panel/order-history.test.tsx` (fetch mocked by path).
 
+## Notification settings in the panel (`NotificationSettings`, since 1.26.0)
+
+"Konto" (`PanelProfile`) and the `state=notifications` screen render
+`src/panel/notifications/NotificationSettings.tsx`.
+
+- Data: `PublicApiService.GetNotificationSettingsDetails` (`project_id`, the
+  panel session as `access_token`); saves with `UpdateNotificationSettings`
+  (`enabled_methods`, empty `modifications`, `newsletter_subscribed`), then
+  reads again (switching e-mail off may withdraw the newsletter server-side).
+- Newsletter switch only when `newsletter_subscribed` is present: true = on
+  (switching off sends `newsletter_subscribed: false`), false = off and
+  disabled with the "sign up again" hint (`newsletter_signup_url`, http(s)
+  only, else the no-link text). Never send `true`: it does not subscribe
+  (double opt-in only). Channel saves leave the field absent.
+- Quiet: no session, a failure (the shop has no notification settings:
+  NotFound), or an older server render nothing (`fallback` on the
+  notifications screen). Texts in `notifications/texts.ts` (pl/en).
+- Tests: `src/panel/notification-settings.test.tsx` (fetch mocked by path).
+
 ## Course view (`PanelCourse`)
 
 The customer panel opens a purchased course inside the panel (no redirect to

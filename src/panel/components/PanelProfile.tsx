@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { getLocale, setLocale } from "../../components/checkout/locale";
+import { NotificationSettings } from "../notifications/NotificationSettings";
 import { getPanelTexts } from "../texts";
 
 interface PanelProfileComponentProps { email: string | null; logout: () => void; onLocaleChange?: () => void; }
@@ -20,6 +21,7 @@ export default function PanelProfileComponent({ email, logout, onLocaleChange }:
         </select>
       </label>
     </div>
+    <NotificationSettings heading={<h4 className="mt-6 mb-2 text-sm font-medium text-neutral-600 dark:text-neutral-400">{texts.notificationsHeading}</h4>} />
     <button type="button" onClick={logout} className="mt-6 flex min-h-11 w-full items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-current dark:border-neutral-800 dark:bg-neutral-900 dark:text-red-400 dark:hover:bg-neutral-800"><LogOut className="h-5 w-5" aria-hidden="true" />{texts.logout}</button>
   </section>;
 }
