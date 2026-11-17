@@ -75,6 +75,42 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.26.0
+
+- **Panel: the shop's notification settings.** "Konto" (`PanelProfile`) now
+  has a notification settings section ("Powiadomienia"), and the
+  `state=notifications` screen shows the same: the channels the shop offers
+  (e-mail, SMS, phone) as switches, saved through `UpdateNotificationSettings`
+  with the panel session. A channel the shop does not offer is not shown, and
+  a save keeps its stored value. When the customer's address has a confirmed newsletter
+  subscription in the shop, a "Newsletter sklepu" / "Shop newsletter" switch
+  shows too: switching it off unsubscribes; once withdrawn it stays off and
+  links to the shop's site, because signing up again needs the shop's
+  confirmation e-mail. Switching e-mail off also unsubscribes from the
+  newsletter (the server's rule). Without a confirmed subscription, or with an
+  older Bitsnap server, the newsletter switch is not shown; when the shop has
+  no notification settings, the section is not shown.
+- `public/v1/public_api` regenerated: `newsletterSubscribed` on
+  `UpdateNotificationSettingsRequest` and `newsletterSubscribed` /
+  `newsletterSignupUrl` on `GetNotificationSettingsDetailsResponse` (plus the
+  server's newer messages). No breaking changes.
+- The notifications component's "manage my data" box (after its e-mail-code
+  login) failed to save and to unsubscribe; that was fixed on the Bitsnap
+  server, so it works in this and earlier versions alike.
+- **Notifications component: only an e-mail-code login switches things on.**
+  The Bitsnap server now marks the token of the e-mail-code login
+  (`VerifyUserEmail`) as verified. The token that the sign-up form
+  (`CreateNotificationUser`, no code) hands back is not: with it, "manage my
+  data" and the group settings can switch channels off, leave groups and
+  unsubscribe, but a switch turned on does not stick. The sign-up itself still
+  joins the groups ticked in the form. Tokens saved before this server change
+  count as unverified, so a customer who wants to switch something on logs in
+  with the e-mail code again. This is server behaviour; it applies to every
+  package version.
+- The panel's switches no longer jump back when the read after one save
+  arrives while the next save is running, and show the saved state from their
+  first frame.
+
 ## 1.25.0
 
 - **`ProductList`: review rating on cards.** New opt-in prop `showRating`
