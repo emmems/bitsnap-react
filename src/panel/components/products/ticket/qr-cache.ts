@@ -11,12 +11,17 @@ const PREFIX = "bitsnap-panel-ticket-qr:";
 /** Bigger images are not worth a sessionStorage slot. */
 const MAX_DATA_URL = 400_000;
 
+/** Only raster images: the same types `safeQrHref` accepts (no SVG). */
+function isRasterDataUrl(value: string): boolean {
+  return /^data:image\/(png|jpe?g|gif|webp)[;,]/i.test(value);
+}
+
 export function readCachedQr(accessId: string): string | undefined {
   const cached = memory.get(accessId);
   if (cached) return cached;
   try {
     const stored = window.sessionStorage.getItem(PREFIX + accessId);
-    if (stored && stored.startsWith("data:image/")) {
+    if (stored && isRasterDataUrl(stored)) {
       memory.set(accessId, stored);
       return stored;
     }
@@ -27,7 +32,7 @@ export function readCachedQr(accessId: string): string | undefined {
 }
 
 export function writeCachedQr(accessId: string, dataUrl: string) {
-  if (!dataUrl.startsWith("data:image/")) return;
+  if (!isRasterDataUrl(dataUrl)) return;
   memory.set(accessId, dataUrl);
   if (dataUrl.length > MAX_DATA_URL) return;
   try {

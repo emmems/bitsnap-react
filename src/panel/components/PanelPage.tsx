@@ -125,15 +125,19 @@ const PanelPage = ({
   );
 
   async function logout() {
-    if (accessToken) {
-      await logoutUserAsync({
-        accessToken: accessToken as string,
-      });
-    }
-    if (typeof window !== "undefined") {
-      clearPanelSession(projectID, host);
-      clearQrCache();
-      window.location.reload();
+    try {
+      if (accessToken) {
+        await logoutUserAsync({
+          accessToken: accessToken as string,
+        });
+      }
+    } finally {
+      // Clear local state even when the logout call fails (e.g. offline).
+      if (typeof window !== "undefined") {
+        clearPanelSession(projectID, host);
+        clearQrCache();
+        window.location.reload();
+      }
     }
   }
 

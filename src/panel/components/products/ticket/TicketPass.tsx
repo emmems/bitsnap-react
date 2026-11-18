@@ -104,7 +104,7 @@ export function TicketPass({
   const ticket = live && state.status === "ok" ? state.value : undefined;
   const apple = safeWalletUrl(ticket?.appleWalletUrl);
   const google = safeWalletUrl(ticket?.googleWalletUrl);
-  const saveHref = safeQrHref(savedQr ?? qrSrc);
+  const saveHref = safeQrHref(savedQr) ?? safeQrHref(qrSrc);
   const loading =
     state.status === "loading" || (live && imageStatus === "loading");
   // Blame the connection only when the browser says it is offline.

@@ -130,6 +130,8 @@ function OrderPageContent({
     locale,
   });
 
+  // Guard only: today the server answers an expired token with masked data,
+  // not Unauthenticated, so the always-on e-mail check covers that case.
   const unauthenticated = isUnauthenticated(query.error);
   useEffect(() => {
     if (!unauthenticated) return;
@@ -220,7 +222,11 @@ function StandaloneOrderPage(props: Props) {
       }`}
     >
       <div className="mx-auto flex w-full max-w-[960px] flex-col">
-        <OrderPageContent {...props} lead={<StandaloneLogo />} />
+        <OrderPageContent
+          key={props.orderID?.trim() ?? ""}
+          {...props}
+          lead={<StandaloneLogo />}
+        />
       </div>
     </div>
   );
@@ -233,7 +239,7 @@ function StandaloneOrderPage(props: Props) {
  */
 function PublicOrderPage(props: Props) {
   if (props.variant === "panel") {
-    return <OrderPageContent {...props} />;
+    return <OrderPageContent key={props.orderID?.trim() ?? ""} {...props} />;
   }
   return <StandaloneOrderPage {...props} />;
 }

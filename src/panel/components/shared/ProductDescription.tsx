@@ -142,10 +142,25 @@ export function ProductDescription({
       );
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
+    // A host web font that loads later re-wraps the text without resizing
+    // the folded box, so measure again once fonts are ready.
+    let cancelled = false;
+    document.fonts?.ready
+      .then(() => {
+        if (!cancelled) measure();
+      })
+      .catch(() => {});
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        cancelled = true;
+      };
+    }
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [html, plain, lines, expanded]);
   const overflows = fold?.overflows ?? false;
 
