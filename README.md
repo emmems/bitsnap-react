@@ -75,6 +75,19 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.28.0
+
+- **Panel ticket as a tall stub.** The ticket card is one centred column
+  (at most 360 px): the event date (`event_start_date`, shown in the panel's
+  locale and the `Europe/Warsaw` zone) above a perforation line with side
+  notches, the shop's brand-tile QR (640×720) on the white tile, the entry
+  hint, wallet buttons, and "Zapisz bilet" / "Save ticket", which now saves
+  the tall stub PNG (`ticket_stub_url`, or `ticketUrl` with `layout=stub`
+  from an older server, `https:` only). The product name is no longer
+  repeated on the card (the page title above shows it) and the "Twój bilet"
+  label is gone. The stub is cached for offline use like the QR, and logout
+  clears it too.
+
 ## 1.27.0
 
 - **Customer panel redesign (option A for every screen).** Audiobook: compact

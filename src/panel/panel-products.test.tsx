@@ -474,7 +474,7 @@ describe("product detail pages (option A)", () => {
     assert.equal(apple.href, "https://wallet.test/a.pkpass");
     assert.equal(apple.rel, "noopener noreferrer");
     assert.equal(links.find((link) => link.textContent === "Dodaj do Google Wallet"), undefined, "non-https wallet link hidden");
-    assert.ok(links.find((link) => link.textContent === "Zapisz kod QR"));
+    assert.ok(links.find((link) => link.textContent === "Zapisz bilet"));
     assert.match(container.textContent ?? "", /Informacje od organizatora/);
     assert.doesNotMatch(container.textContent ?? "", /Twój zakupiony bilet/);
   });
@@ -511,20 +511,23 @@ describe("product detail pages (option A)", () => {
     const container = await ticket("error");
     assert.match(container.textContent ?? "", /Nie udało się odświeżyć biletu – pokazujemy zapisany kod/);
     assert.doesNotMatch(container.textContent ?? "", /Brak połączenia/);
-    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz kod QR")!;
+    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
     assert.equal(save.getAttribute("href"), QR, "saved data: QR is a valid download");
     clearQrCache();
   });
 
-  it("clears every saved QR code from memory and sessionStorage (logout)", async () => {
+  it("clears every saved QR code and stub from memory and sessionStorage (logout)", async () => {
     const { writeCachedQr, readCachedQr, clearQrCache } = await import("./components/products/ticket/qr-cache");
     writeCachedQr("t1", QR);
     writeCachedQr("t2", QR);
+    writeCachedQr("t1:stub", QR);
     page.win.sessionStorage.setItem("other-key", "keep");
     clearQrCache();
     assert.equal(readCachedQr("t1"), undefined);
     assert.equal(readCachedQr("t2"), undefined);
+    assert.equal(readCachedQr("t1:stub"), undefined, "stub entries go too");
     assert.equal(page.win.sessionStorage.getItem("bitsnap-panel-ticket-qr:t1"), null);
+    assert.equal(page.win.sessionStorage.getItem("bitsnap-panel-ticket-qr:t1:stub"), null);
     assert.equal(page.win.sessionStorage.getItem("other-key"), "keep");
     page.win.sessionStorage.clear();
   });
@@ -550,8 +553,64 @@ describe("product detail pages (option A)", () => {
     assert.equal(container.querySelector('[role="alert"]'), null, "no error UI");
     assert.equal(container.querySelector('[data-ticket-pass] [role="status"]'), null, "no skeleton over the QR");
     assert.doesNotMatch(qr.className, /opacity-0/);
-    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz kod QR")!;
-    assert.equal(save.getAttribute("href"), url);
+    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
+    assert.equal(save.getAttribute("href"), `${url}&layout=stub`, "older server: stub from the tile URL");
+    assert.equal(save.getAttribute("download"), "grooveout-bilet.png");
+    assert.ok(requests.includes(`${url}&layout=stub`), "stub fetched best-effort after the tile");
+    assert.equal(readCachedQr("t1:stub"), undefined, "no stub saved without CORS");
+  });
+
+  it("shows the event date as the stub's heading, and no date line when it is unset", async () => {
+    const { clearQrCache } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    const withDate = await ticket({
+      case: "success",
+      value: { projectId: "x", ticketUrl: QR, productName: "GROOVEOUT", productImageUrl: "", eventStartDate: BigInt(Date.UTC(2026, 11, 12, 18, 0) / 1000) },
+    });
+    const date = withDate.querySelector("[data-ticket-pass] h3 time[data-ticket-date]");
+    assert.equal(date?.textContent, "12 grudnia 2026, 19:00");
+    assert.equal(date?.getAttribute("datetime"), "2026-12-12T18:00:00.000Z");
+    assert.ok(withDate.querySelector("[data-ticket-perforation][aria-hidden='true']"), "decorative tear line");
+    assert.equal(withDate.querySelector("[data-ticket-pass]")?.getAttribute("aria-label"), "Twój bilet");
+    assert.doesNotMatch(withDate.querySelector("[data-ticket-pass]")?.textContent ?? "", /Twój bilet/, "no eyebrow");
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+
+    const noDate = await ticket({ case: "success", value: { projectId: "x", ticketUrl: QR, productName: "GROOVEOUT", productImageUrl: "" } });
+    assert.ok(noDate.querySelector("[data-ticket-pass] img"));
+    assert.equal(noDate.querySelector("[data-ticket-pass] time"), null);
+    assert.equal(noDate.querySelector("[data-ticket-pass] h3"), null);
+    assert.equal(noDate.querySelector("[data-ticket-perforation]"), null);
+  });
+
+  it("saves the stub from ticketStubUrl and keeps it for offline use", async () => {
+    const { clearQrCache, readCachedQr, writeCachedQr } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    page.win.sessionStorage.clear();
+    const tile = "https://qr.example.test/api/qr-gen?token=t1";
+    const stub = "https://qr.example.test/api/qr-gen?token=t1&layout=stub&v=2";
+    const container = await ticket({ case: "success", value: { projectId: "x", ticketUrl: tile, ticketStubUrl: stub, productName: "GROOVEOUT", productImageUrl: "" } });
+    const save = () => [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
+    assert.equal(save().getAttribute("href"), stub);
+    const qr = container.querySelector<HTMLImageElement>("[data-ticket-pass] img")!;
+    await React.act(async () => void qr.dispatchEvent(new page.win.Event("load")));
+    await settle();
+    assert.ok(requests.includes(stub), "stub fetched after the tile loads");
+
+    // A stub saved earlier (data: URL) wins over the live URL, even offline.
+    const STUB = "data:image/png;base64,c3R1Yg==";
+    writeCachedQr("t1", QR);
+    writeCachedQr("t1:stub", STUB);
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+    const offline = await ticket("error");
+    assert.equal(offline.querySelector<HTMLImageElement>("[data-ticket-pass] img")?.getAttribute("src"), QR);
+    const offlineSave = [...offline.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
+    assert.equal(offlineSave.getAttribute("href"), STUB);
+    assert.equal(page.win.sessionStorage.getItem("bitsnap-panel-ticket-qr:t1:stub"), STUB);
+    clearQrCache();
+    assert.equal(readCachedQr("t1:stub"), undefined);
+    page.win.sessionStorage.clear();
   });
 
   it("drops non-https QR and file links (R5)", async () => {
