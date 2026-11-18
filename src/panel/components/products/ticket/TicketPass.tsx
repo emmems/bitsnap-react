@@ -14,6 +14,7 @@ import { useProductLoad } from "../useProductLoad";
 import {
   qrAsDataUrl,
   readCachedQr,
+  safeQrHref,
   safeWalletUrl,
   withRetryParam,
   writeCachedQr,
@@ -57,21 +58,32 @@ export function TicketPass({
   useEffect(() => setSavedQr(readCachedQr(accessId)), [accessId]);
 
   const [attempt, setAttempt] = useState(0);
-  const [image, setImage] = useState<"loading" | "ok" | "error">("loading");
+  // Load state of one image URL; any other URL counts as still loading, so a
+  // load event that fires before an effect can never be overwritten.
+  const [image, setImage] = useState<{ src?: string; status: "ok" | "error" }>({
+    status: "ok",
+  });
   const ticketUrl =
     state.status === "ok" && state.value.ticketUrl
       ? state.value.ticketUrl
       : undefined;
-  useEffect(() => setImage("loading"), [ticketUrl, attempt]);
+  const liveSrc = ticketUrl ? withRetryParam(ticketUrl, attempt) : undefined;
+  const imageStatus: "loading" | "ok" | "error" =
+    liveSrc != null && image.src === liveSrc ? image.status : "loading";
 
   function handleLoad() {
-    setImage("ok");
+    setImage({ src: liveSrc, status: "ok" });
     if (!ticketUrl) return;
-    void qrAsDataUrl(ticketUrl).then((dataUrl) => {
-      if (!dataUrl) return;
-      writeCachedQr(accessId, dataUrl);
-      setSavedQr(dataUrl);
-    });
+    // Best effort: without CORS on the image host this gives `undefined` and
+    // nothing is saved; the QR is still shown from its URL.
+    void qrAsDataUrl(ticketUrl).then(
+      (dataUrl) => {
+        if (!dataUrl) return;
+        writeCachedQr(accessId, dataUrl);
+        setSavedQr(dataUrl);
+      },
+      () => {},
+    );
   }
 
   function retry() {
@@ -85,17 +97,21 @@ export function TicketPass({
       state.failure === FailureMessage.UNAUTHORIZED);
   const offline =
     savedQr != null &&
-    (state.status === "error" || (state.status === "ok" && image === "error"));
+    (state.status === "error" ||
+      (state.status === "ok" && imageStatus === "error"));
   const live = state.status === "ok" && !offline;
-  const qrSrc = offline
-    ? savedQr
-    : ticketUrl
-      ? withRetryParam(ticketUrl, attempt)
-      : undefined;
+  const qrSrc = offline ? savedQr : liveSrc;
   const ticket = live && state.status === "ok" ? state.value : undefined;
   const apple = safeWalletUrl(ticket?.appleWalletUrl);
   const google = safeWalletUrl(ticket?.googleWalletUrl);
-  const loading = state.status === "loading" || (live && image === "loading");
+  const saveHref = safeQrHref(savedQr ?? qrSrc);
+  const loading =
+    state.status === "loading" || (live && imageStatus === "loading");
+  // Blame the connection only when the browser says it is offline.
+  const offlineTitle =
+    typeof navigator !== "undefined" && navigator.onLine === false
+      ? texts.ticketOffline
+      : texts.ticketSavedCode;
 
   const failed =
     state.status === "error" ||
@@ -142,13 +158,17 @@ export function TicketPass({
                 height={192}
                 draggable={false}
                 onLoad={offline ? undefined : handleLoad}
-                onError={offline ? undefined : () => setImage("error")}
+                onError={
+                  offline
+                    ? undefined
+                    : () => setImage({ src: liveSrc, status: "error" })
+                }
                 className={cn(
                   "size-48 object-contain [image-rendering:pixelated] sm:size-44",
-                  live && image !== "ok" && "opacity-0",
+                  live && imageStatus !== "ok" && "opacity-0",
                 )}
               />
-              {live && image === "loading" && (
+              {live && imageStatus === "loading" && (
                 <div
                   role="status"
                   aria-label={texts.ticketLoading}
@@ -164,12 +184,12 @@ export function TicketPass({
             <Notice
               role="status"
               tone="offline"
-              title={texts.ticketOffline}
+              title={offlineTitle}
               action={<RetryButton onClick={retry}>{texts.retry}</RetryButton>}
               className="text-left"
             />
           )}
-          {live && image === "error" && (
+          {live && imageStatus === "error" && (
             <Notice
               role="alert"
               tone="danger"
@@ -206,9 +226,9 @@ export function TicketPass({
                     {texts.ticketGoogleWallet}
                   </a>
                 )}
-                {qrSrc && (
+                {saveHref && (
                   <a
-                    href={savedQr ?? qrSrc}
+                    href={saveHref}
                     download={`${fileSlug(productName)}-qr.png`}
                     target="_blank"
                     rel="noopener noreferrer"

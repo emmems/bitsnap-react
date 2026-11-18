@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { sanitizeLessonHtml } from "../../../course/sanitize";
 import {
   detectRichTextFormat,
@@ -22,12 +22,64 @@ const LINE_HEIGHT_EM = 1.5;
 function cleanDescriptionHtml(html: string): string {
   const clean = sanitizeLessonHtml(html);
   if (clean === "" || typeof document === "undefined") return clean;
-  const probe = document.createElement("div");
+  // A <template> parses without loading images or running anything.
+  const probe = document.createElement("template");
   probe.innerHTML = clean;
   const visible =
-    (probe.textContent ?? "").trim() !== "" ||
-    probe.querySelector("img, video, audio, table, hr") != null;
+    (probe.content.textContent ?? "").trim() !== "" ||
+    probe.content.querySelector("img, video, audio, table, hr") != null;
   return visible ? clean : "";
+}
+
+/** Layout effect in the browser, plain effect on the server (no warning). */
+const useBrowserLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+type Fold = {
+  /** Height that ends exactly below the last shown line, in px. */
+  px?: number;
+  overflows: boolean;
+};
+
+/**
+ * Where to fold `element` after `lines` line boxes. Line boxes come from the
+ * client rects of its text (a Range per text node) plus media elements, so
+ * paragraph margins and bigger headings are taken into account. `undefined`
+ * when the browser has no layout (tests, old engines): the caller falls back
+ * to `lines × line-height`.
+ */
+export function measureFold(element: HTMLElement, lines: number): Fold | undefined {
+  const document = element.ownerDocument;
+  if (typeof document.createRange !== "function") return undefined;
+  const range = document.createRange();
+  if (typeof range.getClientRects !== "function") return undefined;
+  const boxes: Array<{ top: number; bottom: number }> = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if ((node.textContent ?? "").trim() === "") continue;
+    range.selectNodeContents(node);
+    for (const rect of Array.from(range.getClientRects())) {
+      if (rect.height > 0) boxes.push({ top: rect.top, bottom: rect.bottom });
+    }
+  }
+  for (const media of Array.from(element.querySelectorAll("img, video, iframe, hr"))) {
+    const rect = media.getBoundingClientRect();
+    if (rect.height > 0) boxes.push({ top: rect.top, bottom: rect.bottom });
+  }
+  if (boxes.length === 0) return undefined;
+  boxes.sort((a, b) => a.top - b.top);
+  // Merge boxes into lines: a box starting above the current line's bottom
+  // belongs to it (inline elements, links, mixed font sizes).
+  const lineBottoms: number[] = [];
+  let bottom = -Infinity;
+  for (const box of boxes) {
+    if (box.top >= bottom - 1) lineBottoms.push(box.bottom);
+    else lineBottoms[lineBottoms.length - 1] = Math.max(lineBottoms[lineBottoms.length - 1], box.bottom);
+    bottom = lineBottoms[lineBottoms.length - 1];
+  }
+  if (lineBottoms.length <= lines) return { overflows: false };
+  const top = element.getBoundingClientRect().top;
+  return { px: Math.ceil(lineBottoms[lines - 1] - top), overflows: true };
 }
 
 export type ProductDescriptionProps = {
@@ -70,17 +122,24 @@ export function ProductDescription({
   const contentId = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
+  const [fold, setFold] = useState<Fold>();
 
-  useEffect(() => {
+  useBrowserLayoutEffect(() => {
     const element = contentRef.current;
     if (element == null || lines <= 0) {
-      setOverflows(false);
+      setFold({ overflows: false });
       return;
     }
     const measure = () => {
       if (expanded) return;
-      setOverflows(element.scrollHeight > element.clientHeight + 1);
+      const next = measureFold(element, lines) ?? {
+        overflows: element.scrollHeight > element.clientHeight + 1,
+      };
+      setFold((previous) =>
+        previous?.px === next.px && previous?.overflows === next.overflows
+          ? previous
+          : next,
+      );
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
@@ -88,6 +147,7 @@ export function ProductDescription({
     observer.observe(element);
     return () => observer.disconnect();
   }, [html, plain, lines, expanded]);
+  const overflows = fold?.overflows ?? false;
 
   if (value === "") return null;
   if (format === "html" && html === null) {
@@ -105,7 +165,14 @@ export function ProductDescription({
   }
   if (format === "html" ? html === "" : plain.trim() === "") return null;
 
-  const folded = lines > 0 && !expanded;
+  // Measured: cut below the Nth line, or no cut when it all fits. Before the
+  // measurement (and without layout): `lines × line-height`.
+  const folded = lines > 0 && !expanded && (fold == null || fold.overflows);
+  const maxHeight = !folded
+    ? undefined
+    : fold?.px != null
+      ? `${fold.px}px`
+      : `${lines * LINE_HEIGHT_EM}em`;
   return (
     <div className={cn("text-sm text-(--panel-fg)", className)}>
       {format === "html" ? (
@@ -115,7 +182,7 @@ export function ProductDescription({
           className={cn(RICH_TEXT_CLASSES, folded && "overflow-hidden")}
           style={{
             lineHeight: LINE_HEIGHT_EM,
-            maxHeight: folded ? `${lines * LINE_HEIGHT_EM}em` : undefined,
+            maxHeight,
           }}
           // Sanitised by DOMPurify (course/sanitize.ts).
           dangerouslySetInnerHTML={{ __html: html ?? "" }}
@@ -130,7 +197,7 @@ export function ProductDescription({
           )}
           style={{
             lineHeight: LINE_HEIGHT_EM,
-            maxHeight: folded ? `${lines * LINE_HEIGHT_EM}em` : undefined,
+            maxHeight,
           }}
         >
           {linkifyText(plain)}

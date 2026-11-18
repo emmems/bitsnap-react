@@ -757,6 +757,36 @@ describe("audiobook controls", () => {
     context.mock.timers.reset();
   });
 
+  it("announces the last minute once, even when second 60 is skipped (R9)", async (context) => {
+    context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+    await renderPlayer({});
+    await choose("Wyłącznik czasowy", "15");
+    const live = () => container!.querySelector('[aria-live="polite"]')?.textContent ?? "";
+    // A throttled tab: the clock jumps from 61 s left straight to 59 s left.
+    // (setTime moves the clock without firing the interval; tick fires it.)
+    context.mock.timers.setTime(Date.now() + (15 * 60 - 62) * 1000);
+    await act(async () => context.mock.timers.tick(1000));
+    assert.equal(container!.querySelector('[role="timer"]')?.textContent, "01:01");
+    assert.doesNotMatch(live(), /za minutę/);
+    context.mock.timers.setTime(Date.now() + 1000);
+    await act(async () => context.mock.timers.tick(1000));
+    assert.match(live(), /Odtwarzanie zatrzyma się za minutę/);
+    context.mock.timers.reset();
+  });
+
+  it("keeps the loading status mounted and names the sleep chip after its visible text (R10)", async () => {
+    const player = await renderPlayer({});
+    const status = container!.querySelector('p[role="status"]');
+    assert.ok(status, "status region mounted");
+    await dispatch(player.video, "loadeddata");
+    assert.equal(container!.querySelector('p[role="status"]'), status, "same node after loading");
+    assert.equal(status.textContent, "");
+    const chip = container!.querySelector('[data-chip$="-sleep"]')!;
+    const visible = chip.textContent?.trim().split(":")[0] ?? "";
+    assert.ok(visible.length > 0);
+    assert.ok(chip.getAttribute("aria-label")!.startsWith(`${visible}:`), chip.getAttribute("aria-label")!);
+  });
+
   it("pauses at the chapter end without advancing", async () => {
     const changed: string[] = [];
     const player = await renderPlayer({

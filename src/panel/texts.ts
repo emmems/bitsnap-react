@@ -97,6 +97,8 @@ export type PanelTexts = {
   orderVerifyEmailLabel: string;
   orderVerifyCancel: string;
   orderVerifyConfirm: string;
+  orderVerifyFailed: string;
+  orderLegacyTitle: string;
   returnsTitle: string;
   returnsTabsLabel: string;
   returnsTabOrders: string;
@@ -211,6 +213,8 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "orderVerifyEmailLabel": "Adres e-mail",
     "orderVerifyCancel": "Anuluj",
     "orderVerifyConfirm": "Potwierdź",
+    "orderVerifyFailed": "Ten adres e-mail nie pasuje do zamówienia. Sprawdź go i spróbuj ponownie.",
+    "orderLegacyTitle": "Starsze zamówienie",
     "returnsTitle": "Zwroty",
     "returnsTabsLabel": "Widok zwrotów",
     "returnsTabOrders": "Do zwrotu",
@@ -323,6 +327,8 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "orderVerifyEmailLabel": "E-mail address",
     "orderVerifyCancel": "Cancel",
     "orderVerifyConfirm": "Confirm",
+    "orderVerifyFailed": "This e-mail address doesn’t match the order. Check it and try again.",
+    "orderLegacyTitle": "Older order",
     "returnsTitle": "Returns",
     "returnsTabsLabel": "Returns view",
     "returnsTabOrders": "To return",

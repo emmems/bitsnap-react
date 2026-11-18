@@ -9,7 +9,7 @@ import {
   Package,
   PackageX,
 } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type { PublicOrderDetails } from "../../../gen/proto/public/v1/public_api_pb";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../../ui/button";
@@ -327,8 +327,13 @@ function TimelineSection({
 
 function CopyValue({ value, texts }: { value: string; texts: PanelTexts }) {
   const [copied, setCopied] = useState(false);
-  const canCopy =
-    typeof navigator !== "undefined" && navigator.clipboard?.writeText != null;
+  // Decided after mount: the server render and the first client render match.
+  const [canCopy, setCanCopy] = useState(false);
+  useEffect(() => {
+    setCanCopy(
+      typeof navigator !== "undefined" && navigator.clipboard?.writeText != null,
+    );
+  }, []);
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 font-semibold tabular-nums">
       <span className="min-w-0 break-all">{value}</span>
@@ -390,24 +395,34 @@ function YourDataCard({
   texts,
   canVerify,
   onVerify,
+  checking = false,
+  verifyError,
   className,
 }: {
   order: PublicOrderDetails;
   texts: PanelTexts;
   canVerify: boolean;
   onVerify: (email: string) => void;
+  checking?: boolean;
+  verifyError?: string;
   className?: string;
 }) {
   const headingId = useId();
   const revealId = useId();
   const emailId = useId();
+  const errorId = useId();
   const [revealed, setRevealed] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [formOpen, setFormOpen] = useState(verifyError != null);
   const [email, setEmail] = useState("");
   const address = order.deliveryAddress?.trim();
   const phone = order.customerPhone?.trim();
   const masked = !order.isVerified;
   const hidden = address || phone;
+  const showForm = formOpen;
+  // A failed check (also of an e-mail from the link) opens the form with it.
+  useEffect(() => {
+    if (verifyError != null) setFormOpen(true);
+  }, [verifyError]);
 
   return (
     <PanelCard as="section" aria-labelledby={headingId} className={className}>
@@ -422,50 +437,48 @@ function YourDataCard({
           <p className="break-all text-(--panel-muted)">{order.customerEmail}</p>
         )}
       </div>
-      {hidden &&
-        (revealed ? (
+      {hidden && (
+        // One toggle that stays mounted: focus stays on it and
+        // aria-controls always points at an element.
+        <div className="mt-2.5 flex flex-wrap items-start justify-between gap-2.5 rounded-lg bg-(--panel-surface-2) px-3 py-2.5">
+          {!revealed && (
+            <span className="self-center text-xs text-(--panel-muted)">
+              {texts.orderDataHidden}
+            </span>
+          )}
           <div
             id={revealId}
-            className="mt-2.5 flex flex-col gap-0.5 rounded-lg bg-(--panel-surface-2) px-3 py-2.5 text-sm"
+            hidden={!revealed}
+            className={
+              revealed ? "flex min-w-0 flex-1 flex-col gap-0.5 text-sm" : "hidden"
+            }
           >
-            {address && <p className="break-words">{address}</p>}
-            {phone && <p className="text-(--panel-muted)">{phone}</p>}
-            <button
-              type="button"
-              aria-expanded="true"
-              aria-controls={revealId}
-              onClick={() => setRevealed(false)}
-              className={cn(LINK_BUTTON, "mt-1 self-start text-xs")}
-            >
-              {texts.orderHideData}
-            </button>
+            {revealed && address && <p className="break-words">{address}</p>}
+            {revealed && phone && <p className="text-(--panel-muted)">{phone}</p>}
           </div>
-        ) : (
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2.5 rounded-lg bg-(--panel-surface-2) px-3 py-2">
-            <span className="text-xs text-(--panel-muted)">{texts.orderDataHidden}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-expanded="false"
-              aria-controls={revealId}
-              className="bg-(--panel-surface)"
-              onClick={() => setRevealed(true)}
-            >
-              {texts.orderShowData}
-            </Button>
-          </div>
-        ))}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={revealed}
+            aria-controls={revealId}
+            className="bg-(--panel-surface)"
+            onClick={() => setRevealed((value) => !value)}
+          >
+            {revealed ? texts.orderHideData : texts.orderShowData}
+          </Button>
+        </div>
+      )}
       {masked && canVerify && (
         <div className="mt-3 border-t border-(--panel-border) pt-3">
           <p className="text-xs text-(--panel-muted)">{texts.orderMaskedNote}</p>
-          {verifying ? (
+          {showForm ? (
             <form
               className="mt-2.5 flex flex-col gap-2"
+              aria-busy={checking}
               onSubmit={(event) => {
                 event.preventDefault();
-                if (email.trim() === "") return;
+                if (email.trim() === "" || checking) return;
                 onVerify(email.trim());
-                setVerifying(false);
               }}
             >
               <p className="text-sm">{texts.orderVerifyText}</p>
@@ -476,17 +489,29 @@ function YourDataCard({
                 autoComplete="email"
                 required
                 value={email}
+                aria-invalid={verifyError != null}
+                aria-describedby={verifyError != null ? errorId : undefined}
                 onChange={(event) => setEmail(event.target.value)}
               />
+              {verifyError != null && (
+                <p
+                  id={errorId}
+                  role="alert"
+                  className="flex items-start gap-1.5 text-xs font-medium text-(--panel-danger)"
+                >
+                  <AlertCircle aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+                  {verifyError}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" className="min-h-11">
+                <Button type="submit" className="min-h-11" disabled={checking}>
                   {texts.orderVerifyConfirm}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   className="min-h-11"
-                  onClick={() => setVerifying(false)}
+                  onClick={() => setFormOpen(false)}
                 >
                   {texts.orderVerifyCancel}
                 </Button>
@@ -496,7 +521,7 @@ function YourDataCard({
             <Button
               variant="outline"
               className="mt-2.5 min-h-11 w-full"
-              onClick={() => setVerifying(true)}
+              onClick={() => setFormOpen(true)}
             >
               <Lock aria-hidden="true" className="size-4" />
               {texts.orderVerify}
@@ -594,6 +619,8 @@ export function OrderDetailsView({
   timeline,
   canVerify,
   onVerify,
+  verifying,
+  verifyError,
   onBack,
   lead,
 }: {
@@ -601,9 +628,13 @@ export function OrderDetailsView({
   texts: PanelTexts;
   locale: string;
   timeline: OrderTimeline;
-  /** Shows the e-mail confirmation for masked data (standalone, no session). */
+  /** Offers the e-mail confirmation when the order data is masked. */
   canVerify: boolean;
   onVerify: (email: string) => void;
+  /** An e-mail check is in flight. */
+  verifying?: boolean;
+  /** Shown in the e-mail form when the check failed. */
+  verifyError?: string;
   onBack?: () => void;
   /** Above the back link, e.g. the shop logo of the standalone page. */
   lead?: ReactNode;
@@ -658,6 +689,8 @@ export function OrderDetailsView({
             texts={texts}
             canVerify={canVerify}
             onVerify={onVerify}
+            checking={verifying}
+            verifyError={verifyError}
             className="order-4 min-w-0"
           />
         </div>

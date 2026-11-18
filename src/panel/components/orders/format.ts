@@ -4,7 +4,8 @@ import type { PanelTexts } from "../../texts";
  * Short order reference the buyer sees in e-mails and on the order page:
  * the prefix before the first `_` plus the last 4 characters of the rest
  * (`c_7Hq3Zk9WmX` → `c_9WmX`). Mirrors the server's `getPublicOrderID`, so
- * an already short reference stays the same. A stopgap until the API sends
+ * an already short reference stays the same. Unlike the server it trims the
+ * id first; ids never carry spaces, so the result is the same in practice. A stopgap until the API sends
  * a display number (plan B1). `""` for an empty id.
  */
 export function shortOrderRef(id: string): string {

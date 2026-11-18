@@ -1,10 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { useEffect, useState, type ReactNode } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useInstrument, type AnalyticsOption } from "../../analytics/instrument";
 import { getLocale } from "../../components/checkout/locale";
 import { rpcProvider, useQuery } from "../../rpc-provider";
+import type { PublicOrderDetails } from "../../gen/proto/public/v1/public_api_pb";
 import { usePanelConfig } from "../PanelProvider";
-import { getPanelSession } from "../session-storage";
+import { clearPanelSession, getPanelSession } from "../session-storage";
 import { getPanelTexts } from "../texts";
 import { usePanelRoot } from "../theme";
 import type { PanelColorScheme } from "../types";
@@ -56,21 +58,31 @@ function isNotFound(error: unknown): boolean {
   );
 }
 
+/** An expired or rejected panel session. */
+function isUnauthenticated(error: unknown): boolean {
+  return error != null && ConnectError.from(error).code === Code.Unauthenticated;
+}
+
 function OrderPageContent({
   orderID,
   initialEmail,
   onBack,
   accessToken: accessTokenProp,
   analytics,
+  variant,
   lead,
 }: Props & { lead?: ReactNode }) {
-  const { projectID, host } = usePanelConfig();
+  const { projectID, host, loginURL } = usePanelConfig();
   const instrument = useInstrument(projectID, analytics, "order");
   const locale = getLocale();
   const texts = getPanelTexts(locale);
   const orderId = orderID?.trim() || undefined;
-  const accessToken =
-    accessTokenProp || getPanelSession(projectID, host) || undefined;
+  // Standalone: a session the server rejected is dropped, so the page falls
+  // back to the e-mail check instead of failing on every retry.
+  const [sessionRejected, setSessionRejected] = useState(false);
+  const accessToken = sessionRejected
+    ? undefined
+    : accessTokenProp || getPanelSession(projectID, host) || undefined;
 
   const [verifyEmail, setVerifyEmail] = useState(initialEmail || "");
 
@@ -80,13 +92,36 @@ function OrderPageContent({
       projectId: projectID ?? "",
       orderId: orderId ?? "",
       email: verifyEmail || undefined,
-      accessToken,
+      // The server checks a valid session before the e-mail, so a typed
+      // e-mail is sent on its own: it also works when the stored session is
+      // somebody else's.
+      accessToken: verifyEmail ? undefined : accessToken,
     },
-    { enabled: orderId != null },
+    {
+      enabled: orderId != null,
+      // The order stays on screen while an e-mail is being checked.
+      placeholderData: keepPreviousData,
+    },
   );
 
-  const order =
+  const fetched =
     query.data?.result.case === "order" ? query.data.result.value : null;
+  // Last order shown for this id: a failed e-mail check keeps it on screen.
+  const shown = useRef<{ id: string; order: PublicOrderDetails } | null>(null);
+  if (fetched != null && orderId != null) {
+    shown.current = { id: orderId, order: fetched };
+  }
+  const previous =
+    shown.current != null && shown.current.id === orderId
+      ? shown.current.order
+      : null;
+  const checking = verifyEmail !== "" && query.isPlaceholderData;
+  const verifyFailed =
+    verifyEmail !== "" &&
+    !checking &&
+    !query.isFetching &&
+    (fetched == null || !fetched.isVerified);
+  const order = fetched ?? (verifyEmail !== "" ? previous : null);
 
   const timeline = useOrderTimeline({
     projectID,
@@ -94,6 +129,20 @@ function OrderPageContent({
     orderId,
     locale,
   });
+
+  const unauthenticated = isUnauthenticated(query.error);
+  useEffect(() => {
+    if (!unauthenticated) return;
+    if (variant === "panel") {
+      // Same as the library and returns: an expired session signs out.
+      clearPanelSession(projectID, host);
+      if (typeof window !== "undefined") {
+        window.location.href = loginURL ?? "/panel/login";
+      }
+    } else {
+      setSessionRejected(true);
+    }
+  }, [unauthenticated, variant, projectID, host, loginURL]);
 
   const viewedOrder = order != null;
   useEffect(() => {
@@ -106,7 +155,7 @@ function OrderPageContent({
   if (orderId == null) {
     return <OrderProblem kind="unavailable" texts={texts} onBack={onBack} />;
   }
-  if (query.isPending) {
+  if (query.isPending || (unauthenticated && order == null)) {
     return <OrderDetailsSkeleton label={texts.orderLoading} />;
   }
   if (order == null) {
@@ -130,9 +179,12 @@ function OrderPageContent({
       texts={texts}
       locale={locale}
       timeline={timeline}
-      // D3: a logged-in buyer is the owner; no e-mail check.
-      canVerify={!accessToken}
+      // Masked data always offers the e-mail check: the stored session may
+      // have expired or belong to someone else. Verified data never shows it.
+      canVerify
       onVerify={setVerifyEmail}
+      verifying={checking}
+      verifyError={verifyFailed ? texts.orderVerifyFailed : undefined}
       onBack={onBack}
       lead={lead}
     />

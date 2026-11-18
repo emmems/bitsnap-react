@@ -151,6 +151,44 @@ describe("ProductDescription", () => {
     }
   });
 
+  it("folds below the Nth line box, past paragraph margins", async () => {
+    // Two paragraphs of two 21px lines each, with a 12px gap between them.
+    const lineRects: Record<string, Array<[number, number]>> = {
+      Pierwszy: [[0, 21], [21, 42]],
+      Drugi: [[54, 75], [75, 96]],
+    };
+    const RangeProto = page.win.Range.prototype as Range & { getClientRects?: unknown };
+    const original = Object.getOwnPropertyDescriptor(RangeProto, "getClientRects");
+    Object.defineProperty(RangeProto, "getClientRects", {
+      configurable: true,
+      value(this: Range) {
+        const text = this.startContainer.textContent ?? "";
+        const key = Object.keys(lineRects).find((name) => text.startsWith(name));
+        return (key ? lineRects[key] : []).map(([top, bottom]) => ({ top, bottom, height: bottom - top }));
+      },
+    });
+    try {
+      const html = "<p>Pierwszy akapit</p><p>Drugi akapit</p>";
+      const folded = await mount(<shared.ProductDescription text={html} lines={3} texts={pl} />);
+      await React.act(async () => {});
+      const content = folded.querySelector<HTMLElement>("[id]")!;
+      assert.equal(content.style.maxHeight, "75px", "ends at the bottom of line 3, not 3 × 1.5em");
+      const toggle = folded.querySelector("button")!;
+      assert.equal(toggle.textContent, pl.descriptionShowMore);
+      await React.act(async () => toggle.click());
+      assert.equal(content.style.maxHeight, "");
+      assert.equal(toggle.getAttribute("aria-expanded"), "true");
+
+      const fits = await mount(<shared.ProductDescription text={html} lines={4} texts={pl} />);
+      await React.act(async () => {});
+      assert.equal(fits.querySelector<HTMLElement>("[id]")!.style.maxHeight, "", "four lines fit: no cut");
+      assert.equal(fits.querySelector("button"), null);
+    } finally {
+      if (original) Object.defineProperty(RangeProto, "getClientRects", original);
+      else delete RangeProto.getClientRects;
+    }
+  });
+
   it("reduces Lexical JSON to text", async () => {
     const state = JSON.stringify({
       root: { children: [{ type: "paragraph", children: [{ type: "text", text: "Z edytora" }] }] },

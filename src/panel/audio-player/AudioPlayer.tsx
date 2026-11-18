@@ -2,7 +2,6 @@ import Hls from "hls.js";
 import {
   Clock,
   Gauge,
-  LoaderCircle,
   Moon,
   Pause,
   Play,
@@ -122,16 +121,22 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     const [chapterID, setChapterID] = useState<string>();
     const [sleepMode, setSleepMode] = useState("off");
     const [sleepRemaining, setSleepRemaining] = useState(0);
-    const sleepRef = useRef<{ mode: string; deadline: number }>({
+    const sleepRef = useRef<{
+      mode: string;
+      deadline: number;
+      /** The last-minute warning was read out for this timer. */
+      announced: boolean;
+    }>({
       mode: "off",
       deadline: 0,
+      announced: false,
     });
 
     function cancelSleep() {
       if (sleepRef.current.mode !== "off") {
         setAnnouncement(textsRef.current.sleepStopped);
       }
-      sleepRef.current = { mode: "off", deadline: 0 };
+      sleepRef.current = { mode: "off", deadline: 0, announced: false };
       setSleepMode("off");
       setSleepRemaining(0);
     }
@@ -150,6 +155,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
       sleepRef.current = {
         mode,
         deadline: Number.isFinite(seconds) ? Date.now() + seconds * 1000 : 0,
+        announced: false,
       };
       setSleepMode(mode);
       setSleepRemaining(Number.isFinite(seconds) ? seconds : 0);
@@ -173,7 +179,9 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           Math.ceil((deadline - Date.now()) / 1000),
         );
         setSleepRemaining(remaining);
-        if (remaining === 60) {
+        // Once per timer, even when a throttled tab skips second 60.
+        if (remaining > 0 && remaining <= 60 && !sleepRef.current.announced) {
+          sleepRef.current.announced = true;
           setAnnouncement(textsRef.current.sleepLastMinute);
         }
         if (remaining === 0) {
@@ -860,7 +868,8 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         countdown != null
           ? `${t.sleepShort}:`
           : `${t.sleepShort}: ${sleepMode === "chapter" ? t.endShort : t.offShort}`,
-      ariaLabel: `${t.sleep}: ${
+      // Starts with the visible text (WCAG 2.5.3), full words after it.
+      ariaLabel: `${t.sleepShort}: ${
         countdown ?? (sleepMode === "chapter" ? t.end : t.off).toLowerCase()
       }`,
       chipExtra:
@@ -1043,12 +1052,10 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         <p aria-live="polite" className="sr-only">
           {announcement}
         </p>
-        {isLoading && (
-          <p role="status" className="sr-only">
-            <LoaderCircle aria-hidden="true" />
-            {t.loadingAudio}
-          </p>
-        )}
+        {/* Always mounted, so the text change is announced. */}
+        <p role="status" className="sr-only">
+          {isLoading ? t.loadingAudio : ""}
+        </p>
       </div>
     );
   },

@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { getProductTexts } from "./products/texts";
 
-import { renderText } from "@/src/lib/render.text";
+import { richTextToPlainText } from "@/src/lib/render.text";
+import { clearQrCache } from "./products/ticket/qr-cache";
 import { fromJsonString } from "@bufbuild/protobuf";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
@@ -82,6 +83,7 @@ const PanelProductGridComponent = ({
   useEffect(() => {
     if (decision.kind !== "signed-out") return;
     clearPanelSession(projectID, host);
+    clearQrCache();
     window.location.href = loginURL;
   }, [decision.kind, projectID, host, loginURL]);
 
@@ -357,7 +359,7 @@ const ProductsComponent = ({
                   {product.productName}
                 </span>
                 <span className="line-clamp-2 text-sm text-(--panel-muted)">
-                  {renderText(product.productDescription)}
+                  {richTextToPlainText(product.productDescription ?? "")}
                 </span>
                 <span className="mt-auto pt-2 text-sm font-medium underline underline-offset-4">
                   {action}

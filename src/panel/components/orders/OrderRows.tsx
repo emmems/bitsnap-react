@@ -1,7 +1,7 @@
 import { ChevronRight, Info } from "lucide-react";
 import { useId } from "react";
 import { cn } from "../../../lib/utils";
-import type { PanelTexts } from "../../texts";
+import { orderStatusLabel, type PanelTexts } from "../../texts";
 import { StatusPill } from "../shared/StatusPill";
 import {
   fillText,
@@ -63,7 +63,7 @@ export function OrderRow({
   if (order.id.trim() === "") {
     const title = date
       ? fillText(texts.orderFromDate, { date })
-      : texts.orderLegacyNote;
+      : texts.orderLegacyTitle;
     return (
       <li
         data-order-row="legacy"
@@ -112,10 +112,14 @@ export function OrderRow({
         type="button"
         data-order-row="open"
         onClick={() => onOpen(order.id)}
+        // Names the row with everything it shows: number, date, amount,
+        // status and the checkout name when there is one.
         aria-label={[
           fillText(texts.orderNumber, { ref }),
           date,
           amount,
+          orderStatusLabel(order.status, texts) ?? order.status.trim(),
+          name,
         ]
           .filter(Boolean)
           .join(", ")}

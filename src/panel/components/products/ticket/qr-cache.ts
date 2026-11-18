@@ -4,6 +4,8 @@
  * sessionStorage (as a data: URL). Storage may be blocked or full: every
  * access is wrapped and the cache is optional.
  */
+import { safeHttpsUrl } from "../safe-url";
+
 const memory = new Map<string, string>();
 const PREFIX = "bitsnap-panel-ticket-qr:";
 /** Bigger images are not worth a sessionStorage slot. */
@@ -35,9 +37,23 @@ export function writeCachedQr(accessId: string, dataUrl: string) {
   }
 }
 
-/** Test hook. */
+/**
+ * Forgets every saved QR code (memory and sessionStorage). The code is a
+ * bearer credential (its URL carries the access id), so call it on logout.
+ */
 export function clearQrCache() {
   memory.clear();
+  try {
+    const storage = window.sessionStorage;
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index++) {
+      const key = storage.key(index);
+      if (key?.startsWith(PREFIX)) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+  } catch {
+    /* Storage blocked or no window. */
+  }
 }
 
 /**
@@ -68,14 +84,16 @@ export async function qrAsDataUrl(url: string): Promise<string | undefined> {
 }
 
 /** A wallet link only when it is a valid `https:` URL. */
-export function safeWalletUrl(value: string | undefined): string | undefined {
+export const safeWalletUrl = safeHttpsUrl;
+
+/**
+ * A link target for the QR image: an `https:` URL, or a `data:image/` URL
+ * (the saved code). Anything else gives `undefined`.
+ */
+export function safeQrHref(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch {
-    return undefined;
-  }
+  if (/^data:image\/(png|jpeg|gif|webp);/i.test(value)) return value;
+  return safeHttpsUrl(value);
 }
 
 /** The QR URL with a cache-buster for a retry; data: URLs stay as they are. */

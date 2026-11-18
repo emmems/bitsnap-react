@@ -26,6 +26,7 @@ import LazyPanelMessages from "./LazyPanelMessages";
 import { usePanelChat } from "../chat-visibility";
 import PublicOrderPage from "./PublicOrderPage";
 import { clearPanelSession, getPanelEmail, getPanelSession } from "../session-storage";
+import { clearQrCache } from "./products/ticket/qr-cache";
 
 export type PanelScreen =
   | "products"
@@ -131,6 +132,7 @@ const PanelPage = ({
     }
     if (typeof window !== "undefined") {
       clearPanelSession(projectID, host);
+      clearQrCache();
       window.location.reload();
     }
   }

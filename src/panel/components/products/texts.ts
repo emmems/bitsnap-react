@@ -68,6 +68,7 @@ const pl = {
     "Sprawdź, czy jesteś zalogowany na ten sam e-mail, którego użyłeś przy zakupie.",
   ticketImageError: "Kod nie załadował się.",
   ticketOffline: "Brak połączenia – pokazujemy zapisany kod.",
+  ticketSavedCode: "Nie udało się odświeżyć biletu – pokazujemy zapisany kod.",
   organizerInfo: "Informacje od organizatora",
 };
 
@@ -136,6 +137,7 @@ const en: typeof pl = {
     "Check that you are signed in with the e-mail you used for the purchase.",
   ticketImageError: "The code did not load.",
   ticketOffline: "No connection – showing the saved code.",
+  ticketSavedCode: "Could not refresh the ticket – showing the saved code.",
   organizerInfo: "Information from the organiser",
 };
 

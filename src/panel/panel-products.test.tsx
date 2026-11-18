@@ -326,6 +326,16 @@ describe("library cards and product links", () => {
     assert.equal(selected[0].product, "file-acc-0");
   });
 
+  it("shows the description in a card as plain text, no <p> or links inside the button (R7)", async () => {
+    products = () => proto(UserPanelGetProductsResponseSchema, { result: { case: "success", value: { products: [
+      { accessId: "d1", productName: "Opisany", productType: UserProductType.FILE, productDescription: '<p>Zobacz <a href="https://a.test">stronę</a></p><p>Drugi</p>' },
+    ] } } });
+    const container = await mountGrid();
+    const card = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Opisany"))!;
+    assert.equal(card.querySelector("p, a, div"), null);
+    assert.match(card.textContent ?? "", /Zobacz stronę/);
+  });
+
   it("accepts old protobuf JSON links and rejects malformed or unowned products", async () => {
     const { resolvePanelProduct } = await import("./components/PanelProductGrid");
     const { UserProductSchema } = await import("../gen/proto/public/v1/public_api_pb");
@@ -478,11 +488,82 @@ describe("product detail pages (option A)", () => {
     const { writeCachedQr, clearQrCache } = await import("./components/products/ticket/qr-cache");
     clearQrCache();
     writeCachedQr("t1", QR);
-    const container = await ticket("error");
+    const nav = globalThis.navigator as Navigator & { onLine?: boolean };
+    const own = Object.getOwnPropertyDescriptor(nav, "onLine");
+    Object.defineProperty(nav, "onLine", { configurable: true, get: () => false });
+    let container: HTMLElement;
+    try {
+      container = await ticket("error");
+    } finally {
+      if (own) Object.defineProperty(nav, "onLine", own);
+      else delete nav.onLine;
+    }
     assert.match(container.textContent ?? "", /Brak połączenia – pokazujemy zapisany kod/);
     assert.equal(container.querySelector<HTMLImageElement>("[data-ticket-pass] img")?.getAttribute("src"), QR);
     clearQrCache();
     page.win.sessionStorage.clear();
+  });
+
+  it("says 'saved code' without blaming the connection while the browser is online (R4)", async () => {
+    const { writeCachedQr, clearQrCache } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    writeCachedQr("t1", QR);
+    const container = await ticket("error");
+    assert.match(container.textContent ?? "", /Nie udało się odświeżyć biletu – pokazujemy zapisany kod/);
+    assert.doesNotMatch(container.textContent ?? "", /Brak połączenia/);
+    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz kod QR")!;
+    assert.equal(save.getAttribute("href"), QR, "saved data: QR is a valid download");
+    clearQrCache();
+  });
+
+  it("clears every saved QR code from memory and sessionStorage (logout)", async () => {
+    const { writeCachedQr, readCachedQr, clearQrCache } = await import("./components/products/ticket/qr-cache");
+    writeCachedQr("t1", QR);
+    writeCachedQr("t2", QR);
+    page.win.sessionStorage.setItem("other-key", "keep");
+    clearQrCache();
+    assert.equal(readCachedQr("t1"), undefined);
+    assert.equal(readCachedQr("t2"), undefined);
+    assert.equal(page.win.sessionStorage.getItem("bitsnap-panel-ticket-qr:t1"), null);
+    assert.equal(page.win.sessionStorage.getItem("other-key"), "keep");
+    page.win.sessionStorage.clear();
+  });
+
+  it("shows the QR from its URL when saving it offline fails (no CORS) (R2, R3)", async () => {
+    const { clearQrCache, readCachedQr } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    page.win.sessionStorage.clear();
+    const url = "https://qr.example.test/api/qr-gen?token=t1";
+    let qrFetches = 0;
+    rpc["qr-gen?token=t1"] = () => {
+      qrFetches++;
+      throw new TypeError("Failed to fetch");
+    };
+    const container = await ticket({ case: "success", value: { projectId: "x", ticketUrl: url, productName: "GROOVEOUT", productImageUrl: "" } });
+    const qr = container.querySelector<HTMLImageElement>("[data-ticket-pass] img")!;
+    assert.equal(qr.getAttribute("src"), url);
+    // The image loads before any effect could reset its state.
+    await React.act(async () => void qr.dispatchEvent(new page.win.Event("load")));
+    await settle();
+    assert.equal(qrFetches, 1);
+    assert.equal(readCachedQr("t1"), undefined, "nothing saved");
+    assert.equal(container.querySelector('[role="alert"]'), null, "no error UI");
+    assert.equal(container.querySelector('[data-ticket-pass] [role="status"]'), null, "no skeleton over the QR");
+    assert.doesNotMatch(qr.className, /opacity-0/);
+    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz kod QR")!;
+    assert.equal(save.getAttribute("href"), url);
+  });
+
+  it("drops non-https QR and file links (R5)", async () => {
+    const { safeQrHref } = await import("./components/products/ticket/qr-cache");
+    assert.equal(safeQrHref(QR), QR);
+    assert.equal(safeQrHref("https://qr.test/a"), "https://qr.test/a");
+    assert.equal(safeQrHref("javascript:alert(1)"), undefined);
+    assert.equal(safeQrHref("data:text/html,<script>alert(1)</script>"), undefined);
+    assert.equal(safeQrHref("data:image/svg+xml;base64,PHN2Zz4="), undefined);
+    const container = await files(["javascript:alert(1)", "https://files.test/a/book.pdf", "https://files.test/a/book.pdf"]);
+    const hrefs = [...container.querySelectorAll<HTMLAnchorElement>("a[download]")].map((a) => a.getAttribute("href"));
+    assert.deepEqual(hrefs, ["https://files.test/a/book.pdf", "https://files.test/a/book.pdf"], "duplicate URLs both render (R6)");
   });
 
   it("shows a load error with retry when the ticket call fails and nothing is saved", async () => {

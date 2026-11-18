@@ -12,6 +12,7 @@ import {
 } from "../Notice";
 import type { ProductTexts } from "../texts";
 import { useProductLoad } from "../useProductLoad";
+import { safeHttpsUrl } from "../safe-url";
 import { fileRows, type FileRowModel } from "./naming";
 
 /**
@@ -45,8 +46,15 @@ export function FilesSection({
       : { ok: false as const, failure: response.result.value! };
   }, accessId);
 
+  // Only `https:` links become download targets.
   const rows =
-    state.status === "ok" ? fileRows(state.value, productName, texts.file) : [];
+    state.status === "ok"
+      ? fileRows(
+          state.value.filter((url) => safeHttpsUrl(url) != null),
+          productName,
+          texts.file,
+        )
+      : [];
 
   return (
     <section
@@ -93,9 +101,9 @@ export function FilesSection({
 
       {rows.length > 0 && (
         <ul className="flex flex-col divide-y divide-(--panel-border)">
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <FileRow
-              key={row.url}
+              key={`${index}-${row.url}`}
               row={row}
               single={rows.length === 1}
               texts={texts}

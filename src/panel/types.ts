@@ -58,6 +58,10 @@ export interface PanelProps {
    * host page; `"system"` follows the operating system. The brand colours of
    * `theme.colors` (`brand` light, `brandDark` dark) colour buttons, links
    * and the focus ring in both.
+   *
+   * With `"system"` on a host that puts `.dark` on `<html>`, the panel is
+   * still dark when the operating system is light: the host's `.dark` class
+   * wins, and there is no forced light mode.
    */
   colorScheme?: PanelColorScheme;
   /**
@@ -97,6 +101,10 @@ export interface PanelLoginProps extends LoginLogoOptions {
   /**
    * Light or dark mode. `"inherit"` (default) follows a `.dark` class on the
    * host page; `"system"` follows the operating system.
+   *
+   * With `"system"` on a host that puts `.dark` on `<html>`, the panel is
+   * still dark when the operating system is light: the host's `.dark` class
+   * wins, and there is no forced light mode.
    */
   colorScheme?: PanelColorScheme;
 }

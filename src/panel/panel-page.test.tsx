@@ -41,7 +41,9 @@ function proto<T extends DescMessage>(schema: T, init: MessageInitShape<T>) {
 
 const roots: Array<{ unmount: () => void }> = [];
 /** What GetPublicOrderDetails answers; a Response is sent as it is. */
-let detail: () => Response | MessageInitShape<typeof GetPublicOrderDetailsResponseSchema>;
+let detail: (request: { email?: string; accessToken?: string }) =>
+  | Response
+  | MessageInitShape<typeof GetPublicOrderDetailsResponseSchema>;
 const baseOrder = {
   orderId: "c_TEY3",
   status: "paid",
@@ -57,7 +59,7 @@ const baseOrder = {
   comments: [{ id: 1, message: "Dziękujemy!", authorType: "seller", authorName: "Sklep" }],
   commentCount: 1,
 };
-const detailRequests: Array<{ orderId: string; accessToken: string }> = [];
+const detailRequests: Array<{ orderId: string; accessToken: string; email?: string }> = [];
 const originalError = console.error;
 const originalWarn = console.warn;
 
@@ -84,8 +86,9 @@ beforeEach(() => {
       detailRequests.push({
         orderId: request.orderId,
         accessToken: request.accessToken ?? "",
+        ...(request.email ? { email: request.email } : {}),
       });
-      const answer = detail();
+      const answer = detail(request);
       return answer instanceof Response
         ? answer
         : proto(GetPublicOrderDetailsResponseSchema, answer);
@@ -180,9 +183,18 @@ describe("Panel", () => {
     // Address and phone stay behind "Pokaż dane".
     assert.doesNotMatch(main.textContent ?? "", /ul\. Długa/);
     const show = [...main.querySelectorAll("button")].find((b) => b.textContent === "Pokaż dane")!;
+    const region = page.win.document.getElementById(show.getAttribute("aria-controls")!);
+    assert.ok(region, "aria-controls points at an element before the click");
+    assert.equal(show.getAttribute("aria-expanded"), "false");
+    show.focus();
     await React.act(async () => show.click());
     assert.match(main.textContent ?? "", /ul\. Długa 1/);
     assert.match(main.textContent ?? "", /\+48 600 100 200/);
+    // The same button toggles back, so focus never drops to <body>.
+    assert.equal(show.isConnected, true);
+    assert.equal(show.getAttribute("aria-expanded"), "true");
+    assert.equal(show.textContent, "Ukryj dane");
+    assert.equal(page.win.document.activeElement, show);
     // The comment thread is read-only, behind a disclosure.
     const comments = [...main.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((b) => /Komentarze/.test(b.textContent ?? ""))!;
     await React.act(async () => comments.click());
@@ -207,6 +219,91 @@ describe("Panel", () => {
     await React.act(async () => back.click());
     await settle();
     assert.equal(page.win.location.search, `?state=${q("orders")}`);
+  });
+
+  it("offers the e-mail check when the session gives masked data, and sends the e-mail without it", async () => {
+    const masked = { ...baseOrder, isVerified: false, customerPhone: "", deliveryAddress: "ul. D***" };
+    detail = (request) =>
+      request.email === "jan@example.test"
+        ? { result: { case: "order", value: baseOrder } }
+        : { result: { case: "order", value: masked } };
+    const container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
+    assert.equal(detailRequests[0].accessToken, "panel-token");
+    const main = container.querySelector("main")!;
+    const verify = [...main.querySelectorAll("button")].find((b) => b.textContent === "Potwierdź e-mail");
+    assert.ok(verify, "verify button is shown for masked data with a session");
+    await React.act(async () => verify.click());
+
+    const input = main.querySelector<HTMLInputElement>("input[type=email]")!;
+    const type = async (value: string) => {
+      await React.act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(page.win.HTMLInputElement.prototype, "value")!.set!;
+        setter.call(input, value);
+        input.dispatchEvent(new page.win.Event("input", { bubbles: true }));
+      });
+    };
+    const submit = () =>
+      React.act(async () =>
+        main.querySelector("form")!.dispatchEvent(new page.win.Event("submit", { bubbles: true, cancelable: true })),
+      );
+
+    // A wrong e-mail keeps the order on screen and explains inside the card.
+    await type("zly@example.test");
+    await submit();
+    await settle();
+    await settle();
+    assert.deepEqual(detailRequests.at(-1), { orderId: "ord_1", accessToken: "", email: "zly@example.test" });
+    assert.equal(main.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
+    assert.match(main.querySelector("[role=alert]")?.textContent ?? "", /nie pasuje do zamówienia/);
+    assert.doesNotMatch(main.textContent ?? "", /Nie możemy otworzyć/);
+
+    // The right one unmasks the data.
+    await type("jan@example.test");
+    await submit();
+    await settle();
+    await settle();
+    assert.equal(main.querySelector("[role=alert]"), null);
+    assert.doesNotMatch(main.textContent ?? "", /Potwierdź e-mail/);
+    assert.match(main.textContent ?? "", /Pokaż dane/);
+  });
+
+  it("keeps the order when the e-mail check fails outright", async () => {
+    const masked = { ...baseOrder, isVerified: false };
+    detail = (request) =>
+      request.email ? { result: { case: "failure", value: "Order not found" } } : { result: { case: "order", value: masked } };
+    const container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
+    const main = container.querySelector("main")!;
+    await React.act(async () => [...main.querySelectorAll("button")].find((b) => b.textContent === "Potwierdź e-mail")!.click());
+    const input = main.querySelector<HTMLInputElement>("input[type=email]")!;
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(page.win.HTMLInputElement.prototype, "value")!.set!.call(input, "x@example.test");
+      input.dispatchEvent(new page.win.Event("input", { bubbles: true }));
+    });
+    await React.act(async () =>
+      main.querySelector("form")!.dispatchEvent(new page.win.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    await settle();
+    await settle();
+    assert.equal(main.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
+    assert.match(main.querySelector("[role=alert]")?.textContent ?? "", /nie pasuje/);
+  });
+
+  it("signs out on an expired session instead of offering a retry that keeps failing", async () => {
+    setPanelConfig({
+      projectID: TEST_KEY,
+      host: undefined,
+      loginURL: "#signed-out",
+      theme: { colors: { brand: "#dc2626", brandDark: "#fca5a5" } },
+    });
+    detail = () =>
+      new Response(JSON.stringify({ code: "unauthenticated", message: "session expired" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    const container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
+    assert.equal(page.win.localStorage.getItem(SESSION_KEY), null);
+    assert.equal(page.win.location.hash, "#signed-out");
+    assert.doesNotMatch(container.textContent ?? "", /Spróbuj ponownie/);
   });
 
   it("goes back to the list with the browser's back button", async () => {
@@ -267,6 +364,35 @@ describe("PublicOrderPage", () => {
     assert.equal(container.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
     // No session: masked data can be confirmed with the order e-mail.
     assert.equal(detailRequests[0].accessToken, "");
+  });
+
+  it("standalone: drops a rejected session and falls back to the e-mail check", async () => {
+    const PublicOrderPage = (await import("./components/PublicOrderPage.tsx")).default;
+    detail = (request) =>
+      request.accessToken
+        ? new Response(JSON.stringify({ code: "unauthenticated", message: "session expired" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          })
+        : { result: { case: "order", value: { ...baseOrder, isVerified: false } } };
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () =>
+      root.render(
+        <PanelProvider analytics={false}>
+          <PublicOrderPage orderID="ord_9" accessToken="stale" />
+        </PanelProvider>,
+      ),
+    );
+    await settle();
+    await settle();
+    await settle();
+    assert.equal(detailRequests[0].accessToken, "stale");
+    assert.equal(detailRequests.at(-1)?.accessToken, "");
+    assert.equal(container.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
+    assert.ok([...container.querySelectorAll("button")].some((b) => b.textContent === "Potwierdź e-mail"));
   });
 });
 

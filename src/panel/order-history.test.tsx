@@ -360,6 +360,11 @@ describe("order list (option A)", () => {
     const buttons = container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]");
     assert.equal(buttons.length, 1);
     assert.match(buttons[0].textContent ?? "", /#c_9WmX/);
+    // The accessible name keeps what the row shows: status and buyer too.
+    const label = buttons[0].getAttribute("aria-label") ?? "";
+    assert.match(label, /Zamówienie #c_9WmX/);
+    assert.match(label, /Opłacone/);
+    assert.match(label, /Dla: Piotr Michalik/);
     await React.act(async () => buttons[0].click());
     assert.deepEqual(opened, ["c_7Hq3Zk9WmX"]);
 
@@ -376,6 +381,14 @@ describe("order list (option A)", () => {
     assert.match(container.textContent ?? "", /Dla: Piotr Krzesaj/);
     assert.equal(container.querySelectorAll("[data-status-variant=ok]").length, 3);
     assert.doesNotMatch(container.textContent ?? "", /To już wszystkie/);
+  });
+
+  it("titles an old order without a date plainly, with the note once", async () => {
+    pages = [[{ ...order("", "2024-03-02"), createdAt: undefined as never }]];
+    const container = await mountOrders();
+    const row = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.equal(page.win.document.getElementById(row.getAttribute("aria-labelledby")!)?.textContent, "Starsze zamówienie");
+    assert.equal((row.textContent ?? "").split("Szczegóły niedostępne").length - 1, 1);
   });
 
   it("hides the checkout name when every order has the same one", async () => {
