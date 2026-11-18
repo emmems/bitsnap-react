@@ -13,6 +13,13 @@ export interface GetThemeOutput {
   };
 }
 
+/**
+ * Light or dark mode of the panel. `"inherit"` (default) follows a `.dark`
+ * class on any ancestor (`html`, `body`, a wrapper), like Tailwind's `dark:`.
+ * `"system"` follows the operating system setting.
+ */
+export type PanelColorScheme = "inherit" | "system";
+
 export type PanelScreen =
   | "products"
   | "notifications"
@@ -47,9 +54,15 @@ export interface PanelProps {
   theme?: GetThemeOutput;
   loginURL: string;
   /**
-   * Appearance of the Returns screen. When omitted, `buttonBackground`,
-   * `focusRing` and a readable `buttonForeground` are derived from
-   * `theme.colors.brand`.
+   * Light or dark mode. `"inherit"` (default) follows a `.dark` class on the
+   * host page; `"system"` follows the operating system. The brand colours of
+   * `theme.colors` (`brand` light, `brandDark` dark) colour buttons, links
+   * and the focus ring in both.
+   */
+  colorScheme?: PanelColorScheme;
+  /**
+   * Appearance of the Returns screen. When omitted, it follows the panel:
+   * its surfaces, mode and brand colour.
    */
   returnsAppearance?: ReturnsAppearance;
   /** Text overrides of the Returns screen. */
@@ -81,4 +94,9 @@ export interface PanelLoginProps extends LoginLogoOptions {
    * anything else Polish. Defaults to the library locale (`setLocale`).
    */
   locale?: string;
+  /**
+   * Light or dark mode. `"inherit"` (default) follows a `.dark` class on the
+   * host page; `"system"` follows the operating system.
+   */
+  colorScheme?: PanelColorScheme;
 }

@@ -1,10 +1,11 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
 import { InstrumentProvider, useInstrument } from "../../analytics/instrument";
 import { usePanelConfig } from "../PanelProvider";
 import { resolvePanelReturnsAppearance } from "../returns-appearance";
+import { usePanelRoot } from "../theme";
 import type { PanelProps } from "../types";
 import {
   buildAccessTokenRedirect,
@@ -38,6 +39,50 @@ export type PanelScreen =
   | "course"
   | "messages";
 
+/**
+ * `?orderId=""` (an old order with no id) opens nothing, and a reload would
+ * keep it. Returns the search string without an empty `orderId`, an
+ * `order-details` state without an id becoming the order list, or `null` when
+ * there is nothing to fix.
+ */
+export function dropEmptyOrderId(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const raw = params.get("orderId");
+  const state = params.get("state");
+  const readJSON = (value: string | null) => {
+    if (value == null) return undefined;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  };
+  const orderId = readJSON(raw);
+  const hasId = typeof orderId === "string" ? orderId.trim() !== "" : orderId != null;
+  const opensDetails = readJSON(state) === "order-details";
+  if (hasId || (raw == null && !opensDetails)) return null;
+  params.delete("orderId");
+  if (opensDetails) params.set("state", JSON.stringify("orders"));
+  const next = params.toString();
+  return next === "" ? "" : `?${next}`;
+}
+
+/** Runs `dropEmptyOrderId` on the address bar once, before the params are read. */
+function useCleanOrderIdOnLoad() {
+  useState(() => {
+    if (typeof window === "undefined") return null;
+    const next = dropEmptyOrderId(window.location.search);
+    if (next != null) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${next}${window.location.hash}`,
+      );
+    }
+    return null;
+  });
+}
+
 export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
@@ -59,8 +104,13 @@ const PanelPage = ({
   returnsAppearance,
   returnsTexts,
   analytics,
-}: Pick<PanelProps, "returnsAppearance" | "returnsTexts" | "analytics"> = {}) => {
+  colorScheme,
+}: Pick<
+  PanelProps,
+  "returnsAppearance" | "returnsTexts" | "analytics" | "colorScheme"
+> = {}) => {
   const { projectID, theme, loginURL, host } = usePanelConfig();
+  const { rootProps, mode } = usePanelRoot(theme, colorScheme);
   const [, refreshLocale] = useState(0);
   const instrument = useInstrument(projectID, analytics, "panel");
 
@@ -98,6 +148,7 @@ const PanelPage = ({
       "messages",
     ].includes(value as string);
 
+  useCleanOrderIdOnLoad();
   const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
     product: undefined,
     state: "products",
@@ -115,6 +166,8 @@ const PanelPage = ({
   );
 
   const handleOpenOrderDetails = (orderID: string) => {
+    // An old order without an id has no details page; stay on the list.
+    if (!orderID.trim()) return;
     setParams({
       state: "order-details",
       orderId: orderID,
@@ -192,12 +245,17 @@ const PanelPage = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.state]);
 
-  const styles = {
-    "--button-background-color": theme?.colors?.brand ?? "#000000",
-    "--button-background-color-dark": theme?.colors?.brandDark ?? "#ffffff",
-    "--button-text-color": theme?.colors?.brandDark ?? "#000000",
-    "--button-text-color-dark": theme?.colors?.brand ?? "#000000",
-  } as CSSProperties;
+  // TODO(wave 2): drop the `styles` props of the header and the grid; the
+  // brand reaches them through the panel tokens now.
+  const styles = {};
+
+  // An `order-details` screen without an id falls back to the order list,
+  // never to an empty page.
+  const orderId = params.orderId?.trim() || undefined;
+  const showOrderDetails = activeScreen === "order-details" && orderId != null;
+  const showOrderList =
+    activeScreen === "orders" ||
+    (activeScreen === "order-details" && orderId == null);
 
   useEffect(() => {
     if (accessToken == null || accessToken.length === 0) {
@@ -234,7 +292,10 @@ useEffect(() => {
     <InstrumentProvider value={instrument}>
     <div
       ref={panelParentRef}
-      className="font-inter relative flex h-dvh w-full flex-col bg-beige-100 text-black dark:bg-black dark:text-white md:flex-row"
+      {...rootProps}
+      className={`relative flex h-dvh w-full flex-col bg-(--panel-bg) text-(--panel-fg) md:flex-row${
+        rootProps.className ? ` ${rootProps.className}` : ""
+      }`}
     >
       <PanelProductHeaderComponent
         activeScreen={activeScreen}
@@ -302,7 +363,7 @@ useEffect(() => {
           <PanelPlansComponent projectID={projectID ?? ""} />
         )}
 
-        {activeScreen === "orders" && (
+        {showOrderList && (
           <PanelOrderHistoryComponent
             projectID={projectID ?? ""}
             accessToken={accessToken ?? ""}
@@ -310,9 +371,10 @@ useEffect(() => {
           />
         )}
 
-        {activeScreen === "order-details" && params.orderId && (
+        {showOrderDetails && (
           <PublicOrderPage
-            orderID={params.orderId}
+            orderID={orderId}
+            accessToken={accessToken ?? undefined}
             onBack={handleBackToOrders}
           />
         )}
@@ -326,7 +388,7 @@ useEffect(() => {
               loginURL={loginURL ?? "/panel/login"}
               appearance={resolvePanelReturnsAppearance(
                 returnsAppearance,
-                theme?.colors?.brand,
+                mode,
               )}
               texts={returnsTexts}
               screen={activeScreen}

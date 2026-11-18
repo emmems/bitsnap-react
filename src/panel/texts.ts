@@ -45,6 +45,9 @@ export type PanelTexts = {
   statusSent: string;
   statusIssue: string;
   statusReturned: string;
+  descriptionShowMore: string;
+  descriptionShowLess: string;
+  descriptionLoading: string;
 };
 
 const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
@@ -90,7 +93,10 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "statusCreated": "Utworzone",
     "statusSent": "Wysłane",
     "statusIssue": "Wymaga uwagi",
-    "statusReturned": "Zwrócone"
+    "statusReturned": "Zwrócone",
+    "descriptionShowMore": "Pokaż więcej",
+    "descriptionShowLess": "Pokaż mniej",
+    "descriptionLoading": "Wczytywanie opisu"
   },
   en: {
     "returnsNavLabel": "Returns",
@@ -134,7 +140,10 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "statusCreated": "Created",
     "statusSent": "Shipped",
     "statusIssue": "Needs attention",
-    "statusReturned": "Returned"
+    "statusReturned": "Returned",
+    "descriptionShowMore": "Show more",
+    "descriptionShowLess": "Show less",
+    "descriptionLoading": "Loading the description"
   },
 };
 

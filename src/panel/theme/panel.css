@@ -1,0 +1,82 @@
+/*
+ * Customer panel theme tokens.
+ *
+ * Selectors here start with (or contain) `[data-bitsnap-panel]`, so
+ * postcss.config.js leaves them unprefixed: `.dark [data-bitsnap-panel]` has
+ * to match a `.dark` class on `html`, `body` or any wrapper of the panel, not
+ * only one inside `.bitsnap-react`.
+ *
+ * The `--panel-*` tokens hold the colours. `panelThemeStyle()` (tokens.ts)
+ * sets the brand literals and maps every shadcn variable the panel's `ui/*`
+ * primitives read onto these tokens, inline on the panel root.
+ *
+ * Keep the hex values in sync with PANEL_TOKENS in tokens.ts (a test checks).
+ * The rules sit in the `base` layer, so utilities keep winning.
+ */
+
+@layer base {
+    [data-bitsnap-panel] {
+        color-scheme: light;
+        font-family: inherit;
+
+        --panel-bg: #fafafa;
+        --panel-surface: #ffffff;
+        --panel-surface-2: #f5f5f5;
+        --panel-border: #e5e5e5;
+        --panel-fg: #171717;
+        --panel-muted: #525252;
+
+        --panel-ok: #15803d;
+        --panel-ok-bg: #f0fdf4;
+        --panel-warn: #b45309;
+        --panel-warn-bg: #fffbeb;
+        --panel-danger: #b91c1c;
+        --panel-danger-bg: #fef2f2;
+        --panel-danger-solid: #b91c1c;
+        --panel-info: #1d4ed8;
+        --panel-info-bg: #eff6ff;
+
+        /* Brand literals; panelThemeStyle() overrides them inline. */
+        --panel-accent: #18181b;
+        --panel-accent-fg: #fafafa;
+        --panel-accent-text: var(--panel-accent);
+        --panel-accent-edge: var(--panel-accent);
+        --panel-accent-dark: #fafafa;
+        --panel-accent-dark-fg: #18181b;
+        --panel-accent-dark-text: var(--panel-accent-dark);
+        --panel-accent-dark-edge: var(--panel-accent-dark);
+
+        /* The accent of the mode in effect. */
+        --panel-accent-now: var(--panel-accent);
+        --panel-accent-fg-now: var(--panel-accent-fg);
+        --panel-accent-text-now: var(--panel-accent-text);
+        --panel-accent-edge-now: var(--panel-accent-edge);
+    }
+
+    .dark [data-bitsnap-panel],
+    [data-bitsnap-panel].dark {
+        color-scheme: dark;
+
+        --panel-bg: #000000;
+        --panel-surface: #171717;
+        --panel-surface-2: #262626;
+        --panel-border: #262626;
+        --panel-fg: #fafafa;
+        --panel-muted: #a3a3a3;
+
+        --panel-ok: #4ade80;
+        --panel-ok-bg: #052e16;
+        --panel-warn: #fbbf24;
+        --panel-warn-bg: #451a03;
+        --panel-danger: #f87171;
+        --panel-danger-bg: #450a0a;
+        --panel-danger-solid: #b91c1c;
+        --panel-info: #60a5fa;
+        --panel-info-bg: #172554;
+
+        --panel-accent-now: var(--panel-accent-dark);
+        --panel-accent-fg-now: var(--panel-accent-dark-fg);
+        --panel-accent-text-now: var(--panel-accent-dark-text);
+        --panel-accent-edge-now: var(--panel-accent-dark-edge);
+    }
+}
