@@ -42,6 +42,8 @@ function proto<T extends DescMessage>(schema: T, init: MessageInitShape<T>) {
 
 type Handler = (url: string) => Response | Promise<Response>;
 let products: Handler;
+/** Extra RPC answers by method name (`UserPanelGetTicketDetails`, ...). */
+let rpc: Record<string, Handler> = {};
 let modelFiles: Handler;
 let downloads: Handler;
 const requests: string[] = [];
@@ -87,6 +89,7 @@ beforeEach(() => {
   page.win.localStorage.clear();
   page.win.localStorage.setItem(SESSION_KEY, "panel-token");
   requests.length = 0;
+  rpc = {};
   products = () => productList(1);
   modelFiles = () => new Response(null, { status: 404 });
   downloads = () =>
@@ -99,6 +102,8 @@ beforeEach(() => {
     if (url.endsWith("/UserPanelGetProducts")) return products(url);
     if (url.endsWith("/ListModelFiles")) return modelFiles(url);
     if (url.endsWith("/GetModelFileDownloadUrl")) return downloads(url);
+    const method = url.split("/").pop() ?? "";
+    if (rpc[method]) return rpc[method](url);
     return new Response(null, { status: 404 });
   }) as typeof fetch;
   console.error = () => {};
@@ -126,7 +131,6 @@ async function mountGrid(options: { product?: string; setParams?: (params: impor
           projectID={TEST_KEY}
           accessToken="panel-token"
           loginURL="/panel/login"
-          styles={{}}
           activeScreen="products"
           params={{ state: "products", product: options.product }}
           setParams={options.setParams ?? (() => {})}
@@ -251,7 +255,7 @@ describe("panel navigation and orders quick wins", () => {
   it("renders four shared navigation items with lucide icons and an active page", async () => {
     const Header = (await import("./components/PanelProductHeader")).default;
     const selected: string[] = [];
-    const container = await mountPanelView(<Header activeScreen="orders" setActiveScreen={screen => selected.push(screen)} setParams={() => {}} styles={{}} logout={() => {}} />);
+    const container = await mountPanelView(<Header activeScreen="orders" setActiveScreen={screen => selected.push(screen)} setParams={() => {}} logout={() => {}} />);
     const nav = container.querySelector("nav")!;
     const buttons = Array.from(nav.querySelectorAll("button"));
     assert.deepEqual(buttons.map(button => button.textContent), ["Biblioteka", "Zamówienia", "Zwroty", "Konto"]);
@@ -271,7 +275,8 @@ describe("panel navigation and orders quick wins", () => {
     const container = await mountPanelView(<Orders projectID={TEST_KEY} accessToken="token" openOrderDetails={() => {}} />);
     assert.match(container.textContent ?? "", /49,00\s*zł/);
     assert.match(container.textContent ?? "", /Opłacone/);
-    assert.match(container.textContent ?? "", /To już wszystkie Twoje zamówienia/);
+    // One page: the end hint shows only after "Pokaż więcej" reaches the end.
+    assert.doesNotMatch(container.textContent ?? "", /To już wszystkie Twoje zamówienia/);
   });
 
   it("shows an order failure and retries successfully instead of claiming there are no orders", async () => {
@@ -284,11 +289,11 @@ describe("panel navigation and orders quick wins", () => {
     const Orders = (await import("./components/PanelOrderHistory")).default;
     const container = await mountPanelView(<Orders projectID={TEST_KEY} accessToken="token" openOrderDetails={() => {}} />);
     assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się pobrać zamówień/);
-    assert.doesNotMatch(container.textContent ?? "", /Brak zamówień/);
+    assert.doesNotMatch(container.textContent ?? "", /Nie masz jeszcze zamówień/);
     await React.act(async () => container.querySelector<HTMLButtonElement>('[role="alert"] button')!.click());
     await settle();
     assert.equal(attempts, 2);
-    assert.match(container.textContent ?? "", /Brak zamówień/);
+    assert.match(container.textContent ?? "", /Nie masz jeszcze zamówień/);
   });
 
   it("renders plans and notifications as unavailable without loading or unsaved controls", async () => {
@@ -375,5 +380,147 @@ describe("library cards and product links", () => {
   it("derives filenames from URL paths without query credentials", async () => {
     const { downloadFileName } = await import("./components/PanelProductDetails");
     assert.equal(downloadFileName("https://files.test/My%20book.pdf?signature=private"), "My book.pdf");
+  });
+});
+
+describe("product detail pages (option A)", () => {
+  const library = (items: Array<Record<string, unknown>>) => () =>
+    proto(UserPanelGetProductsResponseSchema, { result: { case: "success", value: { products: items as never } } });
+
+  async function files(urls: string[] | "error", productName = "Skarb Kibica 2025 Ebook") {
+    const { UserPanelGetFileDetailsResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    products = library([{ accessId: "f1", productId: "p1", productName, productImageUrl: "https://img.test/cover.png", productType: UserProductType.FILE, productDescription: "" }]);
+    rpc.UserPanelGetFileDetails = () =>
+      urls === "error"
+        ? new Response(null, { status: 503 })
+        : proto(UserPanelGetFileDetailsResponseSchema, { result: { case: "success", value: { projectId: "x", files: urls } } });
+    return mountGrid({ product: "file-f1" });
+  }
+
+  it("shows one file under the product name with a format badge and a brand download", async () => {
+    const container = await files(["https://files.test/skarb/f1-medium-compression.pdf?sig=1"]);
+    const shell = container.querySelector("[data-product-shell]")!;
+    assert.ok(shell, container.innerHTML);
+    assert.equal(container.querySelector("main"), null, "no second <main> landmark");
+    assert.equal(shell.querySelectorAll("h2").length, 1, "one title");
+    assert.equal(shell.querySelector("img")?.getAttribute("alt"), "");
+    const download = container.querySelector<HTMLAnchorElement>("a[download]")!;
+    assert.equal(download.textContent, "Pobierz PDF");
+    assert.match(download.className, /bg-\(--panel-accent-now\)/);
+    assert.match(container.textContent ?? "", /Kupione/);
+    assert.match(container.textContent ?? "", /f1-medium-compression\.pdf/);
+    assert.ok([...container.querySelectorAll("a")].some((a) => a.textContent === "Otwórz"));
+    // No description: no "O produkcie" block and no empty grey bar.
+    assert.doesNotMatch(container.textContent ?? "", /O produkcie/);
+  });
+
+  it("shows a file error with help text and retries", async () => {
+    const container = await files("error");
+    const alert = container.querySelector('[role="alert"]')!;
+    assert.match(alert.textContent ?? "", /Nie udało się wczytać plików.*napisz do sprzedawcy/);
+    const { UserPanelGetFileDetailsResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    rpc.UserPanelGetFileDetails = () =>
+      proto(UserPanelGetFileDetailsResponseSchema, { result: { case: "success", value: { projectId: "x", files: [] } } });
+    await React.act(async () => alert.querySelector("button")!.click());
+    await settle();
+    assert.match(container.textContent ?? "", /Do tego produktu nie dodano jeszcze plików/);
+  });
+
+  it("names several files by file name and marks collisions", async () => {
+    const { fileRows, fileFormat } = await import("./components/products/files/naming");
+    const rows = fileRows(
+      ["https://f.test/a/book.pdf", "https://f.test/b/book.pdf", "https://f.test/c/", "https://f.test/maps.zip"],
+      "Book",
+      "Plik",
+    );
+    assert.deepEqual(rows.map((row) => row.title), ["book.pdf (1)", "book.pdf (2)", "Plik 3", "maps.zip"]);
+    assert.deepEqual(rows.map((row) => row.format), ["PDF", "PDF", undefined, "ZIP"]);
+    assert.equal(fileFormat("https://f.test/download.php?id=1"), undefined);
+    assert.equal(fileRows(["https://f.test/x.epub"], "", "Plik")[0].title, "x.epub");
+  });
+
+  async function ticket(result: Record<string, unknown> | "error", options: { description?: string } = {}) {
+    const { UserPanelGetTicketDetailsResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    products = library([{ accessId: "t1", productId: "pt", productName: "GROOVEOUT", productType: UserProductType.TICKET, productDescription: options.description ?? "" }]);
+    rpc.UserPanelGetTicketDetails = () =>
+      result === "error"
+        ? new Response(null, { status: 503 })
+        : proto(UserPanelGetTicketDetailsResponseSchema, { result: result as never });
+    return mountGrid({ product: "ticket-t1" });
+  }
+  const QR = "data:image/png;base64,iVBORw0KGgo=";
+
+  it("calls the ticket RPC and shows the QR on a white tile with wallet links", async () => {
+    const container = await ticket(
+      { case: "success", value: { projectId: "x", ticketUrl: QR, productName: "GROOVEOUT", productImageUrl: "", appleWalletUrl: "https://wallet.test/a.pkpass", googleWalletUrl: "javascript:alert(1)" } },
+      { description: "Start 22:30" },
+    );
+    assert.ok(requests.some((url) => url.endsWith("/UserPanelGetTicketDetails")));
+    const qr = container.querySelector<HTMLImageElement>("[data-ticket-pass] img")!;
+    assert.equal(qr.alt, "Kod QR biletu: GROOVEOUT");
+    assert.match(qr.parentElement!.className, /bg-white/);
+    const links = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")];
+    const apple = links.find((link) => link.textContent === "Dodaj do Apple Wallet")!;
+    assert.equal(apple.href, "https://wallet.test/a.pkpass");
+    assert.equal(apple.rel, "noopener noreferrer");
+    assert.equal(links.find((link) => link.textContent === "Dodaj do Google Wallet"), undefined, "non-https wallet link hidden");
+    assert.ok(links.find((link) => link.textContent === "Zapisz kod QR"));
+    assert.match(container.textContent ?? "", /Informacje od organizatora/);
+    assert.doesNotMatch(container.textContent ?? "", /Twój zakupiony bilet/);
+  });
+
+  it("explains a ticket that is not on this account", async () => {
+    const container = await ticket({ case: "failure", value: FailureMessage.TICKET_NOT_FOUND });
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie znaleźliśmy tego biletu.*ten sam e-mail/);
+  });
+
+  it("keeps the last QR code when the connection is gone", async () => {
+    const { writeCachedQr, clearQrCache } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    writeCachedQr("t1", QR);
+    const container = await ticket("error");
+    assert.match(container.textContent ?? "", /Brak połączenia – pokazujemy zapisany kod/);
+    assert.equal(container.querySelector<HTMLImageElement>("[data-ticket-pass] img")?.getAttribute("src"), QR);
+    clearQrCache();
+    page.win.sessionStorage.clear();
+  });
+
+  it("shows a load error with retry when the ticket call fails and nothing is saved", async () => {
+    const { clearQrCache } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    page.win.sessionStorage.clear();
+    const container = await ticket("error");
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się wczytać biletu/);
+  });
+
+  it("accepts wallet links only over https", async () => {
+    const { safeWalletUrl } = await import("./components/products/ticket/qr-cache");
+    assert.equal(safeWalletUrl("https://pay.google.com/gp/v/save/x"), "https://pay.google.com/gp/v/save/x");
+    assert.equal(safeWalletUrl("http://wallet.test/a"), undefined);
+    assert.equal(safeWalletUrl("javascript:alert(1)"), undefined);
+    assert.equal(safeWalletUrl("not a url"), undefined);
+    assert.equal(safeWalletUrl(undefined), undefined);
+  });
+
+  it("counts audiobook chapters that have no URL (A3)", async () => {
+    const { mergeChapters } = await import("./components/products/audiobook/AudiobookDetails");
+    const merged = mergeChapters(
+      { chapters: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }] as never },
+      [
+        { chapterId: "a", publicUrl: "https://s.test/a.m3u8", duration: 10 },
+        { chapterId: "c", publicUrl: "https://s.test/c.m3u8" },
+      ] as never,
+    );
+    assert.deepEqual(merged.chapters.map((chapter) => chapter.id), ["a", "c"]);
+    assert.deepEqual(merged.missing, ["b"]);
+  });
+
+  it("shows an audiobook load error with retry instead of 'pick a chapter' (A2)", async () => {
+    products = library([{ accessId: "a1", productId: "pa", productName: "Book", productType: UserProductType.AUDIO, productDescription: "" }]);
+    rpc.UserPanelGetAudiobookDetails = () => new Response(null, { status: 503 });
+    rpc.UserPanelGetAudiobookDetailsDownloadURLs = () => new Response(null, { status: 503 });
+    const container = await mountGrid({ product: "audio-a1" });
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się wczytać audiobooka/);
+    assert.doesNotMatch(container.textContent ?? "", /Wybierz rozdział/);
   });
 });

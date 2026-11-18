@@ -1,5 +1,4 @@
 import { LogOut } from "lucide-react";
-import type { CSSProperties } from "react";
 import { cn } from "../../lib/utils";
 import { LoginBrandLogo, useLoginBranding } from "../../ui/email-code-login/LoginBrandLogo";
 import type { GetThemeOutput, PanelScreen } from "../types";
@@ -10,7 +9,6 @@ interface PanelProductHeaderComponentProps {
   activeScreen: PanelScreen;
   setActiveScreen: (screen: PanelScreen) => void;
   setParams: (params: { product?: string; state: PanelScreen }) => void;
-  styles: CSSProperties;
   theme?: GetThemeOutput;
   logout: () => void;
   email?: string | null;

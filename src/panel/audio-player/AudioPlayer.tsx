@@ -1,5 +1,17 @@
 import Hls from "hls.js";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import {
+  Clock,
+  Gauge,
+  LoaderCircle,
+  Moon,
+  Pause,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  RotateCw,
+  SkipBack,
+  SkipForward,
+} from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -9,8 +21,6 @@ import {
   type CSSProperties,
 } from "react";
 import { cn } from "../../lib/utils";
-import { Button } from "../../ui/button";
-import LoadingIndicator from "../LoadingIndicator";
 import {
   createHlsSource,
   playerErrorFromMediaError,
@@ -30,7 +40,8 @@ import {
 } from "./media.session.coordinator";
 
 import "./audio-player.css";
-import { useAudioTexts, formatTime } from "./texts";
+import { formatLeft, formatRate, formatTime, useAudioTexts } from "./texts";
+import { useInlineOptionChip } from "./InlineOptionChip";
 import { playerStorage, SPEED_KEY, SPEEDS } from "./storage";
 
 export type ChapterWithPublicUrl = {
@@ -57,12 +68,13 @@ export type AudioPlayerMethods = {
 type AudioPlayerProps = {
   locale?: string;
   chapters: ChapterWithPublicUrl[];
-  styles: CSSProperties;
+  /** Extra inline style of the player container. */
+  styles?: CSSProperties;
   updateCurrentTime?: (currentTime: number) => void;
 
   title?: string;
   imageURL?: string;
-  /** Hide the repeated visual heading when the desktop details show the cover beside it. */
+  /** The page shows the cover and book title already: no cover row in the player. */
   coverShownBeside?: boolean;
   /** Book author, used as the lock-screen artist. */
   author?: string;
@@ -100,6 +112,11 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     ref,
   ) => {
     const t = useAudioTexts(locale);
+    const textsRef = useRef(t);
+    textsRef.current = t;
+    const [openChip, setOpenChip] = useState<"speed" | "sleep" | null>(null);
+    /** Polite announcement: sleep timer start, stop and last minute only. */
+    const [announcement, setAnnouncement] = useState("");
     const [speed, setSpeed] = useState(1);
     const speedRef = useRef(1);
     const [chapterID, setChapterID] = useState<string>();
@@ -111,12 +128,25 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
     });
 
     function cancelSleep() {
+      if (sleepRef.current.mode !== "off") {
+        setAnnouncement(textsRef.current.sleepStopped);
+      }
       sleepRef.current = { mode: "off", deadline: 0 };
       setSleepMode("off");
       setSleepRemaining(0);
     }
     function changeSleep(mode: string) {
+      if (mode === "off") {
+        cancelSleep();
+        return;
+      }
       const seconds = Number(mode) * 60;
+      const texts = textsRef.current;
+      setAnnouncement(
+        texts.sleepStarted(
+          Number.isFinite(seconds) ? texts.minutes(Number(mode)) : texts.end,
+        ),
+      );
       sleepRef.current = {
         mode,
         deadline: Number.isFinite(seconds) ? Date.now() + seconds * 1000 : 0,
@@ -143,6 +173,9 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           Math.ceil((deadline - Date.now()) / 1000),
         );
         setSleepRemaining(remaining);
+        if (remaining === 60) {
+          setAnnouncement(textsRef.current.sleepLastMinute);
+        }
         if (remaining === 0) {
           playWhenReadyRef.current = false;
           pause();
@@ -793,13 +826,75 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
                 .reduce((sum, chapter) => sum + chapter.duration!, 0)
             : 0),
       ) / speed;
-    const minutesLeft = Math.ceil(remaining / 60);
-    const leftText = `${Math.floor(minutesLeft / 60) > 0 ? `${Math.floor(minutesLeft / 60)} h ` : ""}${minutesLeft % 60} min`;
+    const leftTime = formatLeft(remaining);
+    const rateText = formatRate(speed, t);
+    const leftText = wholeBookKnown
+      ? speed === 1
+        ? t.leftBook(leftTime)
+        : t.leftBookAtSpeed(leftTime, rateText)
+      : t.leftChapter(leftTime);
+    const countdown =
+      sleepMode !== "off" && sleepMode !== "chapter"
+        ? formatTime(sleepRemaining)
+        : null;
+
+    const speedChip = useInlineOptionChip({
+      name: `${uniqueProductID}-speed`,
+      icon: <Gauge />,
+      label: `${t.speed}: ${rateText}×`,
+      ariaLabel: `${t.speed}: ${rateText}×`,
+      legend: t.speedLegend,
+      options: SPEEDS.map((rate) => ({
+        value: String(rate),
+        label: `${formatRate(rate, t)}×`,
+      })),
+      value: String(speed),
+      onChange: (value) => changeSpeed(Number(value)),
+      open: openChip === "speed",
+      onOpenChange: (open) => setOpenChip(open ? "speed" : null),
+    });
+    const sleepChip = useInlineOptionChip({
+      name: `${uniqueProductID}-sleep`,
+      icon: <Moon />,
+      label:
+        countdown != null
+          ? `${t.sleepShort}:`
+          : `${t.sleepShort}: ${sleepMode === "chapter" ? t.endShort : t.offShort}`,
+      ariaLabel: `${t.sleep}: ${
+        countdown ?? (sleepMode === "chapter" ? t.end : t.off).toLowerCase()
+      }`,
+      chipExtra:
+        countdown != null ? (
+          // role="timer" is aria-live="off": the countdown is not read out.
+          <span role="timer" aria-hidden="true" className="tabular-nums">
+            {countdown}
+          </span>
+        ) : undefined,
+      legend: t.sleep,
+      options: [
+        { value: "off", label: t.off },
+        ...[15, 30, 45, 60].map((minutes) => ({
+          value: String(minutes),
+          label: t.minutes(minutes),
+        })),
+        { value: "chapter", label: t.end },
+      ],
+      value: sleepMode,
+      onChange: changeSleep,
+      open: openChip === "sleep",
+      onOpenChange: (open) => setOpenChip(open ? "sleep" : null),
+    });
+
+    const roundButton =
+      "relative inline-flex size-12 items-center justify-center rounded-full bg-(--panel-surface-2) text-(--panel-fg) hover:opacity-80 disabled:opacity-40";
+    const plainButton =
+      "inline-flex size-11 items-center justify-center rounded-full text-(--panel-fg) hover:bg-(--panel-surface-2) disabled:opacity-40";
+    const current = chapters[currentIndex];
 
     return (
       <div
         id="audio-player-container"
-        className="bitsnap-audio-player flex min-w-0 flex-col gap-3 text-neutral-900 dark:text-neutral-100"
+        className="bitsnap-audio-player flex min-w-0 flex-col gap-4 text-(--panel-fg) [--player-fill:var(--panel-accent-text-now,#44403c)] [--player-track:#d6d3d1] dark:[--player-track:#57534e]"
         style={
           {
             ...styles,
@@ -807,6 +902,7 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           } as CSSProperties
         }
         ref={audioPlayerContainerRef}
+        aria-busy={isLoading}
         data-player-error={playerError?.kind}
       >
         <video
@@ -815,8 +911,8 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
           poster={imageURL}
           title={title}
         />
-        <div className={cn("flex min-w-0 items-center gap-3", coverShownBeside && "lg:hidden")}>
-          {imageURL && (
+        <div className="flex min-w-0 items-center gap-3">
+          {!coverShownBeside && imageURL && (
             <img
               src={imageURL}
               alt=""
@@ -824,138 +920,134 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
             />
           )}
           <div className="min-w-0 break-words">
-            <p className="font-semibold">
-              {chapters[currentIndex]?.name ?? title}
-            </p>
-            {author && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                {author}
+            {currentIndex >= 0 && chapters.length > 1 && (
+              <p className="text-xs text-(--panel-muted)">
+                {t.chapterOf(currentIndex + 1, chapters.length)}
               </p>
+            )}
+            <h3 className="text-lg leading-snug font-semibold">
+              {current?.name ?? title}
+            </h3>
+            {!coverShownBeside && author && (
+              <p className="text-sm text-(--panel-muted)">{author}</p>
             )}
           </div>
         </div>
         {playerError && (
           <div
             role="alert"
-            className="rounded-lg bg-red-50 p-3 text-red-800 dark:bg-red-950 dark:text-red-200"
+            className="flex flex-col items-start gap-1 rounded-lg bg-(--panel-warn-bg) p-3 text-sm text-(--panel-fg)"
           >
-            <p>{t.error}</p>
-            <Button variant="outline" onClick={retry}>
+            <p className="font-semibold">
+              {playerError.kind === "network" ? t.streamError : t.error}
+            </p>
+            {position > 0 && (
+              <p className="text-(--panel-muted)">
+                {t.positionKept(formatTime(position))}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg border border-(--panel-border) bg-(--panel-surface) px-4 font-semibold text-(--panel-fg) hover:bg-(--panel-surface-2)"
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
               {t.retry}
-            </Button>
+            </button>
           </div>
         )}
-        <input
-          type="range"
-          min="0"
-          max={knownDuration || 100}
-          value={position}
-          disabled={!knownDuration}
-          aria-label={t.progress}
-          aria-valuetext={`${formatTime(position)} ${t.of} ${formatTime(knownDuration)}`}
-          onChange={(event) => seekTo(Number(event.target.value))}
-        />
-        <section className="flex w-full justify-between text-sm tabular-nums">
-          <span id="current-time">{formatTime(position)}</span>
-          <span id="duration">{formatTime(knownDuration)}</span>
-        </section>
-        {knownDuration > 0 && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-300">
-            {t.left === "left"
-              ? `${leftText} ${t.left}`
-              : `${t.left} ${leftText}`}{" "}
-            · {wholeBookKnown ? t.book : t.chapter} ({speed}×)
-          </p>
-        )}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button
-            variant="outline"
+        <div className="flex flex-col">
+          <input
+            type="range"
+            min="0"
+            max={knownDuration || 100}
+            value={position}
+            disabled={!knownDuration}
+            aria-label={t.progress}
+            aria-valuetext={`${formatTime(position)} ${t.of} ${formatTime(knownDuration)}`}
+            onChange={(event) => seekTo(Number(event.target.value))}
+          />
+          <div className="flex w-full justify-between text-xs text-(--panel-muted) tabular-nums">
+            <span id="current-time">{formatTime(position)}</span>
+            <span id="duration">{formatTime(knownDuration)}</span>
+          </div>
+          {knownDuration > 0 && (
+            <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-(--panel-muted)">
+              <Clock className="size-4 shrink-0" aria-hidden="true" />
+              {leftText}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-center gap-2 sm:gap-4">
+          <button
+            type="button"
+            className={plainButton}
             onClick={playPreviousChapter}
             disabled={currentIndex < 0}
             aria-label={t.previous}
           >
-            <SkipBack className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="outline"
+            <SkipBack className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={roundButton}
             onClick={() => seekBy(-SEEK_STEP_SECONDS)}
             aria-label={t.rewind}
           >
-            −{SEEK_STEP_SECONDS}
-          </Button>
-          <Button
-            variant="outline"
+            <RotateCcw className="size-7" strokeWidth={1.5} aria-hidden="true" />
+            <span aria-hidden="true" className="absolute text-[9px] font-bold">
+              {SEEK_STEP_SECONDS}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={togglePlayState}
             aria-label={playState === PlayState.Paused ? t.play : t.pause}
+            className="inline-flex size-16 items-center justify-center rounded-full border border-(--panel-accent-edge-now) bg-(--panel-accent-now) text-(--panel-accent-fg-now) shadow-sm hover:opacity-90"
           >
             {playState === PlayState.Paused ? (
-              <Play className="h-5 w-5" />
+              <Play className="ml-0.5 size-7 fill-current" aria-hidden="true" />
             ) : (
-              <Pause className="h-5 w-5" />
+              <Pause className="size-7 fill-current" aria-hidden="true" />
             )}
-          </Button>
-          <Button
-            variant="outline"
+          </button>
+          <button
+            type="button"
+            className={roundButton}
             onClick={() => seekBy(SEEK_STEP_SECONDS)}
             aria-label={t.forward}
           >
-            +{SEEK_STEP_SECONDS}
-          </Button>
-          <Button
-            variant="outline"
+            <RotateCw className="size-7" strokeWidth={1.5} aria-hidden="true" />
+            <span aria-hidden="true" className="absolute text-[9px] font-bold">
+              {SEEK_STEP_SECONDS}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={plainButton}
             onClick={playNextChapter}
             disabled={currentIndex < 0 || currentIndex >= chapters.length - 1}
             aria-label={t.next}
           >
-            <SkipForward className="h-5 w-5" />
-          </Button>
+            <SkipForward className="size-5" aria-hidden="true" />
+          </button>
         </div>
-        <div className="flex flex-wrap gap-3 md:grid md:grid-cols-2">
-          <label className="flex flex-1 items-center gap-2 text-sm md:flex-col md:items-start md:whitespace-nowrap">
-            {t.speed}
-            <select
-              aria-label={t.speed}
-              value={speed}
-              onChange={(event) => changeSpeed(Number(event.target.value))}
-            >
-              {SPEEDS.map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate}×
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-1 items-center gap-2 text-sm md:flex-col md:items-start md:whitespace-nowrap">
-            {t.sleep}
-            <select
-              aria-label={t.sleep}
-              value={sleepMode}
-              onChange={(event) => changeSleep(event.target.value)}
-            >
-              <option value="off">{t.off}</option>
-              {[15, 30, 45, 60].map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {minutes} min
-                </option>
-              ))}
-              <option value="chapter">{t.end}</option>
-            </select>
-          </label>
-        </div>
-        {sleepMode !== "off" && (
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span role="timer">
-              {sleepMode === "chapter" ? t.end : formatTime(sleepRemaining)}
-            </span>
-            <Button variant="outline" onClick={cancelSleep}>
-              {t.cancel}
-            </Button>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap justify-center gap-1.5 sm:justify-start sm:gap-2">
+            {speedChip.chip}
+            {sleepChip.chip}
           </div>
-        )}
+          {speedChip.panel}
+          {sleepChip.panel}
+        </div>
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
         {isLoading && (
-          <div role="status" className="flex justify-center">
-            <LoadingIndicator />
-          </div>
+          <p role="status" className="sr-only">
+            <LoaderCircle aria-hidden="true" />
+            {t.loadingAudio}
+          </p>
         )}
       </div>
     );

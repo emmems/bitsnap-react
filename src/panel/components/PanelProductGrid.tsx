@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   FailureMessage,
   UserProductSchema,
@@ -30,7 +23,6 @@ import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
 import { clearPanelSession } from "../session-storage";
 import { usePanelConfig } from "../PanelProvider";
-import { getLocale } from "../../components/checkout/locale";
 import { useModelFiles, type ModelFilesLoad } from "./model-files-load";
 
 // The 3D files list (UI + download RPC) loads only for buyers who have some.
@@ -40,7 +32,6 @@ interface PanelProductGridComponentProps {
   projectID: string;
   accessToken: string;
   loginURL: string;
-  styles: CSSProperties;
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
   setParams: (params: PanelSearchParamsType) => void;
@@ -53,7 +44,6 @@ const PanelProductGridComponent = ({
   accessToken,
   projectID,
   loginURL,
-  styles,
   activeScreen,
   params,
   setParams,
@@ -107,7 +97,7 @@ const PanelProductGridComponent = ({
           <div
             key={index}
             aria-hidden="true"
-            className="h-72 rounded-xl bg-neutral-100 motion-safe:animate-pulse dark:bg-neutral-800"
+            className="h-72 rounded-xl bg-(--panel-surface-2) motion-safe:animate-pulse"
           />
         ))}
       </div>
@@ -125,7 +115,6 @@ const PanelProductGridComponent = ({
         <PanelModelFiles
           accessToken={accessToken}
           models={models}
-          buttonStyle={styles}
         />
       </Suspense>
     ) : null;
@@ -147,7 +136,6 @@ const PanelProductGridComponent = ({
     <ProductsComponent
       accessToken={accessToken}
       products={productsList}
-      styles={styles}
       activeScreen={activeScreen}
       params={params}
       setParams={setParams}
@@ -211,26 +199,22 @@ function PanelProductsEmpty() {
   return (
     <div className="flex flex-col items-start gap-1" data-testid="panel-empty">
       <h3 className="text-2xl">{t.hello}</h3>
-      <p className="text-sm text-neutral-500">{t.empty}</p>
+      <p className="text-sm text-(--panel-muted)">{t.empty}</p>
     </div>
   );
 }
 
 function PanelProductsError({ onRetry }: { onRetry: () => void }) {
-  const en = getLocale().toLowerCase().startsWith("en");
+  const t = getProductTexts();
   return (
     <div
       className="flex flex-col items-start gap-3"
       role="alert"
       data-testid="panel-error"
     >
-      <p className="text-sm text-neutral-600 dark:text-neutral-300">
-        {en
-          ? "Your products could not be loaded."
-          : "Nie udało się wczytać Twoich produktów."}
-      </p>
-      <Button type="button" onClick={onRetry} className="text-sm">
-        {en ? "Try again" : "Spróbuj ponownie"}
+      <p className="text-sm text-(--panel-muted)">{t.productsError}</p>
+      <Button type="button" onClick={onRetry} className="min-h-11 text-sm">
+        {t.retry}
       </Button>
     </div>
   );
@@ -241,7 +225,6 @@ export default PanelProductGridComponent;
 interface ProductsComponentProps {
   accessToken: string;
   products: UserProduct[];
-  styles: CSSProperties;
   filesSection?: ReactNode;
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
@@ -261,7 +244,6 @@ export function opensMessages(product: UserProduct): boolean {
 const ProductsComponent = ({
   accessToken,
   products,
-  styles,
   filesSection,
   activeScreen,
   params,
@@ -321,11 +303,10 @@ const ProductsComponent = ({
   if (activeScreen === "products" && selectedProduct != undefined) {
     return (
       <PanelProductDetails
+        key={panelProductKey(selectedProduct)}
         accessToken={accessToken}
         product={selectedProduct}
-        styles={styles}
         reveal={reveal}
-        onOpenCourse={openCourse}
       />
     );
   }
@@ -334,7 +315,7 @@ const ProductsComponent = ({
     <>
       <h3 className="text-2xl">{t.hello}</h3>
       {products.length > 0 && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+        <p className="text-sm text-(--panel-muted)">
           {t.intro}
         </p>
       )}
@@ -357,10 +338,10 @@ const ProductsComponent = ({
               type="button"
               key={panelProductKey(product)}
               onClick={() => handleSelectedProduct(product)}
-              className="flex min-h-11 min-w-0 flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white text-left text-neutral-900 transition-colors hover:border-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-50 dark:hover:border-neutral-500"
+              className="flex min-h-11 min-w-0 flex-col overflow-hidden rounded-xl border border-(--panel-border) bg-(--panel-surface) text-left text-(--panel-fg) transition-colors hover:border-(--panel-muted) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--panel-accent-text-now)"
             >
-              <span className="flex w-full flex-col gap-3 bg-neutral-100 p-3 dark:bg-neutral-800">
-                <span className="flex w-fit items-center gap-1.5 rounded-md bg-white px-2 py-1 text-xs font-medium dark:bg-neutral-900">
+              <span className="flex w-full flex-col gap-3 bg-(--panel-surface-2) p-3">
+                <span className="flex w-fit items-center gap-1.5 rounded-md bg-(--panel-surface) px-2 py-1 text-xs font-medium">
                   <Icon className="size-4" aria-hidden="true" />
                   {label}
                 </span>
@@ -375,7 +356,7 @@ const ProductsComponent = ({
                 <span className="line-clamp-2 font-semibold">
                   {product.productName}
                 </span>
-                <span className="line-clamp-2 text-sm text-neutral-600 dark:text-neutral-300">
+                <span className="line-clamp-2 text-sm text-(--panel-muted)">
                   {renderText(product.productDescription)}
                 </span>
                 <span className="mt-auto pt-2 text-sm font-medium underline underline-offset-4">

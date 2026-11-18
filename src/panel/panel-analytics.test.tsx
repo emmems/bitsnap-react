@@ -161,9 +161,7 @@ describe("panel analytics", () => {
         <PanelProductDetails
           accessToken="panel-token"
           product={product}
-          styles={{}}
           reveal={() => {}}
-          onOpenCourse={() => {}}
         />
       </PanelProvider>,
     );

@@ -1,31 +1,12 @@
-.bitsnap-audio-player {
-  --player-track: #d6d3d1;
-  --player-fill: #44403c;
-}
-.dark .bitsnap-audio-player {
-  --player-track: #57534e;
-  --player-fill: #e7e5e4;
-}
-.bitsnap-audio-player button,
-.bitsnap-audio-player select {
+/*
+ * Seek bar of the audiobook player. The colours come from variables set with
+ * Tailwind utilities on the container (`[--player-track:…] dark:[…]`, fill =
+ * the panel accent with its contrast guard), so they follow a `.dark` class on
+ * any ancestor (html, body, the panel root). No `.dark` selectors here.
+ */
+.bitsnap-audio-player button {
   min-height: 44px;
   min-width: 44px;
-}
-.bitsnap-audio-player select {
-  max-width: 100%;
-  border: 1px solid var(--player-track);
-  border-radius: 6px;
-  padding: 0 8px;
-  color: inherit;
-  background-color: transparent;
-}
-.bitsnap-audio-player select option {
-  color: #292524;
-  background: #fafaf9;
-}
-.dark .bitsnap-audio-player select option {
-  color: #fafaf9;
-  background: #292524;
 }
 .bitsnap-audio-player input[type="range"] {
   appearance: none;
@@ -42,8 +23,8 @@
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    var(--player-fill) var(--seek-before-width),
-    var(--player-track) var(--seek-before-width)
+    var(--player-fill, #44403c) var(--seek-before-width),
+    var(--player-track, #d6d3d1) var(--seek-before-width)
   );
 }
 .bitsnap-audio-player input[type="range"]::-webkit-slider-thumb {
@@ -52,27 +33,27 @@
   height: 18px;
   width: 18px;
   margin-top: -7px;
-  border: 2px solid var(--player-fill);
+  border: 2px solid var(--player-fill, #44403c);
   border-radius: 50%;
-  background: var(--player-fill);
+  background: var(--player-fill, #44403c);
 }
 .bitsnap-audio-player input[type="range"]::-moz-range-track {
   height: 4px;
   border-radius: 2px;
-  background: var(--player-track);
+  background: var(--player-track, #d6d3d1);
 }
 .bitsnap-audio-player input[type="range"]::-moz-range-progress {
   height: 4px;
-  background: var(--player-fill);
+  background: var(--player-fill, #44403c);
 }
 .bitsnap-audio-player input[type="range"]::-moz-range-thumb {
   height: 18px;
   width: 18px;
   border: 0;
   border-radius: 50%;
-  background: var(--player-fill);
+  background: var(--player-fill, #44403c);
 }
-.bitsnap-audio-player :is(input, button, select):focus-visible {
-  outline: 2px solid var(--player-fill);
+.bitsnap-audio-player :is(input, button):focus-visible {
+  outline: 2px solid var(--player-fill, #44403c);
   outline-offset: 3px;
 }

@@ -648,14 +648,21 @@ async function clickLabel(label: string) {
     button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })),
   );
 }
+const GROUPS: Record<string, string> = {
+  Prędkość: "speed",
+  "Wyłącznik czasowy": "sleep",
+};
+function radio(label: string, value: string) {
+  return container!.querySelector(
+    `input[type="radio"][name$="-${GROUPS[label]}"][value="${value}"]`,
+  ) as HTMLInputElement | null;
+}
+/** Picks an option of an inline chip group (speed, sleep timer). */
 async function choose(label: string, value: string) {
-  const select = container!.querySelector(
-    `select[aria-label="${label}"]`,
-  ) as HTMLSelectElement;
-  assert.ok(select);
+  const input = radio(label, value);
+  assert.ok(input, `Missing option ${label}=${value}`);
   await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    input.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
   });
 }
 
@@ -719,13 +726,10 @@ describe("audiobook controls", () => {
     root = createRoot(container!);
     const restored = await renderPlayer({});
     assert.equal(restored.video.playbackRate, 1.5);
-    assert.equal(
-      (
-        container!.querySelector(
-          'select[aria-label="Prędkość"]',
-        ) as HTMLSelectElement
-      ).value,
-      "1.5",
+    assert.equal(radio("Prędkość", "1.5")?.checked, true);
+    assert.match(
+      container!.querySelector('[data-chip$="-speed"]')?.getAttribute("aria-label") ?? "",
+      /Prędkość: 1,5×/,
     );
     await dispatch(restored.video, "loadeddata");
     assert.equal(restored.video.playbackRate, 1.5);
@@ -744,8 +748,12 @@ describe("audiobook controls", () => {
     assert.ok(pauseCalls.length > before);
     assert.equal(container!.querySelector('[role="timer"]'), null);
     await choose("Wyłącznik czasowy", "30");
-    await clickLabel("Anuluj wyłącznik");
+    await choose("Wyłącznik czasowy", "off");
     assert.equal(container!.querySelector('[role="timer"]'), null);
+    assert.match(
+      container!.querySelector('[aria-live="polite"]')?.textContent ?? "",
+      /wyłączony/,
+    );
     context.mock.timers.reset();
   });
 
@@ -801,6 +809,7 @@ describe("audiobook controls", () => {
     const ChapterList = (await import("./ChapterList")).default;
     localStorage.setItem("__player__book_last_chapter", "two");
     localStorage.setItem("__player__book_two", "724");
+    localStorage.setItem("__player__book_one_completed", "true");
     let selected = "";
     await act(async () =>
       root!.render(
@@ -823,9 +832,100 @@ describe("audiobook controls", () => {
         .querySelector('[aria-current="true"]')
         ?.textContent?.includes("Chapter two"),
     );
-    assert.ok(container!.querySelector('[aria-label="Odsłuchane"]'));
+    assert.match(container!.querySelector("li")?.textContent ?? "", /Odsłuchany/);
     assert.ok(container!.querySelector('a[aria-label="Pobierz rozdział 2"]'));
-    await clickLabel("Kontynuuj: Rozdział 2, 12:04");
+    await clickLabel("Kontynuuj: rozdział 2, 12:04");
     assert.equal(selected, "two");
+  });
+});
+
+describe("audiobook option A details", () => {
+  it("ticks only completed chapters, not every chapter before the current one (A1)", async () => {
+    const ChapterList = (await import("./ChapterList")).default;
+    const list = [
+      { ...chapter("a"), duration: 600 },
+      { ...chapter("b"), duration: 600 },
+      { ...chapter("c"), duration: 600 },
+    ];
+    localStorage.setItem("__player__book_b", "300");
+    await act(async () =>
+      root!.render(
+        React.createElement(ChapterList, {
+          chapters: list,
+          productID: "book",
+          currentID: "c",
+          onSelect: () => {},
+        }),
+      ),
+    );
+    const rows = [...container!.querySelectorAll("li")];
+    assert.doesNotMatch(rows[0].textContent ?? "", /Odsłuchany/);
+    assert.doesNotMatch(rows[1].textContent ?? "", /Odsłuchany/);
+    // A partly played chapter shows its remaining time instead of a tick.
+    assert.match(rows[1].textContent ?? "", /Zostało 5 min/);
+    assert.match(rows[2].textContent ?? "", /Teraz odtwarzany/);
+  });
+
+  it("folds long lists after five rows and keeps the current one visible", async () => {
+    const ChapterList = (await import("./ChapterList")).default;
+    const list = Array.from({ length: 9 }, (_, index) => chapter(`c${index}`));
+    const render = (currentID: string) =>
+      act(async () =>
+        root!.render(
+          React.createElement(ChapterList, {
+            chapters: list,
+            productID: "book",
+            currentID,
+            onSelect: () => {},
+          }),
+        ),
+      );
+    await render("c0");
+    assert.equal(container!.querySelectorAll("li").length, 5);
+    await clickLabel("Pokaż wszystkie rozdziały (9)");
+    assert.equal(container!.querySelectorAll("li").length, 9);
+    await clickLabel("Pokaż mniej");
+    await render("c7");
+    assert.equal(container!.querySelectorAll("li").length, 8);
+  });
+
+  it("expands chips inline with native radios and returns focus on Escape", async () => {
+    await renderPlayer({});
+    const chip = container!.querySelector<HTMLButtonElement>('[data-chip$="-speed"]')!;
+    assert.equal(chip.getAttribute("aria-expanded"), "false");
+    const panel = dom.window.document.getElementById(
+      chip.getAttribute("aria-controls")!,
+    ) as HTMLFieldSetElement;
+    assert.equal(panel.tagName, "FIELDSET");
+    assert.ok(panel.querySelector("legend"));
+    assert.equal(panel.hidden, true);
+    await act(async () => chip.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })));
+    assert.equal(chip.getAttribute("aria-expanded"), "true");
+    assert.equal(panel.hidden, false);
+    const option = radio("Prędkość", "1.25")!;
+    option.focus();
+    await act(async () =>
+      option.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    assert.equal(chip.getAttribute("aria-expanded"), "false");
+    assert.equal(dom.window.document.activeElement, chip);
+  });
+
+  it("shows a connection error that keeps the position", async () => {
+    const player = await renderPlayer({});
+    giveMediaProperties(player.video, 600);
+    player.video.currentTime = 90;
+    await dispatch(player.video, "timeupdate");
+    Object.defineProperty(player.video, "error", { value: { code: 2 }, configurable: true });
+    await dispatch(player.video, "error");
+    const alert = player.container.querySelector('[role="alert"]')!;
+    assert.match(alert.textContent ?? "", /Odtwarzanie przerwane\. Sprawdź połączenie\./);
+    assert.match(alert.textContent ?? "", /01:30/);
+  });
+
+  it("has no .dark selectors in the player CSS", () => {
+    const css = readFileSync("src/panel/audio-player/audio-player.css", "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    assert.doesNotMatch(css, /\.dark\b/);
   });
 });

@@ -98,6 +98,8 @@ export type PanelSearchParamsType = {
   thread?: string;
   /** `state: "messages"`: id of the open channel. */
   channel?: string;
+  /** `state: "returns"`: `"mine"` opens the "Moje zwroty" tab. */
+  returnsTab?: "mine";
 };
 
 const PanelPage = ({
@@ -159,6 +161,7 @@ const PanelPage = ({
     chatProject: undefined,
     thread: undefined,
     channel: undefined,
+    returnsTab: undefined,
   });
 
   const [activeScreen, setActiveScreen] = useState<PanelScreen>(
@@ -194,6 +197,7 @@ const PanelPage = ({
       chatProject: undefined,
       thread: undefined,
       channel: undefined,
+      returnsTab: undefined,
       ...next,
     });
 
@@ -231,31 +235,33 @@ const PanelPage = ({
   const chat = usePanelChat(accessToken);
 
   // The browser's back and forward buttons move between the lessons of a
-  // course and in and out of it, and between conversations.
+  // course and in and out of it, between conversations, between the order
+  // list and an order, and between the returns tabs and a return.
+  const historyScreens: PanelScreen[] = [
+    "course",
+    "messages",
+    "orders",
+    "order-details",
+    "returns",
+    "return-details",
+  ];
   useEffect(() => {
     if (!isScreen(params.state)) return;
     if (
-      params.state === "course" ||
-      activeScreen === "course" ||
-      params.state === "messages" ||
-      activeScreen === "messages"
+      historyScreens.includes(params.state) ||
+      historyScreens.includes(activeScreen)
     ) {
       setActiveScreen(params.state);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.state]);
 
-  // TODO(wave 2): drop the `styles` props of the header and the grid; the
-  // brand reaches them through the panel tokens now.
-  const styles = {};
+  const openScreen = (state: PanelScreen) => {
+    navigate({ state, product: undefined });
+    setActiveScreen(state);
+  };
 
-  // An `order-details` screen without an id falls back to the order list,
-  // never to an empty page.
   const orderId = params.orderId?.trim() || undefined;
-  const showOrderDetails = activeScreen === "order-details" && orderId != null;
-  const showOrderList =
-    activeScreen === "orders" ||
-    (activeScreen === "order-details" && orderId == null);
 
   useEffect(() => {
     if (accessToken == null || accessToken.length === 0) {
@@ -301,7 +307,6 @@ useEffect(() => {
         activeScreen={activeScreen}
         setActiveScreen={setActiveScreen}
         setParams={navigate}
-        styles={styles}
         theme={theme}
         logout={logout}
         email={email}
@@ -315,7 +320,6 @@ useEffect(() => {
             projectID={projectID ?? ""}
             accessToken={accessToken!}
             loginURL={loginURL ?? "/panel/login"}
-            styles={styles}
             activeScreen={activeScreen}
             params={params as PanelSearchParamsType}
             setParams={setParams}
@@ -363,16 +367,19 @@ useEffect(() => {
           <PanelPlansComponent projectID={projectID ?? ""} />
         )}
 
-        {showOrderList && (
+        {activeScreen === "orders" && (
           <PanelOrderHistoryComponent
             projectID={projectID ?? ""}
             accessToken={accessToken ?? ""}
             openOrderDetails={handleOpenOrderDetails}
+            openLibrary={() => openScreen("products")}
           />
         )}
 
-        {showOrderDetails && (
+        {/* D1: every order-details screen renders; without an id it explains. */}
+        {activeScreen === "order-details" && (
           <PublicOrderPage
+            variant="panel"
             orderID={orderId}
             accessToken={accessToken ?? undefined}
             onBack={handleBackToOrders}
@@ -395,6 +402,7 @@ useEffect(() => {
               params={params as PanelSearchParamsType}
               setParams={setParams}
               setActiveScreen={setActiveScreen}
+              openOrders={() => openScreen("orders")}
             />
           )}
 

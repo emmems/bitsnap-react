@@ -40,6 +40,23 @@ function proto<T extends DescMessage>(schema: T, init: MessageInitShape<T>) {
 }
 
 const roots: Array<{ unmount: () => void }> = [];
+/** What GetPublicOrderDetails answers; a Response is sent as it is. */
+let detail: () => Response | MessageInitShape<typeof GetPublicOrderDetailsResponseSchema>;
+const baseOrder = {
+  orderId: "c_TEY3",
+  status: "paid",
+  currency: "PLN",
+  totalAmount: 2500n,
+  isVerified: true,
+  customerName: "Jan Kowalski",
+  customerEmail: "jan@example.test",
+  customerPhone: "+48 600 100 200",
+  deliveryAddress: "ul. Długa 1, 00-001 Warszawa",
+  deliveryMethod: "Kurier",
+  items: [{ name: "Ebook", quantity: 1, price: 2500n, currency: "PLN" }],
+  comments: [{ id: 1, message: "Dziękujemy!", authorType: "seller", authorName: "Sklep" }],
+  commentCount: 1,
+};
 const detailRequests: Array<{ orderId: string; accessToken: string }> = [];
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -53,6 +70,7 @@ beforeEach(() => {
   page.win.localStorage.clear();
   page.win.localStorage.setItem(SESSION_KEY, "panel-token");
   detailRequests.length = 0;
+  detail = () => ({ result: { case: "order", value: baseOrder } });
   globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
     if (url.endsWith("/GetOrders")) {
@@ -67,12 +85,10 @@ beforeEach(() => {
         orderId: request.orderId,
         accessToken: request.accessToken ?? "",
       });
-      return proto(GetPublicOrderDetailsResponseSchema, {
-        result: {
-          case: "order",
-          value: { orderId: "c_TEY3", status: "paid", currency: "PLN", totalAmount: 2500n },
-        },
-      });
+      const answer = detail();
+      return answer instanceof Response
+        ? answer
+        : proto(GetPublicOrderDetailsResponseSchema, answer);
     }
     return new Response(null, { status: 202 });
   }) as typeof fetch;
@@ -145,7 +161,7 @@ describe("Panel", () => {
     const container = await mountAt(`?state=${q("order-details")}&orderId=${q("")}`);
     assert.equal(page.win.location.search, `?state=${q("orders")}`);
     const main = container.querySelector("main");
-    assert.ok(main?.textContent?.includes("Historia zamówień"), main?.textContent ?? "");
+    assert.equal(main?.querySelector("h1")?.textContent, "Zamówienia");
     assert.equal(detailRequests.length, 0);
   });
 
@@ -153,4 +169,104 @@ describe("Panel", () => {
     await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
     assert.deepEqual(detailRequests[0], { orderId: "ord_1", accessToken: "panel-token" });
   });
+
+  it("shows the order as a receipt for a logged-in buyer: no e-mail check, no comment form", async () => {
+    const container = await mountAt(`?state=${q("order-details")}&orderId=${q("c_full_TEY3")}`);
+    const main = container.querySelector("main")!;
+    assert.equal(main.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
+    assert.match(main.textContent ?? "", /Razem/);
+    assert.doesNotMatch(main.textContent ?? "", /Dostawa i rabaty|Potwierdź e-mail|Zweryfikuj/);
+    assert.equal(main.querySelector("textarea"), null);
+    // Address and phone stay behind "Pokaż dane".
+    assert.doesNotMatch(main.textContent ?? "", /ul\. Długa/);
+    const show = [...main.querySelectorAll("button")].find((b) => b.textContent === "Pokaż dane")!;
+    await React.act(async () => show.click());
+    assert.match(main.textContent ?? "", /ul\. Długa 1/);
+    assert.match(main.textContent ?? "", /\+48 600 100 200/);
+    // The comment thread is read-only, behind a disclosure.
+    const comments = [...main.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((b) => /Komentarze/.test(b.textContent ?? ""))!;
+    await React.act(async () => comments.click());
+    assert.match(main.textContent ?? "", /Dziękujemy!/);
+  });
+
+  it("separates a failed request (retry) from a missing order (way back)", async () => {
+    detail = () => new Response(null, { status: 503 });
+    let container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
+    assert.match(container.querySelector("[role=alert]")?.textContent ?? "", /Nie udało się pobrać zamówienia/);
+    detail = () => ({ result: { case: "order", value: baseOrder } });
+    const retry = [...container.querySelectorAll("button")].find((b) => b.textContent === "Spróbuj ponownie")!;
+    await React.act(async () => retry.click());
+    await settle();
+    assert.equal(container.querySelector("main h1")?.textContent, "Zamówienie c_TEY3");
+
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    detail = () => ({ result: { case: "failure", value: 1 } });
+    container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_2")}`);
+    assert.match(container.textContent ?? "", /Nie możemy otworzyć tego zamówienia/);
+    const back = [...container.querySelectorAll("button")].find((b) => b.textContent === "Wróć do zamówień")!;
+    await React.act(async () => back.click());
+    await settle();
+    assert.equal(page.win.location.search, `?state=${q("orders")}`);
+  });
+
+  it("goes back to the list with the browser's back button", async () => {
+    await mountAt(`?state=${q("orders")}`);
+    page.win.history.pushState({}, "", `/panel?state=${q("order-details")}&orderId=${q("ord_1")}`);
+    await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
+    await settle();
+    assert.equal(page.win.document.querySelector("main h1")?.textContent, "Zamówienie c_TEY3");
+    page.win.history.pushState({}, "", `/panel?state=${q("orders")}`);
+    await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
+    await settle();
+    assert.equal(page.win.document.querySelector("main h1")?.textContent, "Zamówienia");
+  });
 });
+
+describe("PublicOrderPage", () => {
+  it("explains an order without an id instead of rendering nothing", async () => {
+    const PublicOrderPage = (await import("./components/PublicOrderPage.tsx")).default;
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    let back = 0;
+    await React.act(async () =>
+      root.render(
+        <PanelProvider analytics={false}>
+          <PublicOrderPage variant="panel" onBack={() => back++} />
+        </PanelProvider>,
+      ),
+    );
+    await settle();
+    assert.match(container.textContent ?? "", /To starsze zamówienie/);
+    assert.equal(detailRequests.length, 0);
+    await React.act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    assert.equal(back, 1);
+  });
+
+  it("is its own themed page when standalone, with no --button-* styles", async () => {
+    const PublicOrderPage = (await import("./components/PublicOrderPage.tsx")).default;
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    page.win.localStorage.clear();
+    await React.act(async () =>
+      root.render(
+        <PanelProvider analytics={false}>
+          <PublicOrderPage orderID="ord_9" />
+        </PanelProvider>,
+      ),
+    );
+    await settle();
+    await settle();
+    const boundary = container.querySelector<HTMLElement>("[data-bitsnap-panel]");
+    assert.ok(boundary);
+    assert.equal(boundary.style.getPropertyValue("--panel-accent"), "#dc2626");
+    assert.equal(boundary.getAttribute("style")?.includes("--button-"), false);
+    assert.equal(container.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
+    // No session: masked data can be confirmed with the order e-mail.
+    assert.equal(detailRequests[0].accessToken, "");
+  });
+});
+
