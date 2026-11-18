@@ -27,7 +27,7 @@ import {
   type ResolvedProductListAppearance,
 } from "./appearance";
 import { clampPageSize, type PublicListProduct } from "./fetch";
-import { formatProductPrice } from "./format";
+import { productCardPrice } from "./format";
 import { createImpressionTracker } from "./impressions";
 import { formatProductRating } from "./rating";
 import {
@@ -41,10 +41,19 @@ import { useProducts, type UseProductsOptions } from "./useProducts";
 export type ProductListItemContext = {
   /** Product page URL from `productHref`. */
   href: string;
-  /** Price formatted for the locale and currency, without the "from" prefix. */
+  /**
+   * Price formatted for the locale and currency, without the "from" prefix.
+   * For a product priced by a quote with no price to show (`quote`), the
+   * `quote` text ("Wyceń") instead.
+   */
   price: string;
   /** Formatted regular price when the product is discounted. */
   compareAtPrice: string | null;
+  /**
+   * `true` when the card shows the `quote` text instead of a price. Such
+   * products (`quoteOnly`) are never added to the cart: `addToCart` rejects.
+   */
+  quote: boolean;
   texts: ProductListTexts;
   locale: string;
   /** Adds the product to the cart the way the built-in button does. */
@@ -261,15 +270,13 @@ function ProductCard({
   const actions = useSlot("actions", "p-4 pt-0");
   const selectButton = useSlot("selectButton", LINK_BUTTON_CLASS);
 
-  const formattedPrice = formatProductPrice(
-    product.price,
-    product.currency,
-    locale,
-  );
+  const cardPrice = productCardPrice(product, locale);
+  const formattedPrice =
+    cardPrice.kind === "quote" ? texts.quote : cardPrice.price;
   const formattedCompare =
-    product.compareAtPrice != null && product.compareAtPrice > product.price
-      ? formatProductPrice(product.compareAtPrice, product.currency, locale)
-      : null;
+    cardPrice.kind === "price" ? cardPrice.compareAtPrice : null;
+  // A quoted product is bought through its page, whatever `addToCart` says.
+  const canAddToCart = product.addToCart && product.quoteOnly !== true;
 
   if (renderItem != null) {
     return (
@@ -282,6 +289,7 @@ function ProductCard({
           href,
           price: formattedPrice,
           compareAtPrice: formattedCompare,
+          quote: cardPrice.kind === "quote",
           texts,
           locale,
           addToCart: onAdd,
@@ -329,8 +337,11 @@ function ProductCard({
               </span>
             </p>
           ) : null}
-          <p {...price}>
-            {product.priceFrom
+          <p
+            {...price}
+            data-kind={cardPrice.kind === "quote" ? "quote" : undefined}
+          >
+            {cardPrice.kind === "price" && cardPrice.from
               ? fillProductListText(texts.priceFrom, { price: formattedPrice })
               : formattedPrice}
             {formattedCompare != null ? (
@@ -362,7 +373,7 @@ function ProductCard({
           <button type="button" {...selectButton} disabled>
             {texts.unavailable}
           </button>
-        ) : product.addToCart ? (
+        ) : canAddToCart ? (
           <AddToCartButton product={product} onAdd={onAdd} />
         ) : (
           <a {...selectButton} href={href} onClick={trackClick}>
@@ -565,6 +576,10 @@ function ProductListContent({
   const { projectID, host } = options;
   const addFor = useCallback(
     (product: PublicListProduct, href: string) => async () => {
+      if (product.quoteOnly === true) {
+        // Priced by a quote: the buyer asks for one on the product page.
+        throw new Error("bitsnap-react: a quote-only product is not added to the cart");
+      }
       if (onAddToCart != null) {
         // The list reports the add itself; a cart helper called inside must not report it again.
         await withCartAnalyticsMuted(() => onAddToCart(product));
