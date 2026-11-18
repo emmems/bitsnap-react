@@ -36,6 +36,8 @@ export type ProductListTexts = {
   priceFrom: string;
   /** Screen reader label of the struck-through regular price. */
   originalPrice: string;
+  /** Shown instead of the price of products priced by a quote (3D prints, services). */
+  quote: string;
   /**
    * Screen reader label of a card's rating (`showRating`). `{average}` is the
    * formatted average and `{reviews}` one of the `reviews*` texts.
@@ -82,6 +84,7 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     model3dLabel: "3D model",
     priceFrom: "from {price}",
     originalPrice: "Original price",
+    quote: "Get a quote",
     ratingLabel: "Rated {average} out of 5, {reviews}",
     reviewsOne: "{count} review",
     reviewsFew: "{count} reviews",
@@ -109,6 +112,7 @@ export const PRODUCT_LIST_TEXT_TABLES: LocaleTables<ProductListTextKey> = {
     model3dLabel: "Model 3D",
     priceFrom: "od {price}",
     originalPrice: "Cena przed obniżką",
+    quote: "Wyceń",
     ratingLabel: "Ocena {average} na 5, {reviews}",
     reviewsOne: "{count} opinia",
     reviewsFew: "{count} opinie",

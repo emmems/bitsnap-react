@@ -156,6 +156,18 @@ export namespace BitsnapModels {
      */
     has3d: z.boolean().optional(),
     /**
+     * `true` for a product that is quoted, not bought (a 3D print, a service
+     * priced by a quote). It is never added to the cart from the list. Unless
+     * `quoteShowsPrice` is also `true`, `price` is not a price (it is 0) and
+     * the card shows the `quote` text ("Wyceń") instead. Older backends omit it.
+     */
+    quoteOnly: z.boolean().optional(),
+    /**
+     * With `quoteOnly`: the service has an automatic price, so the card shows
+     * `price` (with "from" when `priceFrom`). Older backends omit it.
+     */
+    quoteShowsPrice: z.boolean().optional(),
+    /**
      * Published reviews: the average (one decimal, 0-5) and how many there
      * are (at least one). Sent only when the list is asked with `?rating=1`
      * (`ProductList` `showRating`) and only for products with reviews.
