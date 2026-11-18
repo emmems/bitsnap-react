@@ -261,3 +261,167 @@ describe("order history block", () => {
     assert.equal(container.innerHTML, '<div class="bitsnap-react"></div>');
   });
 });
+
+describe("order list helpers", () => {
+  let format: typeof import("./components/orders/format.ts");
+  before(async () => {
+    format = await import("./components/orders/format.ts");
+  });
+
+  it("shortens an order id like the server's getPublicOrderID", () => {
+    assert.equal(format.shortOrderRef("c_7Hq3Zk9WmX"), "c_9WmX");
+    assert.equal(format.shortOrderRef("c_TEY3"), "c_TEY3");
+    assert.equal(format.shortOrderRef("ORDER12345"), "2345");
+    assert.equal(format.shortOrderRef(" "), "");
+  });
+
+  it("uses Polish plural forms", () => {
+    const forms = { one: "{count} zamówienie", few: "{count} zamówienia", many: "{count} zamówień" };
+    assert.equal(format.pluralText("pl", 1, forms), "1 zamówienie");
+    assert.equal(format.pluralText("pl", 3, forms), "3 zamówienia");
+    assert.equal(format.pluralText("pl", 5, forms), "5 zamówień");
+    assert.equal(format.pluralText("pl", 22, forms), "22 zamówienia");
+  });
+
+  it("groups consecutive orders by month and capitalises the month", () => {
+    const dates = ["2026-11-14", "2026-11-02", "2026-09-01", undefined].map((d) => (d ? new Date(`${d}T12:00:00Z`) : undefined));
+    const groups = format.groupByMonth(dates, (d) => d);
+    assert.deepEqual(groups.map((g) => g.items.length), [2, 1, 1]);
+    assert.equal(format.formatMonth(new Date("2024-03-02T12:00:00Z"), "pl-PL"), "Marzec 2024");
+  });
+
+  it("detects differing checkout names", () => {
+    assert.equal(format.namesDiffer(["Jan", " Jan ", ""]), false);
+    assert.equal(format.namesDiffer(["Jan", "Ola"]), true);
+  });
+});
+
+describe("order list (option A)", () => {
+  let Orders: typeof import("./components/PanelOrderHistory.tsx").default;
+  let GetOrdersResponseSchema: typeof import("../gen/proto/public/v1/public_api_pb").GetOrdersResponseSchema;
+  let GetOrdersRequestSchema: typeof import("../gen/proto/public/v1/public_api_pb").GetOrdersRequestSchema;
+  before(async () => {
+    Orders = (await import("./components/PanelOrderHistory.tsx")).default;
+    ({ GetOrdersResponseSchema, GetOrdersRequestSchema } = await import("../gen/proto/public/v1/public_api_pb"));
+  });
+
+  type OrderInit = { id: string; status: string; totalAmount: number; currency: string; customerName: string; createdAt: ReturnType<typeof timestampFromDate> };
+  const order = (id: string, date: string, name = "Piotr Michalik", status = "paid"): OrderInit => ({
+    id,
+    status,
+    totalAmount: 8326,
+    currency: "pln",
+    customerName: name,
+    createdAt: timestampFromDate(new Date(`${date}T10:00:00Z`)),
+  });
+
+  let pages: OrderInit[][];
+  let offsets: number[];
+  beforeEach(() => {
+    offsets = [];
+    globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+      const req = fromBinary(GetOrdersRequestSchema, new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()));
+      offsets.push(req.offset);
+      const all = pages.flat();
+      const index = pages.findIndex((_, i) => pages.slice(0, i).flat().length === req.offset);
+      const orders = index === -1 ? [] : pages[index];
+      return new Response(toBinary(GetOrdersResponseSchema, create(GetOrdersResponseSchema, { orders, totalCount: all.length })) as BodyInit, {
+        status: 200,
+        headers: { "Content-Type": "application/proto" },
+      });
+    }) as typeof fetch;
+  });
+
+  async function mountOrders(opened: string[] = [], openLibrary?: () => void) {
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () =>
+      root.render(
+        <PanelProvider analytics={false}>
+          <Orders projectID={TEST_KEY} accessToken="token" openOrderDetails={(id) => opened.push(id)} openLibrary={openLibrary} />
+        </PanelProvider>,
+      ),
+    );
+    await settle();
+    await settle();
+    return container;
+  }
+
+  it("groups by month, shows the short number, and keeps old orders static", async () => {
+    pages = [[order("c_7Hq3Zk9WmX", "2025-11-02"), order("", "2024-03-02", "Piotr Krzesaj"), order("", "2024-03-02")]];
+    const opened: string[] = [];
+    const container = await mountOrders(opened);
+    assert.equal(container.querySelector("h1")?.textContent, "Zamówienia");
+    assert.match(container.textContent ?? "", /3 zamówienia/);
+    assert.deepEqual([...container.querySelectorAll("h2")].map((h) => h.textContent), ["Listopad 2025", "Marzec 2024"]);
+
+    const buttons = container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]");
+    assert.equal(buttons.length, 1);
+    assert.match(buttons[0].textContent ?? "", /#c_9WmX/);
+    // The accessible name keeps what the row shows: status and buyer too.
+    const label = buttons[0].getAttribute("aria-label") ?? "";
+    assert.match(label, /Zamówienie #c_9WmX/);
+    assert.match(label, /Opłacone/);
+    assert.match(label, /Dla: Piotr Michalik/);
+    await React.act(async () => buttons[0].click());
+    assert.deepEqual(opened, ["c_7Hq3Zk9WmX"]);
+
+    const legacy = [...container.querySelectorAll<HTMLElement>("[data-order-row=legacy]")];
+    assert.equal(legacy.length, 2);
+    for (const row of legacy) {
+      assert.equal(row.tagName, "LI");
+      assert.equal(row.querySelector("button"), null);
+      const note = page.win.document.getElementById(row.getAttribute("aria-describedby")!);
+      assert.equal(note?.textContent, "Szczegóły niedostępne dla starszych zamówień");
+      assert.match(page.win.document.getElementById(row.getAttribute("aria-labelledby")!)?.textContent ?? "", /Zamówienie z 2 mar 2024/);
+    }
+    // Names differ between orders: each row says for whom.
+    assert.match(container.textContent ?? "", /Dla: Piotr Krzesaj/);
+    assert.equal(container.querySelectorAll("[data-status-variant=ok]").length, 3);
+    assert.doesNotMatch(container.textContent ?? "", /To już wszystkie/);
+  });
+
+  it("titles an old order without a date plainly, with the note once", async () => {
+    pages = [[{ ...order("", "2024-03-02"), createdAt: undefined as never }]];
+    const container = await mountOrders();
+    const row = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.equal(page.win.document.getElementById(row.getAttribute("aria-labelledby")!)?.textContent, "Starsze zamówienie");
+    assert.equal((row.textContent ?? "").split("Szczegóły niedostępne").length - 1, 1);
+  });
+
+  it("hides the checkout name when every order has the same one", async () => {
+    pages = [[order("c_AAAA1111", "2025-11-02"), order("c_BBBB2222", "2025-10-02")]];
+    const container = await mountOrders();
+    assert.doesNotMatch(container.textContent ?? "", /Dla:/);
+  });
+
+  it("loads more with \"Pokaż więcej\", keeps the loaded rows and announces the result", async () => {
+    pages = [
+      Array.from({ length: 20 }, (_, i) => order(`c_X${String(i).padStart(7, "0")}`, "2025-11-02")),
+      [order("c_LAST0001", "2025-01-02")],
+    ];
+    const container = await mountOrders();
+    const more = [...container.querySelectorAll("button")].find((b) => b.textContent === "Pokaż więcej");
+    assert.ok(more);
+    await React.act(async () => more!.click());
+    await settle();
+    await settle();
+    assert.deepEqual(offsets, [0, 20]);
+    assert.equal(container.querySelectorAll("[data-order-row=open]").length, 21);
+    assert.equal([...container.querySelectorAll("button")].some((b) => b.textContent === "Pokaż więcej"), false);
+    assert.match(container.querySelector("[aria-live=polite]")?.textContent ?? "", /Wczytano kolejne zamówienia: 1/);
+    assert.match(container.textContent ?? "", /To już wszystkie Twoje zamówienia/);
+  });
+
+  it("shows a real empty state with a way to the library", async () => {
+    pages = [[]];
+    let library = 0;
+    const container = await mountOrders([], () => library++);
+    assert.match(container.textContent ?? "", /Nie masz jeszcze zamówień/);
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Przejdź do biblioteki");
+    await React.act(async () => button!.click());
+    assert.equal(library, 1);
+  });
+});

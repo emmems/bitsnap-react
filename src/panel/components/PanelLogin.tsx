@@ -1,5 +1,5 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TurnstileChallenge } from "../../captcha/TurnstileChallenge";
 import {
   InstrumentProvider,
@@ -34,6 +34,7 @@ import {
 import { panelFailureKind } from "../login-adapter";
 import { resolvePanelLoginTexts, type PanelLoginTexts } from "../login-texts";
 import { usePanelConfig } from "../PanelProvider";
+import { usePanelRoot } from "../theme";
 import type { PanelLoginProps } from "../types";
 import {
   buildAccessTokenRedirect,
@@ -59,7 +60,13 @@ if (typeof window !== "undefined") {
 /** Props of {@link PanelLogin}; `PanelLoginProps` of the package is a superset. */
 export type PanelLoginComponentProps = Pick<
   PanelLoginProps,
-  "analytics" | "texts" | "locale" | "showLogo" | "logoUrl" | "logoDarkUrl"
+  | "analytics"
+  | "texts"
+  | "locale"
+  | "showLogo"
+  | "logoUrl"
+  | "logoDarkUrl"
+  | "colorScheme"
 >;
 
 type PanelLoginResult = { accessToken: string };
@@ -202,20 +209,15 @@ const PanelLoginComponentWrapper = ({
   showLogo,
   logoUrl,
   logoDarkUrl,
+  colorScheme,
 }: PanelLoginComponentProps) => {
   const { theme, allowedReturnOrigins, projectID, host } = usePanelConfig();
+  const { rootProps } = usePanelRoot(theme, colorScheme);
   const instrument = useInstrument(projectID, analytics, "panel");
   const texts = useMemo(
     () => resolvePanelLoginTexts(locale ?? getLocale(), textOverrides),
     [locale, textOverrides],
   );
-
-  const styles = {
-    "--button-background-color": theme?.colors?.brand ?? "#FFFFFF",
-    "--button-background-color-dark": theme?.colors?.brandDark ?? "#000000",
-    "--button-text-color": theme?.colors?.brandDark ?? "#000000",
-    "--button-text-color-dark": theme?.colors?.brand ?? "#FFFFFF",
-  } as CSSProperties;
 
   const [parent] = useAutoAnimate({
     duration: 300,
@@ -253,12 +255,13 @@ const PanelLoginComponentWrapper = ({
 
   return (
     <InstrumentProvider value={instrument}>
-      <div className="bg-white text-black dark:bg-black dark:text-white">
-        <div
-          className="font-inter flex min-h-screen w-full flex-col p-4"
-          style={styles}
-          ref={parent}
-        >
+      <div
+        {...rootProps}
+        className={`bg-(--panel-bg) text-(--panel-fg)${
+          rootProps.className ? ` ${rootProps.className}` : ""
+        }`}
+      >
+        <div className="flex min-h-screen w-full flex-col p-4" ref={parent}>
           <PanelLoginForm
             texts={texts}
             projectID={projectID}

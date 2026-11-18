@@ -75,6 +75,39 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.27.0
+
+- **Customer panel redesign (option A for every screen).** Audiobook: compact
+  player with a brand-coloured play button, 10 s skips, speed and sleep-timer
+  chips, a tick only on completed chapters, load and stream errors with a
+  retry that keeps the position. Files: "Twoje pliki" list with format badges
+  and one download button. Ticket: the panel now calls
+  `UserPanelGetTicketDetails` and shows the QR code on a white tile with
+  "Zapisz kod QR" and wallet buttons (only for `https:` links). Order history:
+  month groups, "Pokaż więcej", an order number (`#c_XXXX`), old orders without
+  an id are no longer clickable (they opened a blank screen). Order detail:
+  receipt layout, address and phone behind "Pokaż dane", read-only comments
+  (the comment form never worked and is removed), e-mail check whenever data
+  is masked. Returns: themed, real tabs, "Jak to działa" and a clear empty
+  state.
+- **Dark mode and seller colour across the panel.** The panel follows a
+  `.dark` class on any ancestor (pure CSS, no flash on SSR) and maps the
+  seller's `brand`/`brandDark` to every button, card and focus ring, with a
+  contrast guard for pale colours. New optional `colorScheme` prop on `Panel`,
+  `PanelLogin` and `PublicOrderPage`: `"inherit"` (default, today's
+  behaviour) or `"system"`. Checkout, products, notifications and the
+  standalone `BitsnapReturns` look the same as before.
+- `PublicOrderPage`: `orderID` is optional; new optional `variant`
+  (`"standalone"` default, `"panel"`) and `colorScheme`. The order id is never
+  sent to analytics or the page title.
+- **Security:** product descriptions on library cards no longer go through
+  `innerHTML` (seller text could inject markup). Only `https:` URLs become
+  links; plain `http://` URLs are no longer clickable. Rich descriptions on
+  product pages are sanitised.
+- Fixes: raw Lexical HTML in descriptions, the empty grey bar under files and
+  tickets, the white returns box on dark sites, dark-on-dark ticket titles,
+  order detail overflowing at phone width.
+
 ## 1.26.0
 
 - **Panel: the shop's notification settings.** "Konto" (`PanelProfile`) now

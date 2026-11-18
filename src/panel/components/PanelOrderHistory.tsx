@@ -1,186 +1,226 @@
+import { Loader2, Receipt } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getLocale } from "../../components/checkout/locale";
-import { getPanelTexts, orderStatusLabel } from "../texts";
+import { rpcProvider, useInfiniteQuery } from "../../rpc-provider";
 import { Button } from "../../ui/button";
-import { rpcProvider, useQuery } from "../../rpc-provider";
-import { Skeleton } from "../../ui/skeleton";
-import { useState } from "react";
+import { getPanelTexts } from "../texts";
+import {
+  fillText,
+  formatMonth,
+  groupByMonth,
+  namesDiffer,
+  ordersCountText,
+  timestampToDate,
+} from "./orders/format";
+import {
+  MonthHeader,
+  OrderRow,
+  OrderRowSkeletons,
+  type OrderRowData,
+} from "./orders/OrderRows";
+import { PanelEmptyState } from "./shared/PanelEmptyState";
 
 interface PanelOrderHistoryComponentProps {
   projectID: string;
   accessToken: string;
   openOrderDetails: (orderId: string) => void;
+  /** Action of the empty state ("Przejdź do biblioteki"); hidden without it. */
+  openLibrary?: () => void;
 }
 
-const formatDate = (ts: number): string =>
-  new Date(ts * 1000).toLocaleDateString(getLocale(), {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+/** Orders per "Pokaż więcej" step. */
+export const ORDERS_PAGE_SIZE = 20;
 
-const formatAmount = (amount: number, currency: string): string =>
-  new Intl.NumberFormat(getLocale(), {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(amount / 100);
+/** The list wrapper: plain on a phone, one divided card from `md`. */
+const LIST_CARD =
+  "md:overflow-hidden md:rounded-xl md:border md:border-(--panel-border) md:bg-(--panel-surface)";
 
-const statusColor: Record<string, string> = {
-  draft: "text-neutral-600 dark:text-neutral-400",
-  unpaid: "text-amber-700 dark:text-amber-300",
-  paid: "text-green-700 dark:text-green-400",
-  overdue: "text-red-700 dark:text-red-400",
-  cancelled: "text-neutral-600 line-through dark:text-neutral-400",
-  completed: "text-green-700 dark:text-green-400",
-  processing: "text-blue-700 dark:text-blue-400",
-  refunded: "text-purple-700 dark:text-purple-400",
-};
-
+/**
+ * Order history, option A: a compact list grouped by month with
+ * "Pokaż więcej". Rows of old orders without an id are static and say why.
+ */
 function PanelOrderHistory({
   openOrderDetails,
+  openLibrary,
   projectID,
   accessToken,
 }: PanelOrderHistoryComponentProps) {
-  const texts = getPanelTexts();
-  const [offset, setOffset] = useState(0);
-  const limit = 20;
+  const locale = getLocale();
+  const texts = getPanelTexts(locale);
 
-  const { data, isFetching, isError, refetch } = useQuery(rpcProvider.publicApi.getOrders, {
-    projectId: projectID,
-    accessToken,
-    offset,
-    limit,
-  });
+  const query = useInfiniteQuery(
+    rpcProvider.publicApi.getOrders,
+    { projectId: projectID, accessToken, offset: 0, limit: ORDERS_PAGE_SIZE },
+    {
+      pageParamKey: "offset",
+      getNextPageParam: (last, pages) => {
+        const loaded = pages.reduce((sum, page) => sum + page.orders.length, 0);
+        return last.orders.length > 0 && loaded < last.totalCount
+          ? loaded
+          : undefined;
+      },
+    },
+  );
 
-  const orders = data?.orders ?? [];
-  const totalCount = data?.totalCount ?? 0;
-  const currentPage = Math.floor(offset / limit) + 1;
-  const totalPages = Math.ceil(totalCount / limit);
+  const orders = useMemo<OrderRowData[]>(() => {
+    const seen = new Set<string>();
+    const rows: OrderRowData[] = [];
+    for (const page of query.data?.pages ?? []) {
+      for (const order of page.orders) {
+        if (order.id !== "") {
+          if (seen.has(order.id)) continue;
+          seen.add(order.id);
+        }
+        rows.push({
+          id: order.id,
+          status: order.status,
+          totalAmount: Number(order.totalAmount),
+          currency: order.currency,
+          customerName: order.customerName,
+          date: timestampToDate(order.createdAt),
+        });
+      }
+    }
+    return rows;
+  }, [query.data]);
 
-  const handlePageChange = (newOffset: number) => {
-    setOffset(newOffset);
+  const pages = query.data?.pages ?? [];
+  const totalCount = pages[pages.length - 1]?.totalCount ?? orders.length;
+  const showNames = namesDiffer(orders.map((order) => order.customerName));
+  const groups = groupByMonth(orders, (order) => order.date);
+
+  // Announce how many orders "Pokaż więcej" added.
+  const [announcement, setAnnouncement] = useState("");
+  const countBeforeMore = useRef<number | null>(null);
+  useEffect(() => {
+    if (countBeforeMore.current == null || query.isFetchingNextPage) return;
+    const added = orders.length - countBeforeMore.current;
+    countBeforeMore.current = null;
+    if (added > 0) {
+      setAnnouncement(fillText(texts.ordersLoadedMore, { count: added }));
+    }
+  }, [orders.length, query.isFetchingNextPage, texts.ordersLoadedMore]);
+
+  const loadMore = () => {
+    countBeforeMore.current = orders.length;
+    void query.fetchNextPage();
   };
 
+  const firstLoad = query.isPending;
+  const failed = query.isError && orders.length === 0;
+
   return (
-    <>
-      <h3 className="text-2xl">{texts.ordersHeading}</h3>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">
-        {texts.ordersDescription}
-      </p>
+    <div className="flex w-full max-w-[720px] flex-col">
+      <header className="mb-5">
+        <h1 className="text-2xl font-semibold tracking-tight">{texts.ordersTitle}</h1>
+        {!firstLoad && !failed && orders.length > 0 && (
+          <p className="mt-0.5 text-sm text-(--panel-muted)">
+            {ordersCountText(texts, locale, totalCount)}
+          </p>
+        )}
+      </header>
 
-      {isFetching ? (
-        <div className="mt-6 flex w-full flex-col gap-3">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl bg-white p-4 shadow-sm dark:bg-neutral-800"
+      {firstLoad ? (
+        <div role="status" aria-label={texts.ordersLoading} className={LIST_CARD}>
+          <OrderRowSkeletons />
+        </div>
+      ) : failed ? (
+        <PanelEmptyState
+          role="alert"
+          title={texts.ordersError}
+          action={
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => void query.refetch()}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Skeleton className="ml-auto h-4 w-16" />
-                  <Skeleton className="ml-auto h-3 w-12" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <Skeleton className="h-3 w-40" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : isError ? (
-        <div role="alert" className="mt-6 space-y-3">
-          <p>{texts.ordersError}</p>
-          <Button
-            onClick={() => void refetch()}
-            className="min-h-11 focus-visible:outline-2 focus-visible:outline-current"
-          >
-            {texts.retry}
-          </Button>
-        </div>
+              {texts.retry}
+            </Button>
+          }
+        />
       ) : orders.length === 0 ? (
-        <div className="mt-6 text-sm text-neutral-600 dark:text-neutral-400">{texts.ordersEmpty}</div>
+        <PanelEmptyState
+          icon={<Receipt />}
+          title={texts.ordersEmptyTitle}
+          description={texts.ordersEmptyText}
+          action={
+            openLibrary ? (
+              <Button className="min-h-11" onClick={openLibrary}>
+                {texts.ordersEmptyAction}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div>
-          <div className="mt-6 flex w-full flex-col gap-3">
-            {orders.map((order) => (
-              <button
-                key={order.id}
-                onClick={() => openOrderDetails(order.id)}
-                className="block min-h-11 focus-visible:outline-2 focus-visible:outline-current rounded-xl bg-white p-4 text-left shadow-sm transition-colors hover:bg-neutral-50 dark:bg-neutral-800 dark:hover:bg-neutral-700"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 break-words">
-                    <p className="font-medium">{texts.orderLabel} #{order.id}</p>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      {order.customerName || texts.customerLabel}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-semibold">
-                      {formatAmount(order.totalAmount, order.currency)}
-                    </p>
-                    <p
-                      className={`text-xs font-medium ${statusColor[order.status] ?? "text-neutral-400"}`}
-                    >
-                      {orderStatusLabel(order.status, texts) ?? order.status}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400">
-                  <span>
-                    {texts.dateLabel}:{" "}
-                    {order.createdAt
-                      ? formatDate(Number(order.createdAt.seconds))
-                      : "-"}
-                  </span>
-                </div>
-              </button>
+        <>
+          <div className={LIST_CARD} data-orders-list="">
+            {groups.map((group, groupIndex) => (
+              <section key={`${group.key}-${groupIndex}`} className="mt-5 first:mt-0 md:mt-0">
+                {group.date && (
+                  <MonthHeader label={formatMonth(group.date, locale)} />
+                )}
+                <ul className="flex flex-col gap-2.5 md:gap-0 md:[&>li:first-child]:border-t-0 md:[&>li:first-child>button]:border-t-0">
+                  {group.items.map((order, index) => (
+                    <OrderRow
+                      key={
+                        order.id ||
+                        `${order.date?.getTime() ?? "none"}-${groupIndex}-${index}`
+                      }
+                      order={order}
+                      showName={showNames}
+                      texts={texts}
+                      locale={locale}
+                      onOpen={openOrderDetails}
+                    />
+                  ))}
+                </ul>
+              </section>
             ))}
           </div>
 
-          {currentPage >= totalPages && (
-            <p className="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
+          {query.hasNextPage && !query.isFetchNextPageError && (
+            <div className="mt-4 flex justify-center md:justify-start">
+              <Button
+                variant="outline"
+                className="min-h-11"
+                disabled={query.isFetchingNextPage}
+                onClick={loadMore}
+              >
+                {query.isFetchingNextPage && (
+                  <Loader2
+                    aria-hidden="true"
+                    className="size-4 animate-spin motion-reduce:animate-none"
+                  />
+                )}
+                {query.isFetchingNextPage
+                  ? texts.ordersLoadingMore
+                  : texts.ordersShowMore}
+              </Button>
+            </div>
+          )}
+          {query.isFetchNextPageError && (
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-center gap-3 text-sm text-(--panel-danger)"
+            >
+              <span>{texts.ordersMoreError}</span>
+              <Button variant="outline" className="min-h-11" onClick={loadMore}>
+                {texts.retry}
+              </Button>
+            </div>
+          )}
+          {/* F8: the end note only after "Pokaż więcej" reached the end. */}
+          {pages.length > 1 && !query.hasNextPage && (
+            <p className="mt-6 text-center text-sm text-(--panel-muted) md:text-left">
               {texts.ordersEnd}
             </p>
           )}
-          {totalPages > 1 && (
-            <nav
-              aria-label={texts.paginationLabel}
-              className="mt-4 flex flex-wrap items-center justify-center gap-2"
-            >
-              {currentPage > 1 && (
-                <Button variant="outline" className="min-h-11" onClick={() => handlePageChange(offset - limit)}>
-                  {texts.previousPage}
-                </Button>
-              )}
-              {Array.from(new Set([1, currentPage - 1, currentPage, currentPage + 1, totalPages]))
-                .filter(page => page > 0 && page <= totalPages)
-                .sort((a, b) => a - b)
-                .map(page => (
-                  <Button
-                    key={page}
-                    variant={page === currentPage ? "secondary" : "ghost"}
-                    className="min-h-11 min-w-11"
-                    aria-current={page === currentPage ? "page" : undefined}
-                    onClick={() => handlePageChange((page - 1) * limit)}
-                  >
-                    {page}
-                  </Button>
-                ))}
-              {currentPage < totalPages && (
-                <Button variant="outline" className="min-h-11" onClick={() => handlePageChange(offset + limit)}>
-                  {texts.nextPage}
-                </Button>
-              )}
-            </nav>
-          )}
-        </div>
+        </>
       )}
-    </>
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+    </div>
   );
 }
 

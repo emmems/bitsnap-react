@@ -4,6 +4,7 @@ import {
   readableForeground,
   resolvePanelReturnsAppearance,
 } from "./returns-appearance";
+import { RETURNS_THEME_PRESETS } from "../components/returns/appearance";
 
 describe("readableForeground", () => {
   it("uses white on dark brands and dark text on light brands", () => {
@@ -28,29 +29,33 @@ describe("readableForeground", () => {
 });
 
 describe("resolvePanelReturnsAppearance", () => {
-  it("derives button and focus tokens from the brand color", () => {
-    assert.deepEqual(resolvePanelReturnsAppearance(undefined, "#635bff"), {
-      tokens: {
-        buttonBackground: "#635bff",
-        focusRing: "#635bff",
-        buttonForeground: "#ffffff",
-      },
-    });
+  it("follows the panel tokens on a transparent background", () => {
+    const appearance = resolvePanelReturnsAppearance(undefined);
+    assert.equal(appearance.theme, undefined);
+    assert.equal(appearance.tokens?.background, "transparent");
+    assert.equal(appearance.tokens?.surface, "var(--panel-surface)");
+    assert.equal(appearance.tokens?.buttonBackground, "var(--panel-accent-now)");
+    assert.equal(appearance.tokens?.buttonForeground, "var(--panel-accent-fg-now)");
+    assert.equal(appearance.tokens?.focusRing, "var(--panel-accent-text-now)");
   });
 
-  it("omits the foreground when it cannot be computed", () => {
-    assert.deepEqual(resolvePanelReturnsAppearance(undefined, "tomato"), {
-      tokens: { buttonBackground: "tomato", focusRing: "tomato" },
-    });
+  it("overrides every colour token of both returns presets", () => {
+    const tokens = resolvePanelReturnsAppearance(undefined).tokens ?? {};
+    for (const theme of ["light", "dark"] as const) {
+      for (const name of Object.keys(RETURNS_THEME_PRESETS[theme])) {
+        if (name === "radius") continue;
+        assert.ok(name in tokens, `${theme} preset token ${name} leaks through`);
+      }
+    }
+  });
+
+  it("passes the mode the panel set itself", () => {
+    assert.equal(resolvePanelReturnsAppearance(undefined, "dark").theme, "dark");
+    assert.equal(resolvePanelReturnsAppearance(undefined, "light").theme, "light");
   });
 
   it("keeps an explicit appearance untouched", () => {
     const explicit = { theme: "dark" } as const;
-    assert.equal(resolvePanelReturnsAppearance(explicit, "#635bff"), explicit);
-  });
-
-  it("falls back to the library defaults without a brand", () => {
-    assert.equal(resolvePanelReturnsAppearance(undefined, undefined), undefined);
-    assert.equal(resolvePanelReturnsAppearance(undefined, "  "), undefined);
+    assert.equal(resolvePanelReturnsAppearance(explicit, "light"), explicit);
   });
 });

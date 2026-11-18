@@ -1,10 +1,11 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { rpcProvider, useMutation } from "../../rpc-provider";
 import { useUrlSearchParams } from "../hooks/useUrlSearchParams";
 import { InstrumentProvider, useInstrument } from "../../analytics/instrument";
 import { usePanelConfig } from "../PanelProvider";
 import { resolvePanelReturnsAppearance } from "../returns-appearance";
+import { usePanelRoot } from "../theme";
 import type { PanelProps } from "../types";
 import {
   buildAccessTokenRedirect,
@@ -25,6 +26,7 @@ import LazyPanelMessages from "./LazyPanelMessages";
 import { usePanelChat } from "../chat-visibility";
 import PublicOrderPage from "./PublicOrderPage";
 import { clearPanelSession, getPanelEmail, getPanelSession } from "../session-storage";
+import { clearQrCache } from "./products/ticket/qr-cache";
 
 export type PanelScreen =
   | "products"
@@ -37,6 +39,50 @@ export type PanelScreen =
   | "return-details"
   | "course"
   | "messages";
+
+/**
+ * `?orderId=""` (an old order with no id) opens nothing, and a reload would
+ * keep it. Returns the search string without an empty `orderId`, an
+ * `order-details` state without an id becoming the order list, or `null` when
+ * there is nothing to fix.
+ */
+export function dropEmptyOrderId(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const raw = params.get("orderId");
+  const state = params.get("state");
+  const readJSON = (value: string | null) => {
+    if (value == null) return undefined;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  };
+  const orderId = readJSON(raw);
+  const hasId = typeof orderId === "string" ? orderId.trim() !== "" : orderId != null;
+  const opensDetails = readJSON(state) === "order-details";
+  if (hasId || (raw == null && !opensDetails)) return null;
+  params.delete("orderId");
+  if (opensDetails) params.set("state", JSON.stringify("orders"));
+  const next = params.toString();
+  return next === "" ? "" : `?${next}`;
+}
+
+/** Runs `dropEmptyOrderId` on the address bar once, before the params are read. */
+function useCleanOrderIdOnLoad() {
+  useState(() => {
+    if (typeof window === "undefined") return null;
+    const next = dropEmptyOrderId(window.location.search);
+    if (next != null) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${next}${window.location.hash}`,
+      );
+    }
+    return null;
+  });
+}
 
 export type PanelSearchParamsType = {
   product?: string;
@@ -53,14 +99,21 @@ export type PanelSearchParamsType = {
   thread?: string;
   /** `state: "messages"`: id of the open channel. */
   channel?: string;
+  /** `state: "returns"`: `"mine"` opens the "Moje zwroty" tab. */
+  returnsTab?: "mine";
 };
 
 const PanelPage = ({
   returnsAppearance,
   returnsTexts,
   analytics,
-}: Pick<PanelProps, "returnsAppearance" | "returnsTexts" | "analytics"> = {}) => {
+  colorScheme,
+}: Pick<
+  PanelProps,
+  "returnsAppearance" | "returnsTexts" | "analytics" | "colorScheme"
+> = {}) => {
   const { projectID, theme, loginURL, host } = usePanelConfig();
+  const { rootProps, mode } = usePanelRoot(theme, colorScheme);
   const [, refreshLocale] = useState(0);
   const instrument = useInstrument(projectID, analytics, "panel");
 
@@ -72,14 +125,19 @@ const PanelPage = ({
   );
 
   async function logout() {
-    if (accessToken) {
-      await logoutUserAsync({
-        accessToken: accessToken as string,
-      });
-    }
-    if (typeof window !== "undefined") {
-      clearPanelSession(projectID, host);
-      window.location.reload();
+    try {
+      if (accessToken) {
+        await logoutUserAsync({
+          accessToken: accessToken as string,
+        });
+      }
+    } finally {
+      // Clear local state even when the logout call fails (e.g. offline).
+      if (typeof window !== "undefined") {
+        clearPanelSession(projectID, host);
+        clearQrCache();
+        window.location.reload();
+      }
     }
   }
 
@@ -98,6 +156,7 @@ const PanelPage = ({
       "messages",
     ].includes(value as string);
 
+  useCleanOrderIdOnLoad();
   const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
     product: undefined,
     state: "products",
@@ -108,6 +167,7 @@ const PanelPage = ({
     chatProject: undefined,
     thread: undefined,
     channel: undefined,
+    returnsTab: undefined,
   });
 
   const [activeScreen, setActiveScreen] = useState<PanelScreen>(
@@ -115,6 +175,8 @@ const PanelPage = ({
   );
 
   const handleOpenOrderDetails = (orderID: string) => {
+    // An old order without an id has no details page; stay on the list.
+    if (!orderID.trim()) return;
     setParams({
       state: "order-details",
       orderId: orderID,
@@ -141,6 +203,7 @@ const PanelPage = ({
       chatProject: undefined,
       thread: undefined,
       channel: undefined,
+      returnsTab: undefined,
       ...next,
     });
 
@@ -178,26 +241,33 @@ const PanelPage = ({
   const chat = usePanelChat(accessToken);
 
   // The browser's back and forward buttons move between the lessons of a
-  // course and in and out of it, and between conversations.
+  // course and in and out of it, between conversations, between the order
+  // list and an order, and between the returns tabs and a return.
+  const historyScreens: PanelScreen[] = [
+    "course",
+    "messages",
+    "orders",
+    "order-details",
+    "returns",
+    "return-details",
+  ];
   useEffect(() => {
     if (!isScreen(params.state)) return;
     if (
-      params.state === "course" ||
-      activeScreen === "course" ||
-      params.state === "messages" ||
-      activeScreen === "messages"
+      historyScreens.includes(params.state) ||
+      historyScreens.includes(activeScreen)
     ) {
       setActiveScreen(params.state);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.state]);
 
-  const styles = {
-    "--button-background-color": theme?.colors?.brand ?? "#000000",
-    "--button-background-color-dark": theme?.colors?.brandDark ?? "#ffffff",
-    "--button-text-color": theme?.colors?.brandDark ?? "#000000",
-    "--button-text-color-dark": theme?.colors?.brand ?? "#000000",
-  } as CSSProperties;
+  const openScreen = (state: PanelScreen) => {
+    navigate({ state, product: undefined });
+    setActiveScreen(state);
+  };
+
+  const orderId = params.orderId?.trim() || undefined;
 
   useEffect(() => {
     if (accessToken == null || accessToken.length === 0) {
@@ -234,13 +304,15 @@ useEffect(() => {
     <InstrumentProvider value={instrument}>
     <div
       ref={panelParentRef}
-      className="font-inter relative flex h-dvh w-full flex-col bg-beige-100 text-black dark:bg-black dark:text-white md:flex-row"
+      {...rootProps}
+      className={`relative flex h-dvh w-full flex-col bg-(--panel-bg) text-(--panel-fg) md:flex-row${
+        rootProps.className ? ` ${rootProps.className}` : ""
+      }`}
     >
       <PanelProductHeaderComponent
         activeScreen={activeScreen}
         setActiveScreen={setActiveScreen}
         setParams={navigate}
-        styles={styles}
         theme={theme}
         logout={logout}
         email={email}
@@ -254,7 +326,6 @@ useEffect(() => {
             projectID={projectID ?? ""}
             accessToken={accessToken!}
             loginURL={loginURL ?? "/panel/login"}
-            styles={styles}
             activeScreen={activeScreen}
             params={params as PanelSearchParamsType}
             setParams={setParams}
@@ -307,12 +378,16 @@ useEffect(() => {
             projectID={projectID ?? ""}
             accessToken={accessToken ?? ""}
             openOrderDetails={handleOpenOrderDetails}
+            openLibrary={() => openScreen("products")}
           />
         )}
 
-        {activeScreen === "order-details" && params.orderId && (
+        {/* D1: every order-details screen renders; without an id it explains. */}
+        {activeScreen === "order-details" && (
           <PublicOrderPage
-            orderID={params.orderId}
+            variant="panel"
+            orderID={orderId}
+            accessToken={accessToken ?? undefined}
             onBack={handleBackToOrders}
           />
         )}
@@ -326,13 +401,14 @@ useEffect(() => {
               loginURL={loginURL ?? "/panel/login"}
               appearance={resolvePanelReturnsAppearance(
                 returnsAppearance,
-                theme?.colors?.brand,
+                mode,
               )}
               texts={returnsTexts}
               screen={activeScreen}
               params={params as PanelSearchParamsType}
               setParams={setParams}
               setActiveScreen={setActiveScreen}
+              openOrders={() => openScreen("orders")}
             />
           )}
 
