@@ -86,7 +86,12 @@ defaults, overridable through `texts`).
   from an older server, `https:` only). The product name is no longer
   repeated on the card (the page title above shows it) and the "Twój bilet"
   label is gone. The stub is cached for offline use like the QR, and logout
-  clears it too.
+  clears it too. A stub that finishes loading after the buyer opened another
+  ticket stays with its own ticket, the event date follows the panel
+  language (Polish unless `en*`), and the saved file's extension matches the
+  cached image type.
+- The generated public API types (`public_api_pb.ts`) were synced with
+  instapay, so they also carry unrelated additive messages.
 
 ## 1.27.0
 

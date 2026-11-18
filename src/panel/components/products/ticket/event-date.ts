@@ -11,7 +11,9 @@ export type EventDate = {
 /**
  * The event start (unix seconds from `event_start_date`) as one line in the
  * panel's locale and the Warsaw time zone, or `undefined` when the ticket
- * has no date. An unknown locale falls back to Polish.
+ * has no date. The locale maps like the panel texts (`getProductTexts`):
+ * `en*` gives English, anything else Polish, so the date never comes out in
+ * another language than the words around it.
  */
 export function formatEventDate(
   seconds: bigint | number | undefined,
@@ -36,11 +38,6 @@ export function formatEventDate(
     }).format(date);
     return `${day}, ${time}`;
   };
-  let label: string;
-  try {
-    label = format(locale);
-  } catch {
-    label = format("pl-PL");
-  }
+  const label = format(locale.toLowerCase().startsWith("en") ? "en-US" : "pl-PL");
   return { label, iso: date.toISOString() };
 }

@@ -14,6 +14,7 @@ import type { ProductTexts } from "../texts";
 import { useProductLoad } from "../useProductLoad";
 import { formatEventDate } from "./event-date";
 import {
+  imageExtension,
   qrAsDataUrl,
   readCachedQr,
   safeQrHref,
@@ -65,13 +66,31 @@ export function TicketPass({
       : { ok: false as const, failure: response.result.value! };
   }, accessId);
 
-  // The saved tile and stub, read after mount (storage is client-only).
-  const [savedQr, setSavedQr] = useState<string>();
-  const [savedStub, setSavedStub] = useState<string>();
+  // The saved tile and stub, read after mount (storage is client-only). Each
+  // is tagged with its ticket: an image fetch that finishes after the ticket
+  // changed still fills its own ticket's cache, but never shows here, and the
+  // render right after a change shows nothing saved instead of the old one.
+  const [saved, setSaved] = useState<{
+    accessId: string;
+    qr?: string;
+    stub?: string;
+  }>();
   useEffect(() => {
-    setSavedQr(readCachedQr(accessId));
-    setSavedStub(readCachedQr(stubCacheKey(accessId)));
+    setSaved({
+      accessId,
+      qr: readCachedQr(accessId),
+      stub: readCachedQr(stubCacheKey(accessId)),
+    });
   }, [accessId]);
+  const savedQr = saved?.accessId === accessId ? saved.qr : undefined;
+  const savedStub = saved?.accessId === accessId ? saved.stub : undefined;
+  /** Shows a freshly cached image, unless the ticket changed meanwhile. */
+  function keepSaved(requestedId: string, image: { qr?: string; stub?: string }) {
+    setSaved((current) => {
+      if (current == null) return { accessId: requestedId, ...image };
+      return current.accessId === requestedId ? { ...current, ...image } : current;
+    });
+  }
 
   const [attempt, setAttempt] = useState(0);
   // Load state of one image URL; any other URL counts as still loading, so a
@@ -92,13 +111,14 @@ export function TicketPass({
   function handleLoad() {
     setImage({ src: liveSrc, status: "ok" });
     if (!ticketUrl) return;
+    const requestedId = accessId;
     // Best effort: without CORS on the image host this gives `undefined` and
     // nothing is saved; the QR is still shown from its URL.
     void qrAsDataUrl(ticketUrl).then(
       (dataUrl) => {
         if (!dataUrl) return;
-        writeCachedQr(accessId, dataUrl);
-        setSavedQr(dataUrl);
+        writeCachedQr(requestedId, dataUrl);
+        keepSaved(requestedId, { qr: dataUrl });
       },
       () => {},
     );
@@ -107,8 +127,8 @@ export function TicketPass({
     void qrAsDataUrl(stubUrl).then(
       (dataUrl) => {
         if (!dataUrl) return;
-        writeCachedQr(stubCacheKey(accessId), dataUrl);
-        setSavedStub(dataUrl);
+        writeCachedQr(stubCacheKey(requestedId), dataUrl);
+        keepSaved(requestedId, { stub: dataUrl });
       },
       () => {},
     );
@@ -132,6 +152,8 @@ export function TicketPass({
   const ticket = live && state.status === "ok" ? state.value : undefined;
   const apple = safeWalletUrl(ticket?.appleWalletUrl);
   const google = safeWalletUrl(ticket?.googleWalletUrl);
+  // Without a cached stub, offline still saves the cached tile: some code
+  // beats none at the door.
   const saveHref =
     safeQrHref(savedStub) ??
     (live ? safeQrHref(stubUrl) : undefined) ??
@@ -285,7 +307,7 @@ export function TicketPass({
               {saveHref && (
                 <a
                   href={saveHref}
-                  download={`${fileSlug(productName)}-bilet.png`}
+                  download={`${fileSlug(productName)}-bilet.${imageExtension(saveHref)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={onSave}

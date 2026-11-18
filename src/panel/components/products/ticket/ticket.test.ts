@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { formatEventDate } from "./event-date";
-import { stubCacheKey, ticketStubUrl } from "./qr-cache";
+import { imageExtension, stubCacheKey, ticketStubUrl } from "./qr-cache";
 
 /** Intl may put a narrow no-break space before "PM". */
 const plain = (value: string | undefined) => value?.replace(/\s/g, " ");
@@ -27,6 +27,12 @@ describe("formatEventDate", () => {
 
   it("falls back to Polish for a locale Intl rejects", () => {
     assert.equal(formatEventDate(DECEMBER, "not_a_locale!")?.label, "12 grudnia 2026, 19:00");
+  });
+
+  it("uses Polish for any non-English locale, like the panel texts", () => {
+    assert.equal(formatEventDate(DECEMBER, "xx-YY")?.label, "12 grudnia 2026, 19:00");
+    assert.equal(formatEventDate(DECEMBER, "de-DE")?.label, "12 grudnia 2026, 19:00");
+    assert.equal(plain(formatEventDate(DECEMBER, "en-GB")?.label), "December 12, 2026, 7:00 PM");
   });
 });
 
@@ -59,5 +65,20 @@ describe("ticketStubUrl", () => {
 
   it("keeps the stub under its own cache key", () => {
     assert.equal(stubCacheKey("acc-1"), "acc-1:stub");
+  });
+});
+
+describe("imageExtension", () => {
+  it("names the saved file after the data URL's image type", () => {
+    assert.equal(imageExtension("data:image/png;base64,AA=="), "png");
+    assert.equal(imageExtension("data:image/jpeg;base64,AA=="), "jpg");
+    assert.equal(imageExtension("data:image/JPG;base64,AA=="), "jpg");
+    assert.equal(imageExtension("data:image/gif;base64,AA=="), "gif");
+    assert.equal(imageExtension("data:image/webp;base64,AA=="), "webp");
+  });
+
+  it("falls back to png for a URL or an unknown type", () => {
+    assert.equal(imageExtension("https://qr.test/stub?layout=stub"), "png");
+    assert.equal(imageExtension("data:image/avif;base64,AA=="), "png");
   });
 });

@@ -60,6 +60,7 @@ const PanelProductDetails = ({
     >
       {ticket ? (
         <TicketPass
+          key={product.accessId}
           accessId={product.accessId}
           accessToken={accessToken}
           productName={product.productName}

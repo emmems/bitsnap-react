@@ -613,6 +613,82 @@ describe("product detail pages (option A)", () => {
     page.win.sessionStorage.clear();
   });
 
+  it("keeps a stub that arrives late out of the next ticket", async () => {
+    const { clearQrCache, readCachedQr } = await import("./components/products/ticket/qr-cache");
+    const { TicketPass } = await import("./components/products/ticket/TicketPass");
+    const { getProductTexts } = await import("./components/products/texts");
+    const { UserPanelGetTicketDetailsResponseSchema } = await import("../gen/proto/public/v1/public_api_pb");
+    clearQrCache();
+    page.win.sessionStorage.clear();
+    const tile = "https://qr.example.test/api/qr-gen?token=t";
+    const stub = "https://qr.example.test/api/qr-gen?token=t&layout=stub";
+    rpc.UserPanelGetTicketDetails = () =>
+      proto(UserPanelGetTicketDetailsResponseSchema, {
+        result: { case: "success", value: { projectId: "x", ticketUrl: tile, ticketStubUrl: stub, productName: "GROOVEOUT", productImageUrl: "" } },
+      });
+    // The first ticket's stub answers only after the buyer opened the second.
+    let answerStub!: () => void;
+    rpc["qr-gen?token=t&layout=stub"] = () =>
+      new Promise<Response>((resolve) => {
+        answerStub = () => resolve(new Response(new Blob(["x"], { type: "image/jpeg" })));
+      });
+    const OLD = "data:image/jpeg;base64,b2xk";
+    const OriginalReader = globalThis.FileReader;
+    globalThis.FileReader = class {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        this.result = OLD;
+        this.onload?.();
+      }
+    } as unknown as typeof FileReader;
+    try {
+      const container = page.win.document.createElement("div");
+      page.win.document.body.appendChild(container);
+      const root = createRoot(container);
+      roots.push(root);
+      // Same instance for both tickets (no key), the worst case.
+      const render = (accessId: string) =>
+        React.act(async () =>
+          root.render(
+            <PanelProvider analytics={false}>
+              <TicketPass accessId={accessId} accessToken="panel-token" productName="GROOVEOUT" texts={getProductTexts("pl-PL")} onSave={() => {}} />
+            </PanelProvider>,
+          ),
+        );
+      await render("t1");
+      await settle();
+      const qr = container.querySelector<HTMLImageElement>("[data-ticket-pass] img")!;
+      await React.act(async () => void qr.dispatchEvent(new page.win.Event("load")));
+      await settle();
+      await render("t2");
+      await settle();
+      answerStub();
+      await settle();
+      assert.equal(readCachedQr("t1:stub"), OLD, "cached under its own ticket");
+      assert.equal(readCachedQr("t2:stub"), undefined);
+      const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
+      assert.equal(save.getAttribute("href"), stub, "the second ticket saves its own stub");
+    } finally {
+      globalThis.FileReader = OriginalReader;
+      clearQrCache();
+      page.win.sessionStorage.clear();
+    }
+  });
+
+  it("names the saved file after the cached image type", async () => {
+    const { clearQrCache, writeCachedQr } = await import("./components/products/ticket/qr-cache");
+    clearQrCache();
+    writeCachedQr("t1", QR);
+    writeCachedQr("t1:stub", "data:image/webp;base64,c3R1Yg==");
+    const container = await ticket("error");
+    const save = [...container.querySelectorAll<HTMLAnchorElement>("[data-ticket-pass] a")].find((a) => a.textContent === "Zapisz bilet")!;
+    assert.equal(save.getAttribute("download"), "grooveout-bilet.webp");
+    clearQrCache();
+    page.win.sessionStorage.clear();
+  });
+
   it("drops non-https QR and file links (R5)", async () => {
     const { safeQrHref } = await import("./components/products/ticket/qr-cache");
     assert.equal(safeQrHref(QR), QR);

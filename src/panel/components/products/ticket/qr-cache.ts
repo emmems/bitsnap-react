@@ -103,6 +103,17 @@ export function safeQrHref(value: string | undefined): string | undefined {
   return safeHttpsUrl(value);
 }
 
+/**
+ * File extension for the saved image: from a `data:` URL's MIME type (the
+ * cached stub or tile may be JPEG, GIF or WebP), else `png`.
+ */
+export function imageExtension(href: string): string {
+  const type = /^data:image\/([a-z]+)[;,]/i.exec(href)?.[1]?.toLowerCase();
+  if (type === "jpeg" || type === "jpg") return "jpg";
+  if (type === "gif" || type === "webp") return type;
+  return "png";
+}
+
 /** Cache key of the saved ticket stub (the tall PNG the buyer saves). */
 export function stubCacheKey(accessId: string): string {
   return `${accessId}:stub`;
