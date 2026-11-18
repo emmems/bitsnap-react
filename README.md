@@ -75,7 +75,7 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
-## 1.28.0
+## 1.29.0
 
 - **Panel ticket as a tall stub.** The ticket card is one centred column
   (at most 360 px): the event date (`event_start_date`, shown in the panel's
@@ -92,6 +92,19 @@ defaults, overridable through `texts`).
   cached image type.
 - The generated public API types (`public_api_pb.ts`) were synced with
   instapay, so they also carry unrelated additive messages.
+
+## 1.28.0
+
+- **`ProductList`: quote-only products.** Bitsnap sends `quoteOnly: true` for
+  products priced by a quote (3D prints, services with a quote). Their card
+  shows "Wyceń" / "Get a quote" (new text `quote`, price slot
+  `data-kind="quote"`) instead of a price of 0, with no struck-through price.
+  A service with an automatic price also has `quoteShowsPrice: true`: its card
+  shows `price`, with "od" / "from" when `priceFrom`. A quote-only product is
+  never added to the cart from the list (its card links to the product page,
+  and `renderItem`'s `addToCart` rejects); `renderItem` gets a new `quote`
+  flag. Both fields are optional: older backends and other products render as
+  before.
 
 ## 1.27.0
 
@@ -884,6 +897,13 @@ regular price for discounts and an "unavailable" state for products out of
 stock. Products with a ready 3D model (`has3d`, sent by Bitsnap servers with
 3D support) get a small "3D" badge in the top right corner (slot
 `model3dBadge`, texts `model3d` / `model3dLabel`).
+
+Products priced by a quote (`quoteOnly`, since 1.28.0: 3D prints, services
+with a quote) show "Wyceń" / "Get a quote" (text `quote`) instead of the
+price, with no regular price, unless the backend also sends `quoteShowsPrice`
+(a service with an automatic price: "250,00 zł", or "od 5,00 zł" with
+`priceFrom`). They never get "Add to cart"; the card links to the product
+page, where the buyer asks for the quote.
 
 ### Add to cart
 
