@@ -1,6 +1,7 @@
 /**
  * Last good QR image of each ticket, so the buyer still has a code at the
- * door without a connection. Kept in memory and, when it fits, in
+ * door without a connection, and its ticket stub (key `stubCacheKey`), so
+ * "Save ticket" still works. Kept in memory and, when it fits, in
  * sessionStorage (as a data: URL). Storage may be blocked or full: every
  * access is wrapped and the cache is optional.
  */
@@ -43,8 +44,9 @@ export function writeCachedQr(accessId: string, dataUrl: string) {
 }
 
 /**
- * Forgets every saved QR code (memory and sessionStorage). The code is a
- * bearer credential (its URL carries the access id), so call it on logout.
+ * Forgets every saved QR code and ticket stub (memory and sessionStorage).
+ * The code is a bearer credential (its URL carries the access id), so call
+ * it on logout.
  */
 export function clearQrCache() {
   memory.clear();
@@ -99,6 +101,45 @@ export function safeQrHref(value: string | undefined): string | undefined {
   if (!value) return undefined;
   if (/^data:image\/(png|jpeg|gif|webp);/i.test(value)) return value;
   return safeHttpsUrl(value);
+}
+
+/**
+ * File extension for the saved image: from a `data:` URL's MIME type (the
+ * cached stub or tile may be JPEG, GIF or WebP), else `png`.
+ */
+export function imageExtension(href: string): string {
+  const type = /^data:image\/([a-z]+)[;,]/i.exec(href)?.[1]?.toLowerCase();
+  if (type === "jpeg" || type === "jpg") return "jpg";
+  if (type === "gif" || type === "webp") return type;
+  return "png";
+}
+
+/** Cache key of the saved ticket stub (the tall PNG the buyer saves). */
+export function stubCacheKey(accessId: string): string {
+  return `${accessId}:stub`;
+}
+
+/**
+ * The tall ticket stub image: `ticketStubUrl` from the server, or, from an
+ * older server that does not send it, `ticketUrl` with `layout=stub`. Only an
+ * `https:` URL; anything else gives `undefined`.
+ */
+export function ticketStubUrl(ticket: {
+  ticketStubUrl?: string;
+  ticketUrl?: string;
+}): string | undefined {
+  if (ticket.ticketStubUrl) return safeHttpsUrl(ticket.ticketStubUrl);
+  if (!ticket.ticketUrl || ticket.ticketUrl.startsWith("data:")) return undefined;
+  try {
+    const base =
+      typeof window !== "undefined" ? window.location.href : undefined;
+    const parsed = new URL(ticket.ticketUrl, base);
+    if (parsed.protocol !== "https:") return undefined;
+    parsed.searchParams.set("layout", "stub");
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 /** The QR URL with a cache-buster for a retry; data: URLs stay as they are. */
