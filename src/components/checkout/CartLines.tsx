@@ -1,0 +1,140 @@
+import React from "react";
+import { cn } from "@/src/lib/utils";
+import { useCartController } from "./cart-controller";
+import { useCheckoutSlot } from "./appearance.context";
+import SingleProduct from "./SingleProduct";
+import { Skeleton } from "./Skeleton";
+import { useCheckoutText } from "./texts.context";
+
+/** The lines of the cart, and the loading, failed and empty states that stand in for them. */
+export function CartLines() {
+  const {
+    status,
+    products,
+    missingItemIds,
+    notice,
+    retry,
+    setQuantity,
+  } = useCartController();
+
+  const productList = useCheckoutSlot("productList");
+  const emptyState = useCheckoutSlot("emptyState");
+  const error = useCheckoutSlot("error");
+  const skeleton = useCheckoutSlot("skeleton");
+  const checkoutButton = useCheckoutSlot("checkoutButton");
+
+  const emptyCartText = useCheckoutText("emptyCart");
+  const loadFailedText = useCheckoutText("loadFailed");
+  const retryText = useCheckoutText("retry");
+
+  return (
+    <>
+      {status === "loading" && (
+        <div className={"relative flex w-full justify-center flex-col gap-4"}>
+          <Skeleton
+            data-bitsnap-checkout-slot="skeleton"
+            className={cn("w-full h-32", skeleton.className)}
+            style={skeleton.style}
+          />
+          <Skeleton
+            data-bitsnap-checkout-slot="skeleton"
+            className={cn("w-full h-32", skeleton.className)}
+            style={skeleton.style}
+          />
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className={"flex flex-col items-start gap-3 p-4"}>
+          <p
+            role="alert"
+            data-bitsnap-checkout-slot="error"
+            className={cn(error.className)}
+            style={error.style}
+          >
+            {loadFailedText}
+          </p>
+          {notice != null && notice.length > 0 && (
+            <p
+              role="alert"
+              data-bitsnap-checkout-slot="error"
+              className={cn("text-sm", error.className)}
+              style={error.style}
+            >
+              {notice}
+            </p>
+          )}
+          <button
+            type="button"
+            data-bitsnap-checkout-slot="checkoutButton"
+            data-bitsnap-checkout-retry=""
+            onClick={retry}
+            className={cn(
+              "px-3 py-2 rounded-md transition font-bold",
+              checkoutButton.className,
+            )}
+            style={checkoutButton.style}
+          >
+            {retryText}
+          </button>
+        </div>
+      )}
+
+      {status === "empty" && (
+        <div className={"flex flex-col gap-4 p-4"}>
+          <p
+            data-bitsnap-checkout-slot="emptyState"
+            className={cn(emptyState.className)}
+            style={emptyState.style}
+          >
+            {emptyCartText}
+          </p>
+          {notice != null && notice.length > 0 && (
+            <p
+              role="alert"
+              data-bitsnap-checkout-slot="error"
+              className={cn("text-sm", error.className)}
+              style={error.style}
+            >
+              {notice}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div
+        data-bitsnap-checkout-slot="productList"
+        className={cn(
+          "max-h-[70vh] overflow-clip overflow-y-scroll",
+          productList.className,
+        )}
+        style={productList.style}
+      >
+        {products != null && products.length > 0 && (
+          <ul className={"mt-5"}>
+            {products.map((product) => (
+              <React.Fragment key={product.id}>
+                {product.details != null && (
+                  <li className={"mb-3"}>
+                    <SingleProduct
+                      isNotAvailable={missingItemIds.includes(
+                        product.productID,
+                      )}
+                      quantity={product.quantity}
+                      details={product.details}
+                      url={product.url}
+                      shouldUpdate={(newQuantity) =>
+                        setQuantity(product.id, newQuantity)
+                      }
+                    />
+                    <hr className="h-1" />
+                  </li>
+                )}
+              </React.Fragment>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+}

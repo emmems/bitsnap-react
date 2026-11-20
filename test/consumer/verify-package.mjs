@@ -614,7 +614,8 @@ const css = readFileSync(join(dist, "index.css"), "utf8");
 /** Top-level-and-nested spans [start, end) of every `@layer <names> { ... }` block in `source`. */
 function layerBlocks(source) {
   const spans = [];
-  const opener = /@layer\s+[^{};]*\{/g;
+  // `\b` after "layer" and `*` for the names: also matches an anonymous `@layer{`.
+  const opener = /@layer\b[^{};]*\{/g;
   let match;
   while ((match = opener.exec(source))) {
     let depth = 1;

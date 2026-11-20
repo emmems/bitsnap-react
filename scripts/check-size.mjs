@@ -92,6 +92,10 @@ function parseArgs(argv) {
     else if (arg === "--fixture") args.fixtures.push(argv[++i]);
     else throw new Error(`Unknown argument: ${arg}`);
   }
+  // A partial run measures only some fixtures and skips CSS and tarball: it must never rewrite the budget.
+  if (args.update && args.fixtures.length > 0) {
+    throw new Error("--update cannot be combined with --fixture: a partial run would rewrite the budget from partial data");
+  }
   return args;
 }
 

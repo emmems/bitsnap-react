@@ -1,5 +1,4 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { sanitizeLessonHtml } from "../../../course/sanitize";
 import {
   detectRichTextFormat,
   lexicalJsonToText,
@@ -17,9 +16,11 @@ const LINE_HEIGHT_EM = 1.5;
 
 /**
  * Sanitized HTML, or `""` when nothing visible is left (empty paragraphs).
- * Needs a DOM: call it in an effect.
+ * Needs a DOM: call it in an effect. DOMPurify loads on first use, so the
+ * cart and every page without a rich description never download it.
  */
-function cleanDescriptionHtml(html: string): string {
+async function cleanDescriptionHtml(html: string): Promise<string> {
+  const { sanitizeLessonHtml } = await import("../../../course/sanitize");
   const clean = sanitizeLessonHtml(html);
   if (clean === "" || typeof document === "undefined") return clean;
   // A <template> parses without loading images or running anything.
@@ -116,7 +117,24 @@ export function ProductDescription({
   // `null` until the effect sanitized the HTML.
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
-    setHtml(format === "html" ? cleanDescriptionHtml(value) : null);
+    if (format !== "html") {
+      setHtml(null);
+      return;
+    }
+    // A newer value (or unmount) before the sanitizer arrived wins.
+    let cancelled = false;
+    cleanDescriptionHtml(value).then(
+      (clean) => {
+        if (!cancelled) setHtml(clean);
+      },
+      () => {
+        // The chunk did not arrive: show nothing rather than unsanitised HTML.
+        if (!cancelled) setHtml("");
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [format, value]);
 
   const contentId = useId();

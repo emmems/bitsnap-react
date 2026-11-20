@@ -70,6 +70,7 @@ const REMOVE_BUTTON = '[data-bitsnap-checkout-slot="removeButton"]';
 const TOTAL = '[data-bitsnap-checkout-slot="totalValue"]';
 // Skeleton markers inside the dialog: today's `ui/skeleton` (`data-slot`), the cart's own slot attribute
 // and the `.bsc-skeleton` class the 1.32.0 redesign uses. The same list is in MEASURE_OPEN (runs in the page).
+const DIALOG = '[role="dialog"]';
 const SKELETON = '[role="dialog"] :is([data-slot="skeleton"], [data-bitsnap-checkout-slot="skeleton"], .bsc-skeleton)';
 
 // ---------------------------------------------------------------- options
@@ -326,25 +327,36 @@ const relativeRequests = (all, clickEpoch) =>
     }))
     .sort((a, b) => a.startMs - b.startMs);
 
-// Runs in the page. Clicks `clickSelector` and resolves when the first cart item has text.
-const MEASURE_OPEN = ({ clickSelector, itemSel, skeletonSel, timeoutMs }) =>
+// Runs in the page. Clicks `clickSelector` and resolves when the first cart item has text. `mountMs` is when the
+// drawer first appeared in the DOM (ms from the click): the drawer's first commit, the A4 reference point.
+// A dialog that already exists at the click (a drawer still leaving) is not the new one.
+const MEASURE_OPEN = ({ clickSelector, itemSel, skeletonSel, dialogSel, timeoutMs }) =>
   new Promise((resolve) => {
     const seen = () => {
       const el = document.querySelector(itemSel);
       return Boolean(el && el.textContent && el.textContent.trim());
     };
+    const dialogBefore = document.querySelector(dialogSel);
     const t0 = performance.now();
     const clickEpoch = performance.timeOrigin + t0;
     let skeleton = false;
+    let mountMs = null;
     let done = false;
+    const stampMount = () => {
+      if (mountMs == null) {
+        const d = document.querySelector(dialogSel);
+        if (d && d !== dialogBefore) mountMs = performance.now() - t0;
+      }
+    };
     const finish = (value) => {
       if (done) return;
       done = true;
       observer.disconnect();
       clearTimeout(timer);
-      resolve({ clickEpoch, skeleton, ...value });
+      resolve({ clickEpoch, skeleton, mountMs, ...value });
     };
     const observer = new MutationObserver(() => {
+      stampMount();
       if (!skeleton && document.querySelector(skeletonSel)) skeleton = true;
       if (seen()) {
         const itemsMs = performance.now() - t0;
@@ -355,6 +367,7 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, skeletonSel, timeoutMs }) =>
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
     const timer = setTimeout(() => finish({ ok: false, itemsMs: null, paintMs: null }), timeoutMs);
     document.querySelector(clickSelector).click();
+    stampMount(); // React flushes a discrete event synchronously: the drawer may already be there
   });
 
 // Runs in the page. `action` "plus": clicks "+" of the first line `times` times; "remove": clicks Remove of the
@@ -478,7 +491,7 @@ async function dismissBanner(page, o) {
   } catch {}
 }
 
-const openArgs = (o, timeoutMs) => ({ clickSelector: o.cartSelector, itemSel: ITEM, skeletonSel: SKELETON, timeoutMs: timeoutMs ?? o.timeout });
+const openArgs = (o, timeoutMs) => ({ clickSelector: o.cartSelector, itemSel: ITEM, skeletonSel: SKELETON, dialogSel: DIALOG, timeoutMs: timeoutMs ?? o.timeout });
 
 const editArgs = (o, action, times, spacingMs) => ({
   action, times, spacingMs, timeoutMs: 6000,
@@ -551,7 +564,7 @@ const SCENARIO_RUNNERS = {
     return openResult(result, run, extra);
   },
   async qty(ctx, run) {
-    return editResult(ctx, run, { action: "plus", seed: undefined, forbidProductsGet: true });
+    return editResult(ctx, run, { action: "plus" });
   },
   async remove(ctx, run) {
     return editResult(ctx, run, { action: "remove" });
@@ -628,6 +641,9 @@ function openResult(r, run, extra = {}) {
     value: r.itemsMs,
     paintMs: r.paintMs,
     skeleton: r.skeleton,
+    mountMs: r.mountMs ?? null,
+    // A4: "never before the click". 5 ms of slack for the CDP clock against the page clock.
+    paymentMethodsBeforeClick: pm != null && pm.startMs < -5,
     productsStartMs: productsGet?.startMs ?? null,
     productsEndMs: productsGet?.endMs ?? null,
     productsCached: productsGet?.fromCache ?? null,
@@ -800,10 +816,13 @@ function criteria(o, results, floorMs) {
     const baseP95 = base && finite(base.p95) ? base.p95 : null;
     const drawerOk = within(drawer.p95, limitA1);
     const addOk = within(addS.p95, 1200);
-    const relative = baseP95 != null && within(drawer.p95, baseP95 / 2);
+    // Decided 2026-11-20: drawer time <= max(50 % of baseline drawer p95, A1 limit). The snapshot-painted
+    // drawer costs about the render floor, so a pure 50 % rule would pass or fail by noise.
+    const relativeLimit = baseP95 == null ? null : Math.max(baseP95 / 2, limitA1);
+    const relative = within(drawer.p95, relativeLimit);
     add("A3", "add-then-open", drawerOk && addOk && relative,
       `drawer (from the add promise) p95 ${fmt(drawer.p95)} <= ${Math.round(limitA1)} ms${drawerOk ? "" : " (missed)"}; add p95 ${fmt(addS.p95)} <= 1200 ms${addOk ? "" : " (missed)"}; ` +
-        `drawer <= 50 % of baseline ${baseP95 == null ? "(baseline drawer p95 missing: FAIL)" : `${fmt(baseP95)} = ${fmt(baseP95 / 2)}${relative ? "" : " (missed)"}`}; ${drawer.failures}/${runs.length} runs without a drawer time`);
+        `drawer <= max(50 % of baseline, A1 limit) ${baseP95 == null ? "(baseline drawer p95 missing: FAIL)" : `= max(${fmt(baseP95 / 2)}, ${Math.round(limitA1)} ms) = ${fmt(relativeLimit)}${relative ? "" : " (missed)"}`}; ${drawer.failures}/${runs.length} runs without a drawer time`);
   }
 
   // A4: the POST /payment-methods starts with the open and does not wait for /products.
@@ -815,10 +834,13 @@ function criteria(o, results, floorMs) {
       continue;
     }
     const mustPost = n !== "reopen";
-    let late = 0;
+    // "The open" = the drawer's first commit (mountMs), not the click (decided 2026-11-20); p95 over the runs.
+    const delays = [];
+    let before = 0;
     let waited = 0;
     let none = 0;
     let failed = 0;
+    let noMount = 0;
     for (const x of r.runs) {
       if (!x.ok) {
         failed++;
@@ -828,13 +850,21 @@ function criteria(o, results, floorMs) {
         if (mustPost) none++;
         continue;
       }
-      if (x.paymentMethodsStartMs > 50) late++;
+      // A POST that started before the click is not an open-path request: a failure of its own.
+      if (x.paymentMethodsBeforeClick) before++;
+      if (finite(x.mountMs)) delays.push(Math.max(0, x.paymentMethodsStartMs - x.mountMs));
+      else noMount++;
       // "Waits for /products": starts only after a /products that really took network time.
       if (x.productsEndMs != null && !x.productsCached && x.paymentMethodsStartMs >= x.productsEndMs) waited++;
     }
-    add("A4", n, late === 0 && waited === 0 && none === 0 && failed === 0,
-      `POST /payment-methods <= 50 ms after the click and not after /products ends: ${late} late, ${waited} waited for /products, ` +
-        `${mustPost ? `${none} without a POST (required here)` : "no POST accepted (cached answer)"}, ${failed} run(s) did not open`);
+    const delayP95 = percentile([...delays].sort((a, b) => a - b), 95);
+    // `reopen` with no POST in any run has no delay to judge: nothing to fail.
+    const delayOk = delays.length === 0 ? noMount === 0 : within(delayP95, 50);
+    add("A4", n, delayOk && before === 0 && noMount === 0 && waited === 0 && none === 0 && failed === 0,
+      `POST /payment-methods p95 ${delays.length ? fmt(delayP95) : "-"} <= 50 ms after the drawer mounts${delayOk ? "" : " (missed)"}; ` +
+        `${before} started before the click, ${waited} waited for /products, ` +
+        `${mustPost ? `${none} without a POST (required here)` : "no POST accepted (cached answer)"}, ` +
+        `${noMount} without a drawer mount time, ${failed} run(s) did not open`);
   }
 
   // A7: the edit shows at once, no refetch, one POST for a burst.

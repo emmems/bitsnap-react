@@ -1,5 +1,3 @@
-import Hls from "hls.js";
-
 export type PlayerErrorKind = "network" | "media" | "unknown";
 
 /** Playback failure the parent can show and offer a retry for. */
@@ -85,6 +83,11 @@ export type HlsSourceHandlers = {
   onError?: (error: PlayerError) => void;
   /** The signed URL was refused (401/403); the owner should refetch it. */
   onExpiredUrl?: () => void;
+  /**
+   * hls.js loaded but this browser cannot use it (`Hls.isSupported()` is
+   * false): the owner should let the media element try the URL itself.
+   */
+  onUnsupported?: (src: string) => void;
 };
 
 export type HlsSource = {
@@ -96,54 +99,102 @@ export type HlsSource = {
 };
 
 /**
+ * True when the browser has Media Source Extensions, the precondition for
+ * hls.js. Cheap and library-free, so the player can decide before it loads
+ * hls.js; the exact `Hls.isSupported()` check runs once the library is in.
+ */
+export function hasMediaSource(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const w = window as unknown as Record<string, unknown>;
+  return Boolean(w.MediaSource || w.ManagedMediaSource || w.WebKitMediaSource);
+}
+
+/** Loads hls.js on first use; bundlers split it into its own chunk. */
+async function loadHlsConstructor(): Promise<HlsConstructor> {
+  const module = await import("hls.js");
+  return module.default as unknown as HlsConstructor;
+}
+
+/**
  * hls.js playback for one media element, mirroring the course `VideoPlayer`:
  * one network retry, one media recovery, expired URLs handed to the owner.
  * `HlsCtor` is injectable so the error paths can be tested without a stream.
+ * Without it, hls.js is imported on first use: `load()` records the URL and
+ * the stream starts once the library arrived; `destroy()` before that cancels.
  */
 export function createHlsSource(args: {
   media: HTMLMediaElement;
   handlers?: HlsSourceHandlers;
   HlsCtor?: HlsConstructor;
 }): HlsSource {
-  const HlsImpl = args.HlsCtor ?? (Hls as unknown as HlsConstructor);
-  const instance = new HlsImpl();
+  let instance: HlsLike | undefined;
+  let destroyed = false;
   let src: string | undefined;
   let retriedNetwork = false;
   let retriedMedia = false;
 
-  instance.attachMedia(args.media);
-  instance.on(HlsImpl.Events.ERROR, (_event, data) => {
-    const decision = decideHlsError(data, {
-      network: retriedNetwork,
-      media: retriedMedia,
-    });
-    switch (decision.action) {
-      case "expired":
-        args.handlers?.onExpiredUrl?.();
-        args.handlers?.onError?.(decision.error);
-        break;
-      case "restart-load":
-        retriedNetwork = true;
-        instance.startLoad();
-        break;
-      case "recover-media":
-        retriedMedia = true;
-        instance.recoverMediaError();
-        break;
-      case "fail":
-        args.handlers?.onError?.(decision.error);
-        break;
-      case "ignore":
-        break;
+  function start(HlsImpl: HlsConstructor) {
+    if (destroyed) {
+      return;
     }
-  });
+    if (args.HlsCtor == null && !HlsImpl.isSupported()) {
+      if (src != null) {
+        args.handlers?.onUnsupported?.(src);
+      }
+      return;
+    }
+    const created = new HlsImpl();
+    instance = created;
+    created.attachMedia(args.media);
+    created.on(HlsImpl.Events.ERROR, (_event, data) => {
+      const decision = decideHlsError(data, {
+        network: retriedNetwork,
+        media: retriedMedia,
+      });
+      switch (decision.action) {
+        case "expired":
+          args.handlers?.onExpiredUrl?.();
+          args.handlers?.onError?.(decision.error);
+          break;
+        case "restart-load":
+          retriedNetwork = true;
+          created.startLoad();
+          break;
+        case "recover-media":
+          retriedMedia = true;
+          created.recoverMediaError();
+          break;
+        case "fail":
+          args.handlers?.onError?.(decision.error);
+          break;
+        case "ignore":
+          break;
+      }
+    });
+    if (src != null) {
+      created.loadSource(src);
+    }
+  }
+
+  if (args.HlsCtor != null) {
+    start(args.HlsCtor);
+  } else {
+    loadHlsConstructor().then(start, () => {
+      if (!destroyed) {
+        // The chunk did not arrive (offline, blocked): the player offers a retry.
+        args.handlers?.onError?.({ kind: "network" });
+      }
+    });
+  }
 
   return {
     load(nextSrc) {
       src = nextSrc;
       retriedNetwork = false;
       retriedMedia = false;
-      instance.loadSource(nextSrc);
+      instance?.loadSource(nextSrc);
     },
     retry() {
       if (src == null) {
@@ -151,10 +202,11 @@ export function createHlsSource(args: {
       }
       retriedNetwork = false;
       retriedMedia = false;
-      instance.loadSource(src);
+      instance?.loadSource(src);
     },
     destroy() {
-      instance.destroy();
+      destroyed = true;
+      instance?.destroy();
     },
     get src() {
       return src;

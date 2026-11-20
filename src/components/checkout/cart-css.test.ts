@@ -379,3 +379,33 @@ describe("CartComponent.tsx", () => {
     }
   });
 });
+
+describe("checkout.css 1.31.0 tokens", () => {
+  const findRule = (selector: string) =>
+    styleRules.find((rule) => rule.selectors.includes(selector));
+
+  it("colours the sale line from the tokens with fallbacks that pass 4.5:1 on the dark panel", () => {
+    const regular = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="regular"]');
+    const omnibus = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="omnibus"]');
+    const sale = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="sale"]');
+    assert.ok(regular && omnibus && sale, "missing a sale-line rule");
+    assert.equal(regular.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
+    assert.equal(omnibus.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
+    assert.equal(sale.declarations.get("color"), "var(--bitsnap-checkout-sale, #f87171)");
+  });
+
+  it("turns the cart's own motion off on the root marker, but not the express widgets", () => {
+    const motionOff = styleRules.find((rule) =>
+      rule.selectors.some((selector) =>
+        selector.startsWith('[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"]'),
+      ),
+    );
+    assert.ok(motionOff, "no motion-off rule");
+    assert.equal(motionOff.declarations.get("animation"), "none !important");
+    assert.equal(motionOff.declarations.get("transition"), "none !important");
+    assert.match(
+      motionOff.selectors.join(","),
+      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*\)\)/,
+    );
+  });
+});

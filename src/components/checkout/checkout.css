@@ -135,6 +135,21 @@
     outline-color: var(--bitsnap-checkout-error, var(--color-red-600));
 }
 
+/* Sale line (`ProductPrice.tsx`): struck regular price, sale price and the
+ * Omnibus line. Literal fallbacks, not Tailwind's palette, so the contrast
+ * holds as computed: on the dark panel #171717 muted #a3a3a3 is 7.11:1 and
+ * sale #f87171 6.48:1; the light preset sets #71717a (4.83:1 on white) and
+ * #b91c1c (6.47:1). Until 1.30 they were #737373, #b91c1c and #525252 on the
+ * dark panel (3.78, 2.77 and 2.29:1). */
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="regular"],
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="omnibus"] {
+    color: var(--bitsnap-checkout-muted-foreground, #a3a3a3);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="sale"] {
+    color: var(--bitsnap-checkout-sale, #f87171);
+}
+
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
     margin: calc(var(--spacing) * 2);
     padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
@@ -340,4 +355,16 @@
 [data-bitsnap-checkout] :where([data-bitsnap-checkout-slot="paymentMethods"]:disabled) [data-bitsnap-checkout-slot="paymentMethodOption"] {
     cursor: not-allowed;
     opacity: 0.6;
+}
+
+/* Motion off: the resolver sets `data-bitsnap-checkout-motion="off"` on the
+ * root when the `motionDuration` token is zero (`0ms`, `0s`, `0`), because CSS
+ * cannot test the value of `--bitsnap-checkout-motion-duration`. The cart's
+ * own animations and transitions stop; the express widgets
+ * (`paymentButtons` and everything in it) keep theirs. `!important` so it
+ * also beats an animation set inline. Specificity (0,2,0): the qualifiers
+ * sit in `:where()`. */
+[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *)) {
+    animation: none !important;
+    transition: none !important;
 }

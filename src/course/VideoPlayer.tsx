@@ -1,4 +1,4 @@
-import Hls from "hls.js";
+import type HlsType from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
@@ -36,9 +36,16 @@ function canPlayNativeHls(video: HTMLVideoElement): boolean {
   return video.canPlayType("application/vnd.apple.mpegurl") !== "";
 }
 
+/** Media Source Extensions exist: the precondition for hls.js, checked without loading it. */
+function hasMediaSource(): boolean {
+  const w = window as unknown as Record<string, unknown>;
+  return Boolean(w.MediaSource || w.ManagedMediaSource || w.WebKitMediaSource);
+}
+
 /**
  * HLS player: hls.js where there is Media Source support, the native player
- * of Safari otherwise.
+ * of Safari otherwise. hls.js is imported on first use, so the video starts
+ * a moment later the first time.
  */
 export function VideoPlayer({
   src,
@@ -92,7 +99,9 @@ export function VideoPlayer({
       return;
     }
     setFailed(false);
-    let hls: Hls | undefined;
+    let hls: HlsType | undefined;
+    // Set by the cleanup: an unmount before the hls.js chunk arrived must not attach.
+    let cancelled = false;
     let retriedNetwork = false;
     let retriedMedia = false;
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -111,29 +120,48 @@ export function VideoPlayer({
     if (canPlayNativeHls(video)) {
       video.src = src;
       video.addEventListener("loadedmetadata", start, { once: true });
-    } else if (Hls.isSupported()) {
-      hls = new Hls();
-      hls.attachMedia(video);
-      hls.loadSource(src);
-      hls.on(Hls.Events.MANIFEST_PARSED, start);
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) {
-          return;
-        }
-        const status = data.response?.code;
-        if (status === 401 || status === 403) {
-          callbacks.current.onExpired?.();
-          setFailed(true);
-        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !retriedNetwork) {
-          retriedNetwork = true;
-          hls?.startLoad();
-        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !retriedMedia) {
-          retriedMedia = true;
-          hls?.recoverMediaError();
-        } else {
-          setFailed(true);
-        }
-      });
+    } else if (hasMediaSource()) {
+      import("hls.js").then(
+        ({ default: Hls }) => {
+          if (cancelled) {
+            return;
+          }
+          if (!Hls.isSupported()) {
+            // Media Source exists but not for these codecs: let the browser try.
+            video.src = src;
+            return;
+          }
+          const instance = new Hls();
+          hls = instance;
+          instance.attachMedia(video);
+          instance.loadSource(src);
+          instance.on(Hls.Events.MANIFEST_PARSED, start);
+          instance.on(Hls.Events.ERROR, (_event, data) => {
+            if (!data.fatal) {
+              return;
+            }
+            const status = data.response?.code;
+            if (status === 401 || status === 403) {
+              callbacks.current.onExpired?.();
+              setFailed(true);
+            } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !retriedNetwork) {
+              retriedNetwork = true;
+              instance.startLoad();
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !retriedMedia) {
+              retriedMedia = true;
+              instance.recoverMediaError();
+            } else {
+              setFailed(true);
+            }
+          });
+        },
+        () => {
+          // The chunk did not arrive (offline, blocked): offer the retry button.
+          if (!cancelled) {
+            setFailed(true);
+          }
+        },
+      );
     } else {
       video.src = src;
     }
@@ -194,6 +222,7 @@ export function VideoPlayer({
     video.addEventListener("timeupdate", onTimeUpdate);
 
     return () => {
+      cancelled = true;
       clearInterval(timer);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);

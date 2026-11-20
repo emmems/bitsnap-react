@@ -6,15 +6,22 @@ const localeStorageKey = "bitsnap-locale";
 
 let activeLocale: string | undefined;
 
-export function setLocale(locale?: string): void {
+/**
+ * The one spelling of a locale the cart sends and stores: trimmed, `"en"` ->
+ * `"en-US"`, `"pl"` -> `"pl-PL"`, anything else unchanged. `undefined` for an
+ * empty value.
+ */
+export function normalizeLocale(locale?: string): string | undefined {
   const value = locale?.trim();
-  activeLocale = value
-    ? value.toLowerCase() === "en"
-      ? "en-US"
-      : value.toLowerCase() === "pl"
-        ? DEFAULT_LOCALE
-        : value
-    : undefined;
+  if (!value) {
+    return undefined;
+  }
+  const lower = value.toLowerCase();
+  return lower === "en" ? "en-US" : lower === "pl" ? DEFAULT_LOCALE : value;
+}
+
+export function setLocale(locale?: string): void {
+  activeLocale = normalizeLocale(locale);
   if (typeof localStorage !== "undefined") {
     if (activeLocale == null) {
       localStorage.removeItem(localeStorageKey);

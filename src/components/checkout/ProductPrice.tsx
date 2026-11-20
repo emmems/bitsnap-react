@@ -1,7 +1,14 @@
 import type { ProductPricing } from "./product.details.model";
 import { formatCurrency } from "./lib/round.number";
-import { useCheckoutText } from "./texts.context";
+import { getLocale } from "./locale";
+import { useCheckoutText, useCheckoutTextsConfig } from "./texts.context";
 
+/**
+ * Line price. On sale: the struck regular price, the sale price and the
+ * Omnibus line (lowest price in the last 30 days). Their colours live in
+ * `checkout.css` (`data-bitsnap-checkout-price`), read the `mutedForeground`
+ * and `sale` tokens, and pass 4.5:1 on both default panels.
+ */
 export function ProductPrice({
   price,
   currency,
@@ -15,6 +22,9 @@ export function ProductPrice({
 }) {
   const lowestPriceText = useCheckoutText("lowestPrice30Days");
   const noPriceHistoryText = useCheckoutText("noPriceHistory");
+  // Amounts follow the cart locale, not the browser language.
+  const locale = useCheckoutTextsConfig().locale ?? getLocale();
+  const format = (amount: number) => formatCurrency(amount, currency, locale);
   const regular = pricing?.regularPrice ?? price;
   const effective = pricing?.effectivePrice ?? price;
   const onSale = pricing?.discount?.status === "ACTIVE" && effective < regular;
@@ -23,20 +33,26 @@ export function ProductPrice({
     <span>
       {onSale ? (
         <>
-          <span className="mr-2 text-neutral-500 line-through">
-            {formatCurrency(regular * quantity, currency)}
+          <span
+            data-bitsnap-checkout-price="regular"
+            className="mr-2 line-through"
+          >
+            {format(regular * quantity)}
           </span>
-          <span className="font-semibold text-red-700">
-            {formatCurrency(effective * quantity, currency)}
+          <span data-bitsnap-checkout-price="sale" className="font-semibold">
+            {format(effective * quantity)}
           </span>
-          <span className="mt-1 block text-xs text-neutral-600">
+          <span
+            data-bitsnap-checkout-price="omnibus"
+            className="mt-1 block text-xs"
+          >
             {pricing?.referencePrice.historyAvailable && pricing.referencePrice.amount != null
-              ? `${lowestPriceText} ${formatCurrency(pricing.referencePrice.amount, currency)}`
+              ? `${lowestPriceText} ${format(pricing.referencePrice.amount)}`
               : noPriceHistoryText}
           </span>
         </>
       ) : (
-        formatCurrency(effective * quantity, currency)
+        format(effective * quantity)
       )}
     </span>
   );

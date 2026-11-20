@@ -37,7 +37,8 @@ function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
   );
   // The trigger lives outside of the dialog, so Radix does not know which element to give the focus back to.
   const returnFocusTo = useRef<HTMLElement | null>(null);
-  const { boundaryClassName, boundaryStyle } = useCheckoutAppearance();
+  const { boundaryClassName, boundaryStyle, boundaryAttributes } =
+    useCheckoutAppearance();
   const root = useCheckoutSlot("root");
   const overlay = useCheckoutSlot("overlay");
   const panel = useCheckoutSlot("panel");
@@ -52,6 +53,7 @@ function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
       ref={rootRef}
       data-bitsnap-checkout="root"
       data-bitsnap-checkout-slot="root"
+      {...boundaryAttributes}
       className={cn("bitsnap-react", boundaryClassName, root.className)}
       style={{ zIndex: 999999, ...boundaryStyle, ...root.style }}
     >

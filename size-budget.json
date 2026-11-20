@@ -4,12 +4,18 @@
       "jsGzipKB": 6.8
     },
     "cart-main": {
-      "forbidStatic": [],
-      "jsGzipKB": 416.2
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/"
+      ],
+      "jsGzipKB": 242.8
     },
     "cart-main-ns": {
-      "forbidStatic": [],
-      "jsGzipKB": 541.7
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/"
+      ],
+      "jsGzipKB": 368.3
     },
     "catalog": {
       "jsGzipKB": 26.5
@@ -24,7 +30,10 @@
       "jsGzipKB": 28.3
     },
     "course": {
-      "jsGzipKB": 276.5
+      "forbidStatic": [
+        "node_modules/hls.js/"
+      ],
+      "jsGzipKB": 114.0
     },
     "models": {
       "jsGzipKB": 16.9

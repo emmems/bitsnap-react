@@ -55,6 +55,18 @@ export type CheckoutAppearanceTokens = {
   overlay?: string;
   /** Corner radius, applied through `--radius`. */
   radius?: string;
+  /** Sale price of a discounted line. Default `#f87171` (dark), `#b91c1c` (light). */
+  sale?: string;
+  /**
+   * Drawer width from the `md` breakpoint up (any CSS length, also
+   * `var(--your-variable)`). Phones keep the full screen width.
+   */
+  panelWidth?: string;
+  /**
+   * Base duration of the cart's enter and exit animations (default `240ms`).
+   * `"0ms"`, `"0s"` or `"0"` turns the cart's own animations off.
+   */
+  motionDuration?: string;
 };
 
 /**
@@ -114,6 +126,10 @@ export type CheckoutAppearance = {
   elements?: CheckoutAppearanceElements;
 };
 
+export type CheckoutBoundaryAttributes = {
+  "data-bitsnap-checkout-motion"?: "off";
+};
+
 export type ResolvedCheckoutAppearance = {
   theme: CheckoutTheme;
   /** `true` as soon as the caller passed anything through `appearance`. */
@@ -125,6 +141,12 @@ export type ResolvedCheckoutAppearance = {
   boundaryClassName: string;
   /** Inline custom properties applied to the drawer root. */
   boundaryStyle: CSSProperties;
+  /**
+   * Data attributes for the drawer root. `data-bitsnap-checkout-motion="off"`
+   * is set only when the `motionDuration` token is zero: CSS cannot test the
+   * value of a variable, so the stylesheet keys the motion-off rule on it.
+   */
+  boundaryAttributes: CheckoutBoundaryAttributes;
   /**
    * Extra properties for the portalled country dropdown, applied with or
    * without an `appearance`. The dropdown is its own `.bitsnap-react`
@@ -151,6 +173,9 @@ export const CHECKOUT_TOKEN_VARIABLES = {
   error: "--bitsnap-checkout-error",
   overlay: "--bitsnap-checkout-overlay",
   radius: "--bitsnap-checkout-radius",
+  sale: "--bitsnap-checkout-sale",
+  panelWidth: "--bitsnap-checkout-panel-width",
+  motionDuration: "--bitsnap-checkout-motion-duration",
 } as const;
 
 export type CheckoutTokenName = keyof typeof CHECKOUT_TOKEN_VARIABLES;
@@ -179,6 +204,7 @@ export const CHECKOUT_THEME_PRESETS: Record<
     focusRing: "#71717a",
     error: "#dc2626",
     overlay: "rgb(0 0 0 / 0.35)",
+    sale: "#b91c1c",
   },
 };
 
@@ -234,6 +260,18 @@ function resolveDropdownStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
   } as CSSProperties;
 }
 
+/**
+ * `true` for a zero duration (`0`, `0ms`, `0s`, `0.0s`, ...). Any other value,
+ * including `var(--host-duration)`, keeps motion on: the token passes through
+ * unvalidated and CSS decides.
+ */
+export function isMotionOff(duration: string | undefined): boolean {
+  if (duration == null) {
+    return false;
+  }
+  return /^[+-]?(0+(\.0*)?|\.0+)(ms|s)?$/i.test(duration.trim());
+}
+
 export function resolveCheckoutAppearance(
   appearance?: CheckoutAppearance,
 ): ResolvedCheckoutAppearance {
@@ -255,6 +293,9 @@ export function resolveCheckoutAppearance(
     elements: resolved.elements,
     boundaryClassName: resolved.theme,
     boundaryStyle: resolved.boundaryStyle,
+    boundaryAttributes: isMotionOff(resolved.tokens.motionDuration)
+      ? { "data-bitsnap-checkout-motion": "off" }
+      : {},
     dropdownStyle: resolveDropdownStyle(resolved.tokens),
   };
 }

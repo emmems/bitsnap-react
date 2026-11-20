@@ -30,6 +30,61 @@ before(async () => {
   getCourseTexts = (await import("./texts.ts")).getCourseTexts;
 });
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+async function renderWithMediaSource(url: string, unmountAtOnce: boolean) {
+  const w = dom.window as unknown as Record<string, unknown>;
+  w.MediaSource = function MediaSource() {};
+  const container = dom.window.document.createElement("div");
+  dom.window.document.body.appendChild(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(
+        <CourseViewProvider
+          value={{
+            dataSource: {} as never,
+            texts: getCourseTexts(undefined, "en"),
+            preview: false,
+          }}
+        >
+          <VideoPlayer src={url} />
+        </CourseViewProvider>,
+      );
+    });
+    const video = container.querySelector("video")!;
+    if (unmountAtOnce) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+    await act(async () => {
+      await settle();
+    });
+    return video.getAttribute("src");
+  } finally {
+    delete w.MediaSource;
+    if (!unmountAtOnce) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  }
+}
+
+describe("lazy hls.js", () => {
+  it("loads the library on first use and falls back when the browser cannot use it", async () => {
+    // jsdom has Media Source stubbed but no codecs: `Hls.isSupported()` is false.
+    const src = await renderWithMediaSource("https://stream.test/lazy.m3u8", false);
+    assert.equal(src, "https://stream.test/lazy.m3u8");
+  });
+
+  it("does not attach when the lesson is left before the library arrived", async () => {
+    const src = await renderWithMediaSource("https://stream.test/gone.m3u8", true);
+    assert.equal(src, null);
+  });
+});
+
 describe("video player", () => {
   it("saves the position when the lesson is left mid-video", async () => {
     const reports: PlaybackReport[] = [];

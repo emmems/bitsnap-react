@@ -35,6 +35,12 @@ export interface SingleProduct {
   };
 
   isPublished?: boolean;
+  /**
+   * How the product is priced (`one_time`, `pay_what_you_want`,
+   * `subscription`, `installments`, `free`). Absent on classic products and on
+   * backends that do not send it yet.
+   */
+  priceType?: string;
   recurring?: Recurring;
   createdAt?: number | null;
   updatedAt?: number | null;

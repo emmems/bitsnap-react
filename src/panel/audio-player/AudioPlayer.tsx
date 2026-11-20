@@ -1,4 +1,3 @@
-import Hls from "hls.js";
 import {
   Clock,
   Gauge,
@@ -22,6 +21,7 @@ import {
 import { cn } from "../../lib/utils";
 import {
   createHlsSource,
+  hasMediaSource,
   playerErrorFromMediaError,
   prefersNativeHls,
   type HlsSource,
@@ -405,7 +405,9 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
         return;
       }
 
-      if (Hls.isSupported()) {
+      // hls.js loads on first use; its own `isSupported()` runs once it is in
+      // (`onUnsupported` then falls back to the plain element).
+      if (hasMediaSource()) {
         if (hlsRef.current == null) {
           hlsRef.current = createHlsSource({
             media: video,
@@ -415,6 +417,11 @@ const AudioPlayer = forwardRef<AudioPlayerMethods, AudioPlayerProps>(
               },
               onExpiredUrl: () => {
                 callbacksRef.current.onExpiredUrl?.();
+              },
+              onUnsupported: (unsupportedSrc) => {
+                destroyHls();
+                video.src = unsupportedSrc;
+                video.load();
               },
             },
           });

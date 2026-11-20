@@ -107,6 +107,7 @@ let AudioPlayer: typeof import("./AudioPlayer.tsx").default;
 let createHlsSource: typeof import("./hls-engine.ts").createHlsSource;
 let prefersNativeHls: typeof import("./hls-engine.ts").prefersNativeHls;
 let decideHlsError: typeof import("./hls-engine.ts").decideHlsError;
+let engineModule: () => typeof import("./hls-engine.ts");
 let mediaSessionCoordinator: typeof import("./media.session.coordinator.ts");
 
 before(async () => {
@@ -118,6 +119,7 @@ before(async () => {
   createHlsSource = engine.createHlsSource;
   prefersNativeHls = engine.prefersNativeHls;
   decideHlsError = engine.decideHlsError;
+  engineModule = () => engine;
   mediaSessionCoordinator = await import("./media.session.coordinator.ts");
 });
 
@@ -364,6 +366,49 @@ describe("hls error handling", () => {
     emit({ fatal: true, type: "networkError" });
     assert.equal(errors.length, 1);
     assert.equal(instance().startLoadCalls, 2);
+  });
+});
+
+describe("lazy hls.js", () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+  it("checks Media Source without loading the library", () => {
+    const w = dom.window as unknown as Record<string, unknown>;
+    const { hasMediaSource } = engineModule();
+    assert.equal(hasMediaSource(), false);
+    w.MediaSource = function MediaSource() {};
+    try {
+      assert.equal(hasMediaSource(), true);
+    } finally {
+      delete w.MediaSource;
+    }
+  });
+
+  it("imports hls.js on first use and hands an unsupported browser the URL", async () => {
+    const unsupported: string[] = [];
+    const lazy = createHlsSource({
+      media: {} as HTMLMediaElement,
+      handlers: { onUnsupported: (src) => unsupported.push(src) },
+    });
+    // The URL is recorded at once; the stream waits for the library.
+    lazy.load("https://stream.test/lazy.m3u8");
+    assert.equal(lazy.src, "https://stream.test/lazy.m3u8");
+    assert.deepEqual(unsupported, []);
+    await settle();
+    // jsdom has no Media Source, so the real `Hls.isSupported()` says no.
+    assert.deepEqual(unsupported, ["https://stream.test/lazy.m3u8"]);
+  });
+
+  it("does nothing when destroyed before the library arrived", async () => {
+    const unsupported: string[] = [];
+    const lazy = createHlsSource({
+      media: {} as HTMLMediaElement,
+      handlers: { onUnsupported: (src) => unsupported.push(src) },
+    });
+    lazy.load("https://stream.test/gone.m3u8");
+    lazy.destroy();
+    await settle();
+    assert.deepEqual(unsupported, []);
   });
 });
 

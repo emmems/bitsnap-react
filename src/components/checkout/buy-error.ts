@@ -18,6 +18,8 @@ export type ParsedBuyError = {
   message?: string;
   /** Ids of the products that cannot be bought. */
   itemIds?: string[];
+  /** The product a `price-changed` answer names (the first mismatching line). */
+  productId?: string;
 };
 
 /**
@@ -150,7 +152,12 @@ export function parseBuyError(bodyText: string): ParsedBuyError {
     return { code: INTERNAL_ERROR };
   }
 
-  const body = payload as { code?: unknown; error?: unknown; itemIds?: unknown };
+  const body = payload as {
+    code?: unknown;
+    error?: unknown;
+    itemIds?: unknown;
+    productId?: unknown;
+  };
   const { message, code: innerCode } = unwrapMessage(body.error);
   const parsed: ParsedBuyError = {
     code:
@@ -163,6 +170,9 @@ export function parseBuyError(bodyText: string): ParsedBuyError {
     parsed.itemIds = body.itemIds.filter(
       (id): id is string => typeof id === "string",
     );
+  }
+  if (typeof body.productId === "string" && body.productId.length > 0) {
+    parsed.productId = body.productId;
   }
   return parsed;
 }

@@ -17,6 +17,7 @@ describe("resolveCheckoutAppearance", () => {
     assert.deepEqual(resolved.elements, {});
     assert.equal(resolved.boundaryClassName, "dark");
     assert.deepEqual(resolved.boundaryStyle, {});
+    assert.deepEqual(resolved.boundaryAttributes, {});
   });
 
   it("treats an empty appearance like an omitted one", () => {
@@ -218,6 +219,9 @@ describe("checkout slots", () => {
         error: "#c00",
         overlay: "rgb(0 0 0 / 0.3)",
         radius: "8px",
+        sale: "#f87171",
+        panelWidth: "28rem",
+        motionDuration: "200ms",
       },
     });
 
@@ -232,5 +236,82 @@ describe("checkout slots", () => {
         `${variable} is not applied to the boundary`,
       );
     }
+  });
+});
+
+describe("1.31.0 tokens: sale, panelWidth, motionDuration", () => {
+  it("maps the new tokens to their CSS variables", () => {
+    assert.equal(CHECKOUT_TOKEN_VARIABLES.sale, "--bitsnap-checkout-sale");
+    assert.equal(CHECKOUT_TOKEN_VARIABLES.panelWidth, "--bitsnap-checkout-panel-width");
+    assert.equal(
+      CHECKOUT_TOKEN_VARIABLES.motionDuration,
+      "--bitsnap-checkout-motion-duration",
+    );
+  });
+
+  it("passes token values through unvalidated, so host variables work (D22)", () => {
+    const style = resolveCheckoutAppearance({
+      tokens: {
+        sale: "var(--host-sale)",
+        panelWidth: "min(30rem, 90vw)",
+        motionDuration: "var(--host-duration)",
+      },
+    }).boundaryStyle as Record<string, string>;
+
+    assert.equal(style["--bitsnap-checkout-sale"], "var(--host-sale)");
+    assert.equal(style["--bitsnap-checkout-panel-width"], "min(30rem, 90vw)");
+    assert.equal(style["--bitsnap-checkout-motion-duration"], "var(--host-duration)");
+  });
+
+  it("gives only the light preset a sale colour; dark keeps the CSS fallback", () => {
+    assert.equal(
+      (resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<string, string>)[
+        "--bitsnap-checkout-sale"
+      ],
+      "#b91c1c",
+    );
+    assert.equal(
+      (resolveCheckoutAppearance({ theme: "dark" }).boundaryStyle as Record<string, string>)[
+        "--bitsnap-checkout-sale"
+      ],
+      undefined,
+    );
+    const custom = resolveCheckoutAppearance({ theme: "light", tokens: { sale: "#9f1239" } });
+    assert.equal(custom.tokens.sale, "#9f1239");
+  });
+
+  it("sets no panel width or duration unless asked", () => {
+    const style = resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<
+      string,
+      string
+    >;
+    assert.equal(style["--bitsnap-checkout-panel-width"], undefined);
+    assert.equal(style["--bitsnap-checkout-motion-duration"], undefined);
+  });
+
+  it("marks the root motion off for a zero duration only", () => {
+    for (const value of ["0", "0ms", "0s", "0.0s", " 0MS ", "-0"]) {
+      assert.deepEqual(
+        resolveCheckoutAppearance({ tokens: { motionDuration: value } }).boundaryAttributes,
+        { "data-bitsnap-checkout-motion": "off" },
+        value,
+      );
+    }
+    for (const value of ["240ms", "0.1s", "10ms", "var(--host-duration)", "calc(0ms)"]) {
+      assert.deepEqual(
+        resolveCheckoutAppearance({ tokens: { motionDuration: value } }).boundaryAttributes,
+        {},
+        value,
+      );
+    }
+    assert.deepEqual(resolveCheckoutAppearance({ theme: "light" }).boundaryAttributes, {});
+  });
+
+  it("still writes the duration variable when motion is off", () => {
+    const resolved = resolveCheckoutAppearance({ tokens: { motionDuration: "0ms" } });
+    assert.equal(
+      (resolved.boundaryStyle as Record<string, string>)["--bitsnap-checkout-motion-duration"],
+      "0ms",
+    );
   });
 });

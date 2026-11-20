@@ -19,6 +19,9 @@ chunks are separate files fetched over the throttled network, as in a shop.
   unpacked npm tarball).
 - **live**: a real shop page, `--url` is required (use a test project, never a merchant's shop). Only adds
   to the cart and opens it. Never checkout, never pay. The `remove` scenario is harness only.
+  **The live target can never pass `--check`:** `remove` is harness-only and `drawerMs` (the add-then-open
+  split) is harness-only too, so A7 `remove` and A3 report "not measured" / no drawer time and FAIL. Use live
+  runs for numbers, and the harness for the gate.
 
 ```sh
 node scripts/perf/cart-open.mjs                                  # all scenarios, 5 warm-up + 20 runs
@@ -77,8 +80,11 @@ node scripts/perf/cart-open.mjs --sdk dist --runs 20 --warmup 5 --check \
 - The render floor is the baseline's `reopen` p95 (or `--render-floor <ms>` if you give one); `--check`
   refuses to run with neither, because a floor taken from the run's own `reopen` makes A1 compare it with itself.
 - A baseline written by another script version (`scriptVersion` in the JSON) is refused: the numbers do not compare.
-- A4 on `reopen`: no `POST /payment-methods` is a pass (cached answer); a POST later than 50 ms after the click
-  or one that starts after a `/products` that took network time is a fail. Cold scenarios must send one.
+- A3: the drawer time (from the add promise) passes when it is <= max(50 % of the baseline drawer p95, the A1 limit).
+- A4 is a p95 over the runs, measured from the drawer's first commit (`mountMs`: the dialog appears in the DOM),
+  not from the click. On `reopen`, no `POST /payment-methods` is a pass (cached answer); a p95 later than 50 ms
+  after the mount, or a POST that starts after a `/products` that took network time, is a fail. A POST that
+  started before the click is counted and fails separately ("started before the click"). Cold scenarios must send one.
 - A7 `qty-burst`: exactly one `POST /payment-methods` for three clicks in 200 ms, in every run.
 
 Commit the numbers to `perf-baseline.md`. Run it when the machine is quiet (`fleet-load-gate status` = ok)

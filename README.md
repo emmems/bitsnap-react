@@ -75,6 +75,25 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.31.0 (unreleased)
+
+- **Cart prices follow the cart locale.** Line prices, the struck price and
+  the Omnibus line are formatted in the cart's `locale` (or the active
+  `setLocale` locale, `pl-PL` by default), not the browser language: a Polish
+  shop in an English browser shows "99,80 zł", not "PLN 99.80". Google Pay's
+  shipping labels keep the browser language.
+- **Readable sale line.** New default colours for a discounted line: the
+  struck regular price and the Omnibus line ("Najniższa cena z 30 dni") use
+  `mutedForeground` (`#a3a3a3` on the dark panel, 7.11:1; `#71717a` in the
+  light theme, 4.83:1), the sale price uses the new `sale` token (`#f87171`
+  dark, 6.48:1; `#b91c1c` light, 6.47:1). Before they were `#737373`,
+  `#b91c1c` and `#525252` on the dark panel (3.78, 2.77 and 2.29:1).
+- **New tokens** `sale`, `panelWidth` and `motionDuration` (see
+  [Tokens](#tokens)). Like every token they accept any CSS value, so
+  `var(--your-variable)` works. `motionDuration: "0ms"` (or `"0s"`, `"0"`)
+  turns the cart's own animations and transitions off; Apple Pay, Google Pay
+  and the other express buttons keep theirs.
+
 ## 1.29.0
 
 - **Panel ticket as a tall stub.** The ticket card is one centred column
@@ -457,7 +476,8 @@ To change a property the checkout sets, use one of these, in this order:
    A token passed in `appearance.tokens`, or a light-preset color under
    `theme: "light"`, is written as an inline style on the checkout root, so the
    same variable set in your CSS has no effect for it; change the token instead.
-   `--bitsnap-checkout-panel-width` is never set inline.
+   `--bitsnap-checkout-panel-width` is set inline only when you pass the
+   `panelWidth` token.
 2. **Inline `style`** on the slot: `appearance.elements.<slot>.style`. Inline
    styles beat every stylesheet.
 3. **Tailwind's important modifier**, if your site uses Tailwind:
@@ -474,11 +494,12 @@ before. The checkout sets these properties:
 
 | Slot | Properties |
 | ---- | ---------- |
-| root (`[data-bitsnap-checkout]`) | `position`, `z-index`, `font-family`, `font-size` |
+| root (`[data-bitsnap-checkout]`) | `position`, `z-index`, `font-family`, `font-size`; `animation` and `transition` of the cart's elements when `motionDuration` is zero |
 | `panel` | `position`, `top`, `right`, `bottom`, `width`, `display`, `flex-direction`, `overflow-y`, `z-index`, `background-color`, `color` |
 | `overlay` | `position`, `top`, `right`, `bottom`, `left`, `z-index`, `cursor`, `background-color` |
 | `productList` | `margin-top` of the list (`ul`); `height`, `margin`, `border-width`, `border-style`, `border-color` of the separators (`hr`) |
 | `product` | `outline-color` when the product is unavailable |
+| `productPrice` | `color` of the struck regular price, the sale price and the Omnibus line (`[data-bitsnap-checkout-price="regular" \| "sale" \| "omnibus"]`) |
 | `checkoutButton` | `margin`, `padding`, `font-weight`, `background-color`, `color`; `background-color` on hover; `opacity` and `cursor` when disabled |
 | `closeButton` | `padding`; `background-color` on hover |
 | `countryLabel` | `margin`, `color` |
@@ -500,7 +521,7 @@ before. The checkout sets these properties:
 | `background`              | Panel, country trigger                                  |
 | `surface`                 | Country dropdown, search bar, selected payment method   |
 | `foreground`              | Titles, prices, total, country list                                   |
-| `mutedForeground`         | Empty cart, delivery note, country label, search field  |
+| `mutedForeground`         | Empty cart, delivery note, country label, search field, struck regular price, Omnibus line |
 | `border`                  | Country trigger, dropdown, product separators, payment method cards |
 | `buttonBackground`        | "Next step" button                                      |
 | `buttonForeground`        | "Next step" button                                      |
@@ -510,6 +531,12 @@ before. The checkout sets these properties:
 | `error`                   | Error message, unavailable product outline              |
 | `overlay`                 | Drawer backdrop                                         |
 | `radius`                  | Radius of the rounded elements                          |
+| `sale`                    | Sale price of a discounted line (default `#f87171`; `#b91c1c` in the light theme) |
+| `panelWidth`              | Drawer width from 768 px (default 350 px, 420 px from 1280 px); phones stay full width |
+| `motionDuration`          | Base duration of the cart's animations (default `240ms`); `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted |
+
+Every token accepts any CSS value and is written as-is, so
+`tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site.
 
 ### What stays untouched
 
@@ -520,9 +547,9 @@ before. The checkout sets these properties:
 - Apple Pay and Google Pay keep their native artwork and fonts; only the space
   around them is themed.
 - The drawer is full width on phones, 350 px from 768 px and 420 px from
-  1280 px. To change the width on screens from 768 px, set
-  `--bitsnap-checkout-panel-width` on `[data-bitsnap-checkout]` in your CSS
-  (for example `[data-bitsnap-checkout] { --bitsnap-checkout-panel-width: 480px; }`).
+  1280 px. To change the width on screens from 768 px, pass the `panelWidth`
+  token or set `--bitsnap-checkout-panel-width` on `[data-bitsnap-checkout]` in
+  your CSS (for example `[data-bitsnap-checkout] { --bitsnap-checkout-panel-width: 480px; }`).
   A width class or a plain width rule on the `panel` slot loses.
 - The country list is rendered in a portal, outside the drawer. It receives the
   theme (colors, font, focus ring and stacking) from the checkout, with or
