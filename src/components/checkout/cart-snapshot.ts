@@ -104,6 +104,11 @@ function truncate(value: string, max: number): string {
   return value.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
 }
 
+/** Else `Intl.NumberFormat` throws at render. */
+function isCurrency(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Z]{3}$/.test(value);
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -146,7 +151,7 @@ function parsePricing(raw: unknown): ProductPricing | undefined {
     !isRecord(raw) ||
     !isFiniteNumber(raw.regularPrice) ||
     !isFiniteNumber(raw.effectivePrice) ||
-    !isBoundedString(raw.currency, MAX_SHORT_LENGTH) ||
+    !isCurrency(raw.currency) ||
     !isBoundedString(raw.priceVersion, MAX_PRICE_VERSION_LENGTH)
   ) {
     return undefined;
@@ -221,7 +226,7 @@ function parseDetails(raw: unknown): CartLineDetails | undefined {
     raw.name.length === 0 ||
     !isFiniteNumber(raw.price) ||
     raw.price < 0 ||
-    !isBoundedString(raw.currency, MAX_SHORT_LENGTH)
+    !isCurrency(raw.currency)
   ) {
     return undefined;
   }

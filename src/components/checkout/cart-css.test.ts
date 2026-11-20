@@ -367,6 +367,23 @@ describe("checkout.css", () => {
 });
 
 describe("CartComponent.tsx", () => {
+  it("turns both auto-animate instances off with motion off (S8)", () => {
+    const drawer = readFileSync(COMPONENT_PATH, "utf8");
+    const content = readFileSync(
+      resolve(process.cwd(), "src/components/checkout/CartComponentContent.tsx"),
+      "utf8",
+    );
+    // CSS cannot stop the animations auto-animate starts from script.
+    assert.equal(drawer.includes("useAutoAnimate("), false, "the drawer root calls useAutoAnimate directly");
+    assert.match(drawer, /const parent = useCartAutoAnimate\(\)/);
+    assert.equal(content.match(/useAutoAnimate\(/g)?.length, 1, "only inside useCartAutoAnimate");
+    assert.match(content, /const productsParent = useCartAutoAnimate\(\)/);
+    assert.match(
+      content,
+      /"data-bitsnap-checkout-motion"\]\s*===\s*"off"[\s\S]*?if \(motionOff\) \{\s*setEnabled\(false\)/,
+    );
+  });
+
   it("leaves the drawer geometry to the stylesheet", () => {
     const source = readFileSync(COMPONENT_PATH, "utf8");
     // A host page that defines `.w-full` or `.fixed` unlayered would win over
@@ -405,7 +422,14 @@ describe("checkout.css 1.31.0 tokens", () => {
     assert.equal(motionOff.declarations.get("transition"), "none !important");
     assert.match(
       motionOff.selectors.join(","),
-      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*, \.bsc-skeleton\)\)/,
+      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*, \[data-bitsnap-checkout-slot="skeleton"\]\)\)/,
+    );
+    // The exclusion must match the skeleton the cart renders (its pulse is a
+    // status signal), not a class nothing carries.
+    assert.doesNotMatch(motionOff.selectors.join(","), /\.bsc-skeleton/);
+    assert.match(
+      readFileSync(resolve(process.cwd(), "src/components/checkout/CartLines.tsx"), "utf8"),
+      /<Skeleton\s+data-bitsnap-checkout-slot="skeleton"/,
     );
     // The skeleton's delayed show (1.32.0) must never be stopped by motion off.
   });

@@ -6,6 +6,7 @@ import { RevolutPayButtonInner } from "../express/RevolutPayButton";
 import { useCheckoutSlot } from "./appearance.context";
 import ApplePayButton from "./ApplePay";
 import { useCartController } from "./cart-controller";
+import { catalogUnitPrice } from "./cart-view";
 import { getProjectID } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
 import GooglePayButton from "./GooglePay";
@@ -25,6 +26,7 @@ export function CartCheckout() {
   const {
     locale,
     status,
+    lines,
     total,
     totalComplete,
     wallets,
@@ -70,8 +72,16 @@ export function CartCheckout() {
   const reviewPricesText = useCheckoutText("reviewPrices");
 
   // A line still waiting for its price keeps the block (and a mounted wallet
-  // sheet) on screen; only the amount waits.
-  if (status !== "ready" || !(total > 0 || !totalComplete)) {
+  // sheet) on screen; only the amount waits. Catalog prices as in 1.29, so a
+  // pay-what-you-want `amount: 0` keeps the button.
+  const catalogSum = lines.reduce(
+    (sum, item) =>
+      item.details == null
+        ? sum
+        : sum + catalogUnitPrice(item.details) * item.line.quantity,
+    0,
+  );
+  if (status !== "ready" || !(total > 0 || catalogSum > 0 || !totalComplete)) {
     return null;
   }
 

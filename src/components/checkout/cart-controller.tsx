@@ -31,7 +31,7 @@ import {
 import { rememberPendingOrder } from "./pending-order";
 import { useCheckoutStore } from "./state";
 import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
-import { useCartView } from "./useCartView";
+import { useCartView, type PriceCheck } from "./useCartView";
 
 /**
  * The state and the logic of the cart, with no markup (PLAN.md D1).
@@ -138,12 +138,14 @@ export function useCartController(): CartController {
 
 export function CartControllerProvider({
   locale,
+  open,
   children,
 }: {
   locale?: string;
+  open?: boolean;
   children: React.ReactNode;
 }) {
-  const controller = useCartControllerState(locale);
+  const controller = useCartControllerState(locale, open);
   return (
     <CartControllerContext.Provider value={controller}>
       {children}
@@ -185,11 +187,14 @@ function useDebounced(value: string | undefined, ms: number) {
   return [debounced, flush] as const;
 }
 
-function useCartControllerState(localeProp?: string): CartController {
+function useCartControllerState(
+  localeProp?: string,
+  open?: boolean,
+): CartController {
   const provider = useCartProvider();
   const instrument = useInstrumentContext();
   const locale = localeProp ?? getLocale();
-  const cart = useCartView(locale);
+  const cart = useCartView(locale, open);
   const { view } = cart;
 
   const unavailableProductsText = useCheckoutText("unavailableProducts");
@@ -411,23 +416,29 @@ function useCartControllerState(localeProp?: string): CartController {
       // is built from storage, so a change from another tab while the payment
       // options load runs the gate again, and a second one stops (N5). A
       // changed `amount` stops at once: the gate never looks at amounts.
+      const opening = cart.opening();
       let paymentMethod: PaymentMethod | undefined;
+      let shownAmounts: Record<string, number> = {};
       for (let attempt = 0; ; attempt++) {
         setIsCheckingPrices(true);
-        let gate: "pass" | "marked" | "failed";
+        let gate: PriceCheck;
         try {
           gate = await cart.checkPrices();
         } finally {
           setIsCheckingPrices(false);
         }
-        if (gate === "failed") {
+        if (gate.result === "cancelled") {
+          return;
+        }
+        if (gate.result === "failed") {
           setGateFailed(true);
           return;
         }
-        if (gate === "marked") {
+        if (gate.result === "marked") {
           setShowReviewPrices(true);
           return;
         }
+        shownAmounts = gate.shownAmounts;
         setShowReviewPrices(false);
         const gated = readLocalCartLines();
 
@@ -505,11 +516,16 @@ function useCartControllerState(localeProp?: string): CartController {
         } catch (e) {}
       }
 
+      // Closed since the click (S3).
+      if (opening == null || cart.opening() !== opening) {
+        return;
+      }
       // What this order is made of; only these lines go once it is paid.
       const cartLinesBeforeBuy = getCartLines();
-      const response = await continueToCheckoutAsync(
-        paymentMethod != null ? { paymentMethod } : undefined,
-      );
+      const response = await continueToCheckoutAsync({
+        ...(paymentMethod != null ? { paymentMethod } : {}),
+        shownAmounts,
+      });
 
       if (isErr(response)) {
         // The seller may have changed the payment methods in the meantime.

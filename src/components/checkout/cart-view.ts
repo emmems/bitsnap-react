@@ -45,6 +45,22 @@ export function payWhatYouWantKind(
   return line.amount != null ? "amount" : "suggested";
 }
 
+/**
+ * The shown unit price of each `suggested` line, by line id: `/buy` sends it as
+ * `amount`, else the server charges its current, unversioned suggested price.
+ */
+export function suggestedAmounts(
+  view: Pick<CartView, "lines">,
+): Record<string, number> {
+  const amounts: Record<string, number> = {};
+  for (const item of view.lines) {
+    if (item.payWhatYouWant === "suggested" && item.unitPrice != null) {
+      amounts[item.line.id] = item.unitPrice;
+    }
+  }
+  return amounts;
+}
+
 /** True when the line is priced at its `amount` and skips the price gate. */
 export function isPayWhatYouWantLine(
   line: Pick<LocalCartLine, "amount">,

@@ -361,10 +361,11 @@
  * root when the `motionDuration` token is zero (`0ms`, `0s`, `0`), because CSS
  * cannot test the value of `--bitsnap-checkout-motion-duration`. The cart's
  * own animations and transitions stop; the express widgets
- * (`paymentButtons` and everything in it) keep theirs. `!important` so it
+ * (`paymentButtons` and everything in it) keep theirs, and so does the skeleton
+ * (its pulse is a status). `!important` so it
  * also beats an animation set inline. Specificity (0,2,0): the qualifiers
  * sit in `:where()`. */
-[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *, .bsc-skeleton)) {
+[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *, [data-bitsnap-checkout-slot="skeleton"])) {
     animation: none !important;
     transition: none !important;
 }

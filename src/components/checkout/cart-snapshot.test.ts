@@ -279,6 +279,16 @@ describe("hand-written validation (D3)", () => {
     assert.ok(!("tricky" in entry.details.pricing!.referencePrice));
   });
 
+  it("drops an entry whose currency is not an ISO code, and only the pricing when its currency is bad (S6)", () => {
+    for (const currency of ["???", "pln", "PL", "PLNX", " PLN"]) {
+      assert.equal(parse(rawEntry("p", { details: details("p", { currency }) })), undefined, currency);
+      const entry = parse(rawEntry("p", { details: details("p", { pricing: pricing({ currency }) }) }));
+      assert.ok(entry, currency);
+      assert.equal(entry.details.currency, "PLN");
+      assert.equal("pricing" in entry.details, false, currency);
+    }
+  });
+
   it("drops a bad pricing and keeps the entry at its price (m4)", () => {
     for (const patch of [
       { regularPrice: "10" },

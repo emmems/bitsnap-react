@@ -1,4 +1,3 @@
-import { useAutoAnimate } from "@formkit/auto-animate/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,7 +9,7 @@ import {
   useCheckoutSlot,
 } from "./appearance.context";
 import type { CheckoutAppearance } from "./appearance";
-import CartComponentContent from "./CartComponentContent";
+import CartComponentContent, { useCartAutoAnimate } from "./CartComponentContent";
 import CartProvider, { getLocale } from "./CartProvider";
 import { registerWarmTarget, warmCart, whenIdle } from "./cart-warmup";
 import { CheckoutTextsProvider, useCheckoutText } from "./texts.context";
@@ -48,7 +47,7 @@ function CartComponent({
       forget();
     };
   }, [queryClient, locale, prefetch]);
-  const [parent] = useAutoAnimate(/* optional config */);
+  const parent = useCartAutoAnimate();
   // The drawer renders inside the checkout root: the stylesheet is scoped to `.bitsnap-react`.
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
   const rootRef = useCallback(
@@ -166,7 +165,11 @@ function CartComponent({
                 </button>
               </div>
 
-              <CartComponentContent className={"grow"} locale={locale} />
+              <CartComponentContent
+                className={"grow"}
+                locale={locale}
+                open={isVisible}
+              />
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>

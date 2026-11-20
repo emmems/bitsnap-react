@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import React from "react";
 import {
   adoptPriceVersion,
+  cartLinesSignature,
   fetchCartProducts,
   rememberCartAnswer,
   getProjectID,
@@ -28,6 +29,7 @@ import {
   EMPTY_PRICE_GATE_STATE,
   PRICE_SEEN_MS,
   runPriceGate,
+  suggestedAmounts,
   trackPrices,
   type CartView,
   type CartViewFresh,
@@ -45,6 +47,11 @@ export const INSTANT_CART = true;
 
 /** A snapshot price older than this shows the "refreshing" state while a revalidation runs. */
 const REFRESHING_AGE_MS = 60_000;
+
+/** `cancelled`: the drawer closed while the gate waited. */
+export type PriceCheck =
+  | { result: "pass"; shownAmounts: Record<string, number> }
+  | { result: "marked" | "failed" | "cancelled" };
 
 type Answered = {
   details: CartLineDetails;
@@ -162,8 +169,8 @@ export type CartViewState = {
   /** A revalidation request is running. */
   isFetching: boolean;
   /**
-   * `productID:quantity` of every local line, sorted: what `/buy` and
-   * `/payment-methods` would get (`readLocalCartSignature`).
+   * `cartLinesSignature` of the local lines: what `/buy` and
+   * `/payment-methods` would get (same as `readLocalCartSignature`).
    */
   localSignature: string;
   /** The unit price a marked line showed before its price changed on screen. */
@@ -179,7 +186,9 @@ export type CartViewState = {
    * - `marked`: a price the buyer has not seen (long enough); wait for a click;
    * - `failed`: the server could not be asked; do not send `/buy`.
    */
-  checkPrices(): Promise<"pass" | "marked" | "failed">;
+  checkPrices(): Promise<PriceCheck>;
+  /** A token per opening of the drawer; `null` once it closed. */
+  opening(): object | null;
   /**
    * After `/buy` answered `price-changed`: asks the server again bypassing the
    * HTTP cache and marks the changed lines (also writes silent adoptions).
@@ -194,7 +203,7 @@ export type CartViewState = {
  * answers, then with the answer (part 1 §3.3). Renders at once from what is on
  * the device; the `/products` query only revalidates.
  */
-export function useCartView(locale: string): CartViewState {
+export function useCartView(locale: string, open = true): CartViewState {
   const projectID = getProjectID() ?? "";
   const queryClient = useQueryClient();
   const store = React.useMemo(
@@ -217,16 +226,27 @@ export function useCartView(locale: string): CartViewState {
   );
   const productIDs = React.useMemo(() => productIDsOf(localLines), [localLines]);
   const localSignature = React.useMemo(
-    () =>
-      localLines
-        .map((line) => `${line.productID}:${line.quantity}`)
-        .sort()
-        .join(","),
+    () => cartLinesSignature(localLines),
     [localLines],
   );
   // The content mounts when the drawer opens.
   const [openedAt] = React.useState(() => Date.now());
   const [, rerender] = React.useReducer((n: number) => n + 1, 0);
+  const openingRef = React.useRef<object | null>(null);
+  const cancelWait = React.useRef<(() => void) | undefined>(undefined);
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const token = {};
+    openingRef.current = token;
+    return () => {
+      if (openingRef.current === token) {
+        openingRef.current = null;
+      }
+      cancelWait.current?.();
+    };
+  }, [open]);
 
   const sessionKey = `${projectID}|${normalizeLocale(locale) ?? getLocale()}`;
   const sessionRef = React.useRef<Session | null>(null);
@@ -483,7 +503,8 @@ export function useCartView(locale: string): CartViewState {
     return (await freshenForGate()) ? runGate() : undefined;
   }
 
-  async function checkPrices(): Promise<"pass" | "marked" | "failed"> {
+  async function checkPrices(): Promise<PriceCheck> {
+    const opening = openingRef.current;
     let run = await askGate();
     // A block only for the seen time is waited out with nothing marked on
     // screen meanwhile: the marks of that run are not committed (m1).
@@ -492,7 +513,17 @@ export function useCartView(locale: string): CartViewState {
         ? waitInsteadOfMark(run.prior, run.result, run.view, Date.now())
         : undefined;
     if (wait != null) {
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, wait);
+        cancelWait.current = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      cancelWait.current = undefined;
+      if (opening == null || openingRef.current !== opening) {
+        return { result: "cancelled" };
+      }
       // The cart may have changed meanwhile: ask again rather than fail (m2).
       run = await askGate();
     }
@@ -503,9 +534,11 @@ export function useCartView(locale: string): CartViewState {
     rerender();
     if (result?.result === "pass") {
       dropUnknownLines();
-      return applyAdoptions(result) ? "pass" : "failed";
+      return applyAdoptions(result)
+        ? { result: "pass", shownAmounts: suggestedAmounts(run!.view) }
+        : { result: "failed" };
     }
-    return result?.result === "marked" ? "marked" : "failed";
+    return { result: result?.result === "marked" ? "marked" : "failed" };
   }
 
   async function recheckPrices(): Promise<"pass" | "marked" | "failed"> {
@@ -545,6 +578,7 @@ export function useCartView(locale: string): CartViewState {
       session.answers.get(productID)?.catalogProductID ??
       snapshot[productID]?.catalogProductID,
     checkPrices,
+    opening: () => openingRef.current,
     recheckPrices,
     retry: () => {
       session.revalidateFailed = false;

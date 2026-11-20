@@ -698,6 +698,44 @@ describe("instant drawer: price gate (D18)", () => {
     assert.equal((buys()[0].body as { items: { priceVersion?: string }[] }).items[0].priceVersion, "va3");
   });
 
+  it("closing the drawer during the 1 s wait sends no /buy, even after the wait (S3)", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    await React.act(async () => button.click());
+    assert.equal(buys().length, 0, "waiting for the price to be seen");
+    await close();
+    await settle(1200);
+    assert.equal(buys().length, 0, "the closed drawer's click is dropped");
+  });
+
+  it("an adopted price version asks /payment-methods again, so the seller's options show (S5)", async () => {
+    // The server refuses a stale version; the client reads that as "no choice".
+    paymentMethods = (body) =>
+      (body as { items: { priceVersion?: string }[] }).items[0].priceVersion === catalog.get("pa")!.pricing!.priceVersion
+        ? json({ success: true, choice: { methods: ["online", "manual"], manualAccountTypes: ["blik"] } })
+        : json({ success: false, code: "price-changed", error: "Price changed" }, 400);
+    const option = () => doc().querySelector('[data-bitsnap-checkout-slot="paymentMethodOption"]');
+    await mount();
+    await add("pa");
+    setPrice("pa", 2500, "va2");
+    await open();
+    await settle();
+    assert.equal(option(), null, "the stored version got no options");
+    lookAtCart();
+    await clickNext();
+    assert.equal(storedLines()[0].priceVersion, "va2", "the gate adopted the new version");
+    assert.equal(
+      (methodRequests().at(-1)!.body as { items: { priceVersion?: string }[] }).items[0].priceVersion,
+      "va2",
+      "asked again with the adopted version",
+    );
+    assert.ok(option(), "the manual payment option shows");
+    assert.equal(buys().length, 0, "the buyer sees the options before /buy");
+  });
+
   it("a failed revalidation never sends /buy", async () => {
     const root = await mount();
     await add("pa");
@@ -729,6 +767,34 @@ describe("instant drawer: pay what you want (N5)", () => {
     await clickNext();
     assert.equal(buys().length, 1, "skips the gate");
     assert.equal((buys()[0].body as { items: { amount?: number }[] }).items[0].amount, 1500);
+  });
+
+  it("a PWYW line without an amount sends the suggested price it showed as its amount; other lines do not change (S2)", async () => {
+    catalog.set("pw", product("pw", "Tip", 2500, "vw1", { priceType: "pay_what_you_want" }));
+    await mount();
+    await add("pw");
+    await add("pa");
+    await open();
+    await settle();
+    assert.equal(total(), PLN("50,00"));
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 1);
+    const items = (buys()[0].body as { items: { id: string; amount?: number }[] }).items;
+    assert.equal(items.find((item) => item.id === "pw")!.amount, 2500);
+    assert.equal("amount" in items.find((item) => item.id === "pa")!, false);
+  });
+
+  it("a PWYW amount of 0 on a product with a positive price keeps the total and the button (S4)", async () => {
+    catalog.set("pw", product("pw", "Tip", 2500, "vw1", { priceType: "pay_what_you_want" }));
+    await mount();
+    await add("pw", 1, { amount: 0 });
+    await open();
+    await settle();
+    assert.equal(total(), PLN("0,00"), "the charged total");
+    assert.ok(doc().querySelector('[data-bitsnap-checkout-slot="checkoutButton"]'), "the button stays");
+    await clickNext();
+    assert.equal((buys()[0].body as { items: { amount?: number }[] }).items[0].amount, 0);
   });
 
   for (const [name, extra] of [
@@ -1051,6 +1117,8 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
     assert.ok(reviewNotice());
     assert.equal(total(), PLN("9,00"));
     await clickNext();
+    // The amount is part of the /payment-methods key (S5): the options of the new cart.
+    await releaseMethods();
     assert.equal(buys().length, 1);
     assert.equal(buyItems(0)[0].amount, 900);
   });

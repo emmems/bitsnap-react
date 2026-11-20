@@ -130,9 +130,12 @@ export interface CartMethods {
 
   /**
    * Creates the order of the cart (`/buy`). `paymentMethod` is sent only when
-   * given, that is when the buyer was offered the choice.
+   * given, that is when the buyer was offered the choice. `shownAmounts`: internal.
    */
-  redirectToNextStep: (args?: { paymentMethod?: PaymentMethod }) => Promise<
+  redirectToNextStep: (args?: {
+    paymentMethod?: PaymentMethod;
+    shownAmounts?: Record<string, number>;
+  }) => Promise<
     Err | { url: string; orderId?: string; projectId?: string }
   >;
 
@@ -651,12 +654,19 @@ export function readCheckoutCountry(): string | undefined {
   return getCheckout().country;
 }
 
-/** Stable signature of the local cart content: one `productID:quantity` per line, sorted. */
-export function readLocalCartSignature(): string {
-  return readLocalCartLines()
-    .map((line) => `${line.productID}:${line.quantity}`)
+/** One `productID:quantity:priceVersion:amount` per line, sorted (the `/payment-methods` key). */
+export function cartLinesSignature(lines: readonly LocalCartLine[]): string {
+  return lines
+    .map(
+      (line) =>
+        `${line.productID}:${line.quantity}:${line.priceVersion ?? ""}:${line.amount ?? ""}`,
+    )
     .sort()
     .join(",");
+}
+
+export function readLocalCartSignature(): string {
+  return cartLinesSignature(readLocalCartLines());
 }
 
 /**
@@ -923,10 +933,14 @@ function notifyLocalCartChanged(): void {
   }
 }
 
-/** The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when it is empty. */
+/**
+ * The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when
+ * it is empty. `shownAmounts`: see `suggestedAmounts`.
+ */
 export function cartLinkRequest(
   checkout: Checkout,
   locale: string,
+  shownAmounts?: Readonly<Record<string, number>>,
 ): LinkRequest | undefined {
   if (checkout.products == null || checkout.products.length == 0) {
     return undefined;
@@ -953,7 +967,11 @@ export function cartLinkRequest(
         quantity: el.quantity,
         priceVersion: el.priceVersion,
         // The buyer's pay-what-you-want amount, in minor units per item.
-        ...(el.amount != null ? { amount: el.amount } : {}),
+        ...(el.amount != null
+          ? { amount: el.amount }
+          : shownAmounts?.[el.id] != null
+            ? { amount: shownAmounts[el.id] }
+            : {}),
       };
     }),
     askForNote: true,
@@ -1224,8 +1242,9 @@ export const getCheckoutMethods: (
 
     async redirectToNextStep(args?: {
       paymentMethod?: PaymentMethod;
+      shownAmounts?: Record<string, number>;
     }): Promise<Err | { url: string; orderId?: string; projectId?: string }> {
-      const payload = cartLinkRequest(getCheckout(), locale);
+      const payload = cartLinkRequest(getCheckout(), locale, args?.shownAmounts);
       if (payload == null) {
         return Err("cart-is-empty", "badInput");
       }
