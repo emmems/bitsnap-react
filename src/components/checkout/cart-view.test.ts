@@ -486,7 +486,12 @@ describe("price gate (D18)", () => {
   it("a pay-what-you-want line with a changed catalog price is never marked", () => {
     const d = details("a", { priceType: "pay_what_you_want", version: "v9", price: 5000 });
     const view = viewOf([line("l1", "a", { priceVersion: "v0", amount: 700 })], [d]);
-    const gate = runPriceGate(stateOf({}, { l1: { priceVersion: "v8", shownPrice: 1, markedAt: NOW } }), view, NOW);
+    // Only its amount counts (S13): an amount marked over 1 s ago is adopted.
+    const gate = runPriceGate(
+      stateOf({}, { l1: { priceVersion: "", shownPrice: 700, markedAt: NOW - PRICE_SEEN_MS - 1 } }),
+      view,
+      NOW,
+    );
     assert.equal(gate.result, "pass");
     assert.deepEqual(gate.adopt, []);
     assert.equal(gate.state.marks.has("l1"), false);

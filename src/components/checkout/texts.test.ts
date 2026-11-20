@@ -11,6 +11,7 @@ const english = {
   chooseCountry: "Choose a country",
   nextStep: "Next step",
   unavailableProducts: "Not all products are available.",
+  unavailableProduct: "Unavailable product",
   checkoutFailed: "Something went wrong. Please try again later.",
   noPaymentGateway:
     "This shop doesn't accept online payments yet. Try again later or contact the seller.",
@@ -89,6 +90,7 @@ const polish = {
   chooseCountry: "Wybierz kraj",
   nextStep: "Następny krok",
   unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
+  unavailableProduct: "Produkt niedostępny",
   checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
   noPaymentGateway:
     "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",

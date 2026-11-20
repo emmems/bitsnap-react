@@ -361,6 +361,25 @@ describe("the drawer reads what the warm-up cached", () => {
     assert.ok(productCalls() <= before.products + 1, "at most the revalidation of the open");
   });
 
+  it("a warm-up still running at the open is asked again once it lands, and then unlocks the wallets (S14)", async () => {
+    storeCart(["pa"]);
+    await mount();
+    holdProducts = true;
+    await React.act(async () => Bitsnap.warmUp());
+    await React.act(async () => Bitsnap.showCart());
+    await settle();
+    assert.equal(productCalls(), 1, "the open shares the running warm-up");
+    holdProducts = false;
+    await React.act(async () => {
+      for (const release of pendingProducts.splice(0)) release();
+    });
+    await settle(80);
+    assert.equal(productCalls(), 2, "one more /products after the warm-up landed");
+    const wallets = doc().querySelector("[data-bitsnap-checkout-wallets]");
+    assert.ok(wallets);
+    assert.equal(wallets!.hasAttribute("inert"), false);
+  });
+
   it("another cart content is another key and is asked for", async () => {
     storeCart(["pa"]);
     await mount();
@@ -411,6 +430,15 @@ describe("after add", () => {
     assert.equal(countryCalls(), 1, "opening does not ask again");
     assert.ok(productCalls() <= productsAfterAdd + 1, "at most the revalidation of the open");
     assert.equal(doc().querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
+  });
+
+  it("the public Bitsnap.addProductToCart warms too (S19)", async () => {
+    storeCart([]);
+    await mount();
+    await React.act(async () => void (await Bitsnap.addProductToCart("pa")));
+    await settle();
+    assert.equal(JSON.parse(page.win.localStorage.getItem("checkout")!).products.length, 1);
+    assert.equal(countryCalls(), 1, "countries warmed by the add");
   });
 
   it("a failed add warms nothing", async () => {

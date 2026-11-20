@@ -11,6 +11,7 @@ export function CartLines() {
   const {
     status,
     lines,
+    unavailable,
     refreshFailed,
     missingItemIds,
     notice,
@@ -29,6 +30,7 @@ export function CartLines() {
   const emptyCartText = useCheckoutText("emptyCart");
   const loadFailedText = useCheckoutText("loadFailed");
   const retryText = useCheckoutText("retry");
+  const unavailableText = useCheckoutText("unavailableProduct");
 
   return (
     <>
@@ -148,6 +150,29 @@ export function CartLines() {
                     style={skeleton.style}
                   />
                 )}
+                <hr className="h-1" />
+              </li>
+            ))}
+            {unavailable.map(({ line, details }) => (
+              // Not returned by the server: kept until the buyer removes it (S15).
+              <li key={line.id} className={"mb-3"}>
+                <SingleProduct
+                  isNotAvailable
+                  quantity={line.quantity}
+                  details={
+                    details ?? {
+                      id: line.productID,
+                      name: unavailableText,
+                      price: 0,
+                      currency: "",
+                      image_url: null,
+                    }
+                  }
+                  url={line.url}
+                  shouldUpdate={(newQuantity) =>
+                    setQuantity(line.id, newQuantity)
+                  }
+                />
                 <hr className="h-1" />
               </li>
             ))}

@@ -27,6 +27,7 @@ export function CartCheckout() {
     locale,
     status,
     lines,
+    unavailable,
     total,
     totalComplete,
     wallets,
@@ -209,7 +210,7 @@ export function CartCheckout() {
             </div>
           </div>
         )}
-        {wallets.mounted && wallets.inert && (
+        {wallets.mounted && wallets.inert && unavailable.length === 0 && (
           <p
             role="status"
             data-bitsnap-checkout-notice="wallets-updating"

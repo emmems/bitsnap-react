@@ -20,7 +20,7 @@ import {
 
 /**
  * - `amount`: the buyer's own price is honoured: priced at `line.amount`,
- *   skips the price gate.
+ *   skips the version check; gated only after it changed on screen (S13).
  * - `suggested`: a pay-what-you-want product without a chosen amount; the
  *   server charges the suggested price, `pricing.regularPrice ?? price`, never a
  *   discounted one (instapay `product.resolver.helper.ts`
@@ -331,16 +331,17 @@ function freshVersion(item: CartViewLine): string | undefined {
  * `priceVersion: ""`, because the server does not check such a line and the seen
  * rule is the only protection. The mark carries `markedAt: now`, so it cannot be
  * adopted before the new price has been on screen for `PRICE_SEEN_MS`. A mark is
- * dropped when its line is gone or is a pay-what-you-want line at its `amount`;
- * the gate drops it on adoption. Returns `state` itself when nothing changed.
+ * dropped when its line is gone; the gate drops it on adoption. Returns `state`
+ * itself when nothing changed.
  *
  * The compared field is the price the server charges (`chargedUnitPrice`:
  * `pricing.effectivePrice ?? price`, for a pay-what-you-want line without an
- * amount `pricing.regularPrice ?? price`) plus `currency`. Pay-what-you-want
- * lines at their `amount` are never shown-tracked or marked.
+ * amount `pricing.regularPrice ?? price`) plus `currency`; for a
+ * pay-what-you-want line at its `amount`, the amount. A changed amount is
+ * marked with `priceVersion: ""` (S13), whatever the source.
  *
- * A line that shows no price (no details, an expired snapshot price, or a
- * pay-what-you-want line at its `amount`) loses its `shown` entry, so a price
+ * A line that shows no price (no details, an expired snapshot price) loses its
+ * `shown` entry, so a price
  * that disappears and comes back is counted from its return and does not count
  * as a change from the price before. `marks` are untouched by that.
  *
@@ -361,21 +362,25 @@ export function trackPrices(
   for (const item of view.lines) {
     ids.add(item.line.id);
     const { details } = item;
-    if (details == null || item.payWhatYouWant === "amount" || !item.priceKnown) {
+    if (details == null || !item.priceKnown) {
       // Nothing priced on screen: the next price starts a new count.
       if (shown.delete(item.line.id)) changed = true;
       continue;
     }
-    const price = chargedUnitPrice(item.payWhatYouWant, details);
+    const amount = item.payWhatYouWant === "amount";
+    const price = amount
+      ? (item.line.amount as number)
+      : chargedUnitPrice(item.payWhatYouWant, details);
     const previous = shown.get(item.line.id);
     if (previous != null && previous.price === price && previous.currency === details.currency) {
       continue;
     }
     shown.set(item.line.id, { price, currency: details.currency, since: now });
     changed = true;
-    if (previous != null && item.source === "fresh") {
+    // A changed amount (another tab) is new to the buyer too (S13).
+    if (previous != null && (amount || item.source === "fresh")) {
       marks.set(item.line.id, {
-        priceVersion: freshVersion(item) ?? "",
+        priceVersion: (!amount && freshVersion(item)) || "",
         shownPrice: price,
         markedAt: now,
       });
@@ -385,11 +390,6 @@ export function trackPrices(
   for (const id of [...shown.keys()]) {
     if (!ids.has(id)) {
       shown.delete(id);
-      changed = true;
-    }
-  }
-  for (const item of view.lines) {
-    if (item.payWhatYouWant === "amount" && marks.delete(item.line.id)) {
       changed = true;
     }
   }
@@ -420,8 +420,9 @@ export type PriceGateResult = {
 
 /**
  * "Next step" gate (D18), run on a view whose lines the server answered after
- * the drawer opened. Per line that is not a pay-what-you-want line at its
- * `amount`, with the stored version `L` and the fresh version `F` (possibly
+ * the drawer opened. A pay-what-you-want line at its `amount` is only gated
+ * while it carries a mark (its amount changed on screen, S13): the marked
+ * amount must have been on screen for `PRICE_SEEN_MS`. Per other line, with the stored version `L` and the fresh version `F` (possibly
  * none: classic products send no `pricing`, and the server skips its own check
  * for a line without a `priceVersion` and for pay-what-you-want lines, so for
  * those the seen rule is the only protection):
@@ -471,15 +472,18 @@ export function runPriceGate(
 
   for (const item of view.lines) {
     const lineId = item.line.id;
-    if (item.payWhatYouWant === "amount") {
-      marks.delete(lineId);
+    const amount = item.payWhatYouWant === "amount";
+    // An amount is gated only once it changed on screen (S13), by the seen rule.
+    if (amount && !marks.has(lineId)) {
       continue;
     }
-    const fresh = freshVersion(item);
+    const fresh = amount ? undefined : freshVersion(item);
     // A line without a version is marked with "" and never adopts one.
     const current = fresh ?? "";
     const details = item.details as CartLineDetails;
-    const price = chargedUnitPrice(item.payWhatYouWant, details);
+    const price = amount
+      ? (item.line.amount as number)
+      : chargedUnitPrice(item.payWhatYouWant, details);
     const seen = state.shown.get(lineId);
     const shownNow =
       seen != null && seen.price === price && seen.currency === details.currency

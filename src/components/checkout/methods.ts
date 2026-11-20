@@ -57,7 +57,8 @@ export namespace Bitsnap {
     if (err != null) {
       return err;
     }
-
+    // The drawer usually opens next: fill its cache with the new line (S19).
+    warmCart(true);
     return undefined;
   }
 

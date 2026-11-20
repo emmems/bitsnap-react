@@ -31,7 +31,11 @@ import {
 import { rememberPendingOrder } from "./pending-order";
 import { useCheckoutStore } from "./state";
 import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
-import { useCartView, type PriceCheck } from "./useCartView";
+import {
+  useCartView,
+  type CartViewState,
+  type PriceCheck,
+} from "./useCartView";
 
 /**
  * The state and the logic of the cart, with no markup (PLAN.md D1).
@@ -60,6 +64,8 @@ export type CartController = {
   status: "loading" | "error" | "empty" | "ready";
   /** The lines in local order; a line without `details` waits for the server. */
   lines: CartViewLine[];
+  /** Lines the server did not return: shown as unavailable, out of the total, block checkout (S15). */
+  unavailable: CartViewState["unavailable"];
   /** Lines are shown from the device but the server could not be asked (inline row with retry). */
   refreshFailed: boolean;
   /** Sum of the lines in minor units. */
@@ -217,7 +223,9 @@ function useCartControllerState(
     () => () => useCheckoutStore.getState().setNotice(undefined),
     [],
   );
-  const shownError = errMsg.length > 0 ? errMsg : (notice ?? "");
+  const { unavailable } = cart;
+  const shownError =
+    errMsg || notice || (unavailable.length > 0 ? unavailableProductsText : "");
   const [missingItemIds, setMissingItemIds] = React.useState<string[]>([]);
   const [showReviewPrices, setShowReviewPrices] = React.useState(false);
   const [gateFailed, setGateFailed] = React.useState(false);
@@ -228,6 +236,9 @@ function useCartControllerState(
     isPending: isContinueToCheckoutLoading,
   } = useMutation({
     mutationFn: provider.redirectToNextStep,
+    // Offline fails like any network error: a paused mutation would resume
+    // later, maybe after the drawer closed (S12).
+    networkMode: "always",
   });
 
   const { data: availableCountries } = useQuery(
@@ -419,6 +430,7 @@ function useCartControllerState(
       const opening = cart.opening();
       let paymentMethod: PaymentMethod | undefined;
       let shownAmounts: Record<string, number> = {};
+      let content = "";
       for (let attempt = 0; ; attempt++) {
         setIsCheckingPrices(true);
         let gate: PriceCheck;
@@ -436,6 +448,9 @@ function useCartControllerState(
         }
         if (gate.result === "marked") {
           setShowReviewPrices(true);
+          return;
+        }
+        if (gate.result !== "pass") {
           return;
         }
         shownAmounts = gate.shownAmounts;
@@ -483,7 +498,8 @@ function useCartControllerState(
           }
         }
         const current = readLocalCartLines();
-        if (contentOf(current) === contentOf(gated)) {
+        content = contentOf(current);
+        if (content === contentOf(gated)) {
           break;
         }
         if (attempt > 0 || amountsOf(current) !== amountsOf(gated)) {
@@ -525,9 +541,16 @@ function useCartControllerState(
       const response = await continueToCheckoutAsync({
         ...(paymentMethod != null ? { paymentMethod } : {}),
         shownAmounts,
+        // Checked again right before the request (S12).
+        accept: (stored) =>
+          cart.opening() === opening && contentOf(stored) === content,
       });
 
       if (isErr(response)) {
+        if (response.error == "cart-changed") {
+          setShowReviewPrices(cart.opening() === opening);
+          return;
+        }
         // The seller may have changed the payment methods in the meantime.
         void queryClient.invalidateQueries({ queryKey: ["cart-payment-methods"] });
         if (response.error == "price-changed") {
@@ -582,9 +605,9 @@ function useCartControllerState(
 
   const hasDetails = lines.some((item) => item.details != null);
   const status: CartController["status"] =
-    lines.length === 0
+    lines.length + unavailable.length === 0
       ? "empty"
-      : !hasDetails
+      : !hasDetails && unavailable.length === 0
         ? view.failed
           ? "error"
           : "loading"
@@ -597,6 +620,7 @@ function useCartControllerState(
     locale,
     status,
     lines,
+    unavailable,
     refreshFailed:
       status === "ready" && (view.status === "unavailable-refresh" || gateFailed),
     total: view.sum,
@@ -614,7 +638,7 @@ function useCartControllerState(
     showReviewPrices: showReviewPrices && lines.length > 0,
     wallets: {
       mounted: walletsMounted.current,
-      inert: walletsInert(view),
+      inert: walletsInert(view) || unavailable.length > 0,
       oneClick: !hasPayWhatYouWantLine(view),
       items: walletItems(view),
     },
@@ -644,7 +668,12 @@ function useCartControllerState(
     checkout: continueToCheckout,
     isStartingCheckout: isContinueToCheckoutLoading,
     isCheckingOut,
-    canCheckout: !(status !== "ready" || isCheckingOut || selectedCountry == null),
+    canCheckout: !(
+      status !== "ready" ||
+      isCheckingOut ||
+      selectedCountry == null ||
+      unavailable.length > 0
+    ),
     error: shownError,
     notice,
   };

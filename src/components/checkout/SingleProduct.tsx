@@ -50,6 +50,7 @@ const SingleProduct = ({
   const productPrice = useCheckoutSlot("productPrice");
   const removeButton = useCheckoutSlot("removeButton");
   const removeText = useCheckoutText("remove");
+  const unavailableText = useCheckoutText("unavailableProduct");
   const priceUpdatedText = useCheckoutText("priceUpdated");
   const textsLocale = useCheckoutTextsConfig().locale;
 
@@ -107,6 +108,9 @@ const SingleProduct = ({
         </p>
         {details.variantName != null && details.variantName.length > 0 && (
           <p className="text-sm opacity-70">{details.variantName}</p>
+        )}
+        {isNotAvailable && name !== unavailableText && (
+          <p className="text-sm opacity-70">{unavailableText}</p>
         )}
         <p
           data-bitsnap-checkout-slot="productPrice"

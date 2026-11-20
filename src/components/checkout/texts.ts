@@ -24,6 +24,8 @@ export type CheckoutTexts = {
   nextStep: string;
   /** Error shown when some products are out of stock. */
   unavailableProducts: string;
+  /** On a cart line the shop did not return (also its name when none is known). */
+  unavailableProduct: string;
   /** Error shown when the checkout fails and the server gave no reason. */
   checkoutFailed: string;
   /** Error shown when the shop has no payment gateway connected. */
@@ -142,6 +144,7 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     chooseCountry: "Choose a country",
     nextStep: "Next step",
     unavailableProducts: "Not all products are available.",
+    unavailableProduct: "Unavailable product",
     checkoutFailed: "Something went wrong. Please try again later.",
     noPaymentGateway:
       "This shop doesn't accept online payments yet. Try again later or contact the seller.",
@@ -219,6 +222,7 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     chooseCountry: "Wybierz kraj",
     nextStep: "Następny krok",
     unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
+    unavailableProduct: "Produkt niedostępny",
     checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
     noPaymentGateway:
       "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",

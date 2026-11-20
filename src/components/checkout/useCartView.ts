@@ -8,7 +8,6 @@ import {
   getProjectID,
   localCartVersionSnapshot,
   readLocalCartLines,
-  removeLocalCartLines,
   subscribeToLocalCart,
   type CartProductsAnswer,
   type LocalCartLine,
@@ -166,6 +165,12 @@ function productIDsOf(lines: readonly LocalCartLine[]): string[] {
 export type CartViewState = {
   /** The cart as shown, marks of the price gate included. */
   view: CartView;
+  /**
+   * Lines the latest answer did not return (an unknown product, or an upstream
+   * lookup that failed): not in `view`, kept in storage, with the snapshot's
+   * details when there are any (S15).
+   */
+  unavailable: { line: LocalCartLine; details?: CartLineDetails }[];
   /** A revalidation request is running. */
   isFetching: boolean;
   /**
@@ -417,36 +422,17 @@ export function useCartView(locale: string, open = true): CartViewState {
     return { result: runPriceGate(prior, view, now), prior, view };
   }
 
-  /**
-   * Removes the lines an answer from after the open did not know, so `/buy`,
-   * the badge and the wallets see what the drawer shows (1.30 only hid them).
-   * Never on the snapshot or an answer from before the open; no analytics.
-   */
-  function dropUnknownLines(): void {
-    const gone = new Set(
-      [...session.missing].filter(([, at]) => at >= openedAt).map(([id]) => id),
-    );
-    if (
-      gone.size > 0 &&
-      readLocalCartLines().some((line) => gone.has(line.productID))
-    ) {
-      try {
-        removeLocalCartLines([...gone].map((id) => ({ id, quantity: Infinity })));
-      } catch {
-        // still hidden from the view
-      }
-    }
-  }
-  React.useEffect(dropUnknownLines);
-
   // The wallets wait for an answer from after the open (`gateFresh`, D12): an
-  // answer cached before it (an earlier open, the warm-up) is asked again once.
+  // answer cached before it (an earlier open, the warm-up) is asked again once,
+  // also when that request was still running at the open (S14).
   const stale = view.lines.some((item) => item.confirmed && !item.gateFresh);
+  const fetchingAtOpen = React.useRef(query.isFetching);
   React.useEffect(() => {
     if (stale && session.floor == null && !query.isFetching) {
+      fetchingAtOpen.current = false;
       void query.refetch();
     }
-  }, [productIDs.join()]);
+  }, [productIDs.join(), fetchingAtOpen.current && query.isFetching]);
 
   /**
    * A block only because the drawer opened less than `PRICE_SEEN_MS` ago, on
@@ -533,7 +519,6 @@ export function useCartView(locale: string, open = true): CartViewState {
     }
     rerender();
     if (result?.result === "pass") {
-      dropUnknownLines();
       return applyAdoptions(result)
         ? { result: "pass", shownAmounts: suggestedAmounts(run!.view) }
         : { result: "failed" };
@@ -562,6 +547,9 @@ export function useCartView(locale: string, open = true): CartViewState {
   const isFetching = query.isFetching;
   return {
     view,
+    unavailable: localLines
+      .filter((line) => session.missing.has(line.productID))
+      .map((line) => ({ line, details: snapshot[line.productID]?.details })),
     isFetching,
     localSignature,
     priceWas: (lineId) => session.was.get(lineId),

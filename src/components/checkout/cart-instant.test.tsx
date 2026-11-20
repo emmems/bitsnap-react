@@ -49,6 +49,7 @@ let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let renderToString: typeof import("react-dom/server").renderToString;
 let focusManager: typeof import("@tanstack/react-query").focusManager;
+let onlineManager: typeof import("@tanstack/react-query").onlineManager;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
 let Bitsnap: typeof import("./methods.ts").Bitsnap;
 let useCheckoutStore: typeof import("./state.ts").useCheckoutStore;
@@ -59,7 +60,7 @@ before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
   renderToString = (await import("react-dom/server")).renderToString;
-  ({ focusManager } = await import("@tanstack/react-query"));
+  ({ focusManager, onlineManager } = await import("@tanstack/react-query"));
   BitsnapCheckout = (await import("./BitsnapCart.tsx")).default;
   ({ Bitsnap } = await import("./methods.ts"));
   ({ useCheckoutStore } = await import("./state.ts"));
@@ -105,6 +106,8 @@ let pendingProducts: Array<() => void>;
 let paymentMethods: (body: { items: { quantity: number }[] }) => Response;
 let oneClick: { applePay?: boolean; googlePay?: boolean };
 let requests: { url: string; method: string; cache?: RequestCache; body?: unknown }[];
+/** The network is down: nothing reaches the server. */
+let networkDown: boolean;
 const roots: Array<{ unmount: () => void }> = [];
 
 const json = (body: unknown, status = 200) =>
@@ -164,7 +167,9 @@ beforeEach(() => {
   paymentMethods = () => json({ success: true, choice: null });
   oneClick = {};
   requests = [];
+  networkDown = false;
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (networkDown) throw new TypeError("Failed to fetch");
     const url = String(input);
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
     requests.push({ url, method: init?.method ?? "GET", cache: init?.cache, body });
@@ -711,6 +716,28 @@ describe("instant drawer: price gate (D18)", () => {
     assert.equal(buys().length, 0, "the closed drawer's click is dropped");
   });
 
+  it("an offline click fails at once and never resumes after the drawer closed (S12)", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    lookAtCart();
+    try {
+      onlineManager.setOnline(false);
+      networkDown = true;
+      await clickNext();
+      assert.equal(text(doc().querySelector('[data-bitsnap-checkout-slot="error"]')), "Coś poszło nie tak. Spróbuj ponownie później.");
+      await close();
+      networkDown = false;
+      await React.act(async () => onlineManager.setOnline(true));
+      await settle(100);
+    } finally {
+      networkDown = false;
+      onlineManager.setOnline(true);
+    }
+    assert.equal(buys().length, 0, "no /buy from a click of the closed drawer");
+  });
+
   it("an adopted price version asks /payment-methods again, so the seller's options show (S5)", async () => {
     // The server refuses a stale version; the client reads that as "no choice".
     paymentMethods = (body) =>
@@ -967,7 +994,7 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
 
 // ------------------------------------------------------- gate review fixes
 
-describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
+describe("instant drawer: gate review fixes (N2, N5, m1, m2, S15)", () => {
   const priceUpdated = () => doc().querySelector('[data-bitsnap-checkout-state="price-updated"]');
   const walletsUpdating = () => doc().querySelector('[data-bitsnap-checkout-notice="wallets-updating"]');
   const failedRow = () => doc().querySelector('[role="alert"]');
@@ -1101,7 +1128,7 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
     assert.ok(reviewNotice());
   });
 
-  it("N5: a pay-what-you-want amount changed by another tab before /buy stops, the next click pays the shown amount", async () => {
+  it("N5: a pay-what-you-want amount changed by another tab before /buy stops; it pays only after 1 s on screen (S13)", async () => {
     catalog.set("pw", product("pw", "Tip", 2500, "vw1", { priceType: "pay_what_you_want" }));
     await mount();
     await add("pw", 1, { amount: 1500 });
@@ -1116,6 +1143,16 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
     assert.equal(buys().length, 0, "the new amount was not on screen when the gate passed");
     assert.ok(reviewNotice());
     assert.equal(total(), PLN("9,00"));
+    assert.equal(
+      text(doc().querySelector('[data-bitsnap-checkout-price="updated"]')),
+      "Cena się zmieniła: była 15,00 zł, jest 9,00 zł.",
+    );
+    await clickNext();
+    await releaseMethods();
+    assert.equal(buys().length, 0, "the new amount is on screen for less than 1 s");
+    assert.ok(reviewNotice());
+
+    lookAtCart();
     await clickNext();
     // The amount is part of the /payment-methods key (S5): the options of the new cart.
     await releaseMethods();
@@ -1167,30 +1204,66 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
     assert.equal(reviewNotice(), null);
   });
 
-  it("m5: a line the server no longer knows leaves the local cart on a fresh answer, with no remove event", async () => {
+  it("a line the answer did not return stays in storage as an unavailable row, blocks checkout, and comes back (S15)", async () => {
     await mount();
     await add("pa");
     await add("pb");
-    const layer = page.win as unknown as { dataLayer?: { event?: string }[] };
-    layer.dataLayer = [];
-    const events = () => layer.dataLayer!.filter((event) => event.event === "remove_from_cart");
-    catalog.delete("pb");
+    const removed = catalog.get("pb")!;
+    catalog.delete("pb"); // or an upstream lookup failed: the server still answers success
     lookAtCart(31_000); // the answer from the add is stale
     productsMode = "pending";
     await open();
     await settle();
     assert.deepEqual(names(), ["Mug", "Cap"], "painted from the snapshot");
-    assert.deepEqual(storedLines().map((l) => l.productID), ["pa", "pb"], "never on snapshot data");
     productsMode = "ok";
     await releaseProducts();
     await settle(60);
-    assert.deepEqual(names(), ["Mug"]);
+    const row = doc().querySelector("[data-bitsnap-checkout-unavailable]");
+    assert.ok(row, "an unavailable row");
+    assert.equal(text(row!.querySelector('[data-bitsnap-checkout-slot="productName"]')), "Cap");
+    assert.ok(text(row!)?.includes("Produkt niedostępny"));
+    assert.ok(row!.querySelector('[data-bitsnap-checkout-slot="removeButton"]'), "the buyer can remove it");
+    assert.deepEqual(storedLines().map((l) => l.productID), ["pa", "pb"], "nothing removed from storage");
+    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 2);
+    assert.equal(total(), PLN("25,00"), "not in the total");
+    const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    assert.equal(button.disabled, true, "Next step is disabled");
+    assert.equal(
+      text(doc().querySelector('[data-bitsnap-checkout-slot="error"]')),
+      "Nie wszystkie produkty są dostępne w magazynie.",
+    );
+    assert.equal(wallets()?.hasAttribute("inert") ?? true, true, "no wallet starts");
+    assert.equal(doc().querySelector('[data-bitsnap-checkout-notice="wallets-updating"]'), null);
+
+    // The next fresh answer has it again.
+    catalog.set("pb", removed);
+    lookAtCart(31_000);
+    await React.act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    focusManager.setFocused(undefined);
+    await settle(60);
+    assert.equal(doc().querySelector("[data-bitsnap-checkout-unavailable]"), null);
+    assert.deepEqual(names(), ["Mug", "Cap"]);
+    assert.equal(total(), PLN("65,00"));
+    assert.equal(button.disabled, false);
+  });
+
+  it("an unavailable row without a snapshot shows a generic name, and remove drops it (S15)", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    await otherTabWrites([...storedLines(), { id: "x9", productID: "gone", quantity: 1 }]);
+    await settle(60);
+    const row = doc().querySelector("[data-bitsnap-checkout-unavailable]")!;
+    assert.equal(text(row.querySelector('[data-bitsnap-checkout-slot="productName"]')), "Produkt niedostępny");
+    await React.act(async () =>
+      row.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="removeButton"]')!.click(),
+    );
     assert.deepEqual(storedLines().map((l) => l.productID), ["pa"]);
-    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 1, "the badge follows");
-    assert.equal(events().length, 0);
-    lookAtCart();
-    await clickNext();
-    assert.deepEqual(buyItems(0).map((item) => item.id), ["pa"]);
+    assert.equal(doc().querySelector("[data-bitsnap-checkout-unavailable]"), null);
   });
 });
 

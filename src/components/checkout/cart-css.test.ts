@@ -380,7 +380,7 @@ describe("CartComponent.tsx", () => {
     assert.match(content, /const productsParent = useCartAutoAnimate\(\)/);
     assert.match(
       content,
-      /"data-bitsnap-checkout-motion"\]\s*===\s*"off"[\s\S]*?if \(motionOff\) \{\s*setEnabled\(false\)/,
+      /"data-bitsnap-checkout-motion"\]\s*===\s*"off"[\s\S]*?if \(!motionOff\) \{\s*return undefined;\s*\}\s*setEnabled\(false\)/,
     );
   });
 

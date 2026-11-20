@@ -135,6 +135,8 @@ export interface CartMethods {
   redirectToNextStep: (args?: {
     paymentMethod?: PaymentMethod;
     shownAmounts?: Record<string, number>;
+    /** Internal: the stored lines `/buy` is built from; `false` sends nothing (`cart-changed`). */
+    accept?: (lines: LocalCartLine[]) => boolean;
   }) => Promise<
     Err | { url: string; orderId?: string; projectId?: string }
   >;
@@ -775,12 +777,14 @@ export function appendLocalCartLines(
 function getCheckout(): Checkout {
   try {
     const value = localStorage.getItem(checkoutKey);
+    // A copy: callers push lines into the result, which must never reach the
+    // shared default.
     if (value == null) {
-      return emptyCheckout;
+      return structuredClone(emptyCheckout);
     }
     return checkoutSchema.parse(JSON.parse(value));
   } catch (e) {
-    return emptyCheckout;
+    return structuredClone(emptyCheckout);
   }
 }
 
@@ -1243,8 +1247,14 @@ export const getCheckoutMethods: (
     async redirectToNextStep(args?: {
       paymentMethod?: PaymentMethod;
       shownAmounts?: Record<string, number>;
+      accept?: (lines: LocalCartLine[]) => boolean;
     }): Promise<Err | { url: string; orderId?: string; projectId?: string }> {
-      const payload = cartLinkRequest(getCheckout(), locale, args?.shownAmounts);
+      // One read: what is checked is what is sent (S12).
+      const checkout = getCheckout();
+      if (args?.accept?.(checkout.products ?? []) === false) {
+        return Err("cart-changed", "badInput");
+      }
+      const payload = cartLinkRequest(checkout, locale, args?.shownAmounts);
       if (payload == null) {
         return Err("cart-is-empty", "badInput");
       }

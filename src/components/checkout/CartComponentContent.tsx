@@ -12,10 +12,11 @@ export function useCartAutoAnimate() {
     useCheckoutAppearance().boundaryAttributes["data-bitsnap-checkout-motion"] ===
     "off";
   useEffect(() => {
-    if (motionOff) {
-      setEnabled(false);
-      return () => setEnabled(true);
+    if (!motionOff) {
+      return undefined;
     }
+    setEnabled(false);
+    return () => setEnabled(true);
   }, [motionOff, setEnabled]);
   return ref;
 }

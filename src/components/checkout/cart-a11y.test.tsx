@@ -214,6 +214,9 @@ describe("cart loading", () => {
   it("shows a retryable alert instead of an empty cart when the products cannot be loaded", async () => {
     await mount();
     await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+    // A new page: the add warmed this cache (S19), a reload starts without it.
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    await mount();
     productsStatus = 500;
     await openCart();
     const alert = dialog()!.querySelector('[role="alert"]')!;
