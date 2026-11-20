@@ -216,6 +216,14 @@ describe("panel chat visibility", () => {
     assert.equal(hasPanelChat([file, chatProduct]), true);
     assert.equal(hasPanelChat([communityProduct]), true);
     assert.equal(hasPanelChat([], "https://chat.bitsnap.pl"), true);
+    // A shop's panel: only that shop's chat products count; the URL alone
+    // counts only for a buyer without chat products (a channel invite).
+    const mine = product({ projectId: "shop-a", productType: UserProductType.CHAT });
+    const theirs = product({ projectId: "shop-b", productType: UserProductType.COMMUNITY });
+    assert.equal(hasPanelChat([mine, theirs], "https://chat.bitsnap.pl", "shop-a"), true);
+    assert.equal(hasPanelChat([theirs], "https://chat.bitsnap.pl", "shop-a"), false);
+    assert.equal(hasPanelChat([], "https://chat.bitsnap.pl", "shop-a"), true);
+    assert.equal(hasPanelChat([theirs], "https://chat.bitsnap.pl"), true);
   });
 
   it("asks the projects of the chat products, else the panel project", () => {
@@ -254,7 +262,7 @@ describe("panel chat visibility", () => {
             toBinary(
               UserPanelGetProductsResponseSchema,
               create(UserPanelGetProductsResponseSchema, {
-                result: { case: "success", value: { products: [chatProduct], chatApiUrl: "https://chat.test" } },
+                result: { case: "success", value: { products: [{ ...chatProduct, projectId: TEST_KEY }], chatApiUrl: "https://chat.test" } },
               }),
             ) as BodyInit,
             { status: 200, headers: { "Content-Type": "application/proto" } },

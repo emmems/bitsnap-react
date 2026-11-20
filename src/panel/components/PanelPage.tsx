@@ -238,7 +238,7 @@ const PanelPage = ({
     setActiveScreen("messages");
   };
 
-  const chat = usePanelChat(accessToken);
+  const chat = usePanelChat(accessToken, projectID ?? "");
 
   // The browser's back and forward buttons move between the lessons of a
   // course and in and out of it, between conversations, between the order

@@ -1,4 +1,11 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   FailureMessage,
   UserProductSchema,
@@ -22,9 +29,12 @@ import { clearQrCache } from "./products/ticket/qr-cache";
 import { fromJsonString } from "@bufbuild/protobuf";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
-import { clearPanelSession } from "../session-storage";
+import { clearPanelSession, getPanelEmail } from "../session-storage";
 import { usePanelConfig } from "../PanelProvider";
 import { useModelFiles, type ModelFilesLoad } from "./model-files-load";
+import { productsOfShop } from "../shop-scope";
+
+export { productsOfShop };
 
 // The 3D files list (UI + download RPC) loads only for buyers who have some.
 const PanelModelFiles = lazy(() => import("./PanelModelFiles"));
@@ -61,14 +71,28 @@ const PanelProductGridComponent = ({
     accessToken: accessToken,
   });
   const modelFiles = useModelFiles(accessToken, projectID);
+  // The server answers with the buyer's purchases from every Bitsnap shop;
+  // a shop's panel lists only its own (bitsnap.pl/panel lists them all).
+  const productsList = useMemo(
+    () =>
+      products?.result.case === "success"
+        ? productsOfShop(products.result.value.products, projectID)
+        : [],
+    [products, projectID],
+  );
   const decision = decidePanelProducts({
     products: isProductsLoading
       ? { status: "loading" }
       : productsError != null
         ? { status: "error" }
         : products?.result.case === "success"
-          ? { status: "ok", count: products.result.value.products.length }
-          : products?.result.case === "failure"
+          ? { status: "ok", count: productsList.length }
+          : products?.result.case === "failure" &&
+              products.result.value === FailureMessage.PRDUCTS_NOT_FOUND
+            ? // Nothing bought with this e-mail in any shop: the empty
+              // state (with the way to the all-shops panel), not an error.
+              { status: "ok", count: 0 }
+            : products?.result.case === "failure"
             ? {
                 status: "failure",
                 unauthorized:
@@ -106,10 +130,6 @@ const PanelProductGridComponent = ({
     );
   }
 
-  const productsList =
-    products && products.result.case === "success"
-      ? products.result.value.products
-      : [];
   const models = modelFiles.status === "ready" ? modelFiles.models : [];
   const filesSection =
     models.length > 0 ? (
@@ -131,7 +151,7 @@ const PanelProductGridComponent = ({
   }
 
   if (decision.kind === "empty") {
-    return <PanelProductsEmpty />;
+    return <PanelProductsEmpty projectID={projectID} host={host} />;
   }
 
   return (
@@ -196,12 +216,69 @@ export function decidePanelProducts({
   return { kind: "list" };
 }
 
-function PanelProductsEmpty() {
+const BITSNAP_PANEL = "https://bitsnap.pl/panel";
+
+/**
+ * The all-shops panel, where the buyer sees what they bought in every shop
+ * on Bitsnap. `host` is the API origin, which a seller may point at their
+ * own domain or an API-only name: only bitsnap.pl itself and a local dev
+ * server serve the panel page, everything else links to bitsnap.pl.
+ */
+export function allPurchasesURL(host?: string): string {
+  if (!host) return BITSNAP_PANEL;
+  try {
+    const url = new URL(host);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (local || url.hostname === "bitsnap.pl" || url.hostname === "www.bitsnap.pl") {
+      return `${url.origin}/panel`;
+    }
+  } catch {
+    // Not a URL: the default below.
+  }
+  return BITSNAP_PANEL;
+}
+
+function PanelProductsEmpty({
+  projectID,
+  host,
+}: {
+  projectID: string;
+  host?: string;
+}) {
   const t = getProductTexts();
+  if (!projectID) {
+    return (
+      <div className="flex flex-col items-start gap-1" data-testid="panel-empty">
+        <h3 className="text-2xl">{t.hello}</h3>
+        <p className="text-sm text-(--panel-muted)">{t.empty}</p>
+      </div>
+    );
+  }
+  // Nothing from this shop: the purchase may be in another shop on Bitsnap,
+  // or under another e-mail. Point to the panel that lists every shop.
+  const url = allPurchasesURL(host);
+  const label = url.replace(/^https?:\/\//, "");
   return (
     <div className="flex flex-col items-start gap-1" data-testid="panel-empty">
       <h3 className="text-2xl">{t.hello}</h3>
-      <p className="text-sm text-(--panel-muted)">{t.empty}</p>
+      <p className="text-sm text-(--panel-muted)">
+        {t.emptyShop(getPanelEmail(projectID, host))}
+      </p>
+      <p className="max-w-prose text-sm text-(--panel-muted)">
+        {t.emptyOtherShops}{" "}
+        <a
+          href={url}
+          data-all-purchases-link
+          className="rounded-sm font-medium text-(--panel-fg) underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--panel-accent-text-now)"
+        >
+          {label}
+        </a>
+      </p>
+      <Button asChild className="mt-3 min-h-11 text-sm">
+        <a href={url} data-all-purchases-button>
+          {t.emptyAllPurchases}
+        </a>
+      </Button>
     </div>
   );
 }

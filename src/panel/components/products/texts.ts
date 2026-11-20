@@ -4,8 +4,16 @@ const pl = {
   hello: "Hej 👋",
   intro: "Poniżej znajdziesz swoje produkty",
   loading: "Ładowanie produktów…",
-  empty:
-    "Nie masz jeszcze produktów w tym sklepie. Twoje zakupy pojawią się tutaj.",
+  /** The all-shops panel (bitsnap.pl/panel) with nothing bought anywhere. */
+  empty: "Nie masz jeszcze żadnych produktów. Twoje zakupy pojawią się tutaj.",
+  /** A shop's panel with nothing bought in this shop. */
+  emptyShop: (email?: string | null) =>
+    email
+      ? `Nie widzimy zakupów w tym sklepie na adres ${email}.`
+      : "Nie widzimy zakupów w tym sklepie.",
+  emptyOtherShops:
+    "Kupujesz też w innych sklepach na Bitsnapie? Wszystkie swoje produkty zobaczysz w jednym miejscu:",
+  emptyAllPurchases: "Zobacz wszystkie zakupy",
   productsError: "Nie udało się wczytać Twoich produktów.",
   audio: "Audio",
   files: "Pliki",
@@ -76,8 +84,14 @@ const en: typeof pl = {
   hello: "Hi 👋",
   intro: "Your products are below",
   loading: "Loading products…",
-  empty:
-    "You have no products in this shop yet. Your purchases will show up here.",
+  empty: "You have no products yet. Your purchases will show up here.",
+  emptyShop: (email?: string | null) =>
+    email
+      ? `We can't see any purchases in this shop for ${email}.`
+      : "We can't see any purchases in this shop.",
+  emptyOtherShops:
+    "Shopping in other shops on Bitsnap too? See all your products in one place:",
+  emptyAllPurchases: "See all purchases",
   productsError: "Your products could not be loaded.",
   audio: "Audio",
   files: "Files",
