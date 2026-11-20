@@ -56,6 +56,12 @@ export type PanelTexts = {
   ordersEmptyTitle: string;
   ordersEmptyText: string;
   ordersEmptyAction: string;
+  ordersEmptyShopTitle: string;
+  ordersEmptyShopText: string;
+  ordersShowAll: string;
+  shopFilterLabel: string;
+  shopFilterAll: string;
+  shopUnknown: string;
   ordersShowMore: string;
   ordersLoadingMore: string;
   ordersMoreError: string;
@@ -172,6 +178,12 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "ordersEmptyTitle": "Nie masz jeszcze zamówień",
     "ordersEmptyText": "Gdy coś kupisz, zamówienie pojawi się tutaj.",
     "ordersEmptyAction": "Przejdź do biblioteki",
+    "ordersEmptyShopTitle": "Brak zamówień w tym sklepie",
+    "ordersEmptyShopText": "Wybierz inny sklep albo zobacz wszystkie swoje zamówienia.",
+    "ordersShowAll": "Pokaż wszystkie",
+    "shopFilterLabel": "Filtr sklepu",
+    "shopFilterAll": "Wszystkie",
+    "shopUnknown": "Sklep",
     "ordersShowMore": "Pokaż więcej",
     "ordersLoadingMore": "Ładowanie…",
     "ordersMoreError": "Nie udało się wczytać kolejnych zamówień.",
@@ -286,6 +298,12 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "ordersEmptyTitle": "You have no orders yet",
     "ordersEmptyText": "When you buy something, the order will appear here.",
     "ordersEmptyAction": "Go to the library",
+    "ordersEmptyShopTitle": "No orders in this shop",
+    "ordersEmptyShopText": "Choose another shop or view all your orders.",
+    "ordersShowAll": "Show all",
+    "shopFilterLabel": "Filter by shop",
+    "shopFilterAll": "All",
+    "shopUnknown": "Shop",
     "ordersShowMore": "Show more",
     "ordersLoadingMore": "Loading…",
     "ordersMoreError": "Could not load more orders.",

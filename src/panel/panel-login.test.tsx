@@ -300,4 +300,122 @@ describe("PanelLogin", () => {
     assert.equal(doc().querySelector('[role="img"][aria-label="Bitsnap"]') != null, true);
     assert.equal(doc().querySelector("main img"), null);
   });
+
+  it("saves the session under * when projectID is empty (global panel)", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    await mount();
+    await requestCode();
+    await type(codeInput(), "123456");
+    await settle(200);
+    const host = encodeURIComponent("https://bitsnap.pl");
+    assert.equal(
+      page.win.localStorage.getItem(`bitsnap-panel-session:${host}:*`),
+      "panel-token",
+    );
+    assert.equal(
+      page.win.localStorage.getItem(`bitsnap-panel-email:${host}:*`),
+      "jane@example.com",
+    );
+  });
+
+  it("redirects an already-signed-in empty-project visit from /panel/login to /panel/", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    const host = encodeURIComponent("https://bitsnap.pl");
+    page.win.localStorage.setItem(`bitsnap-panel-session:${host}:*`, "global-token");
+
+    const navigated: string[] = [];
+    const fakeLocation = {
+      href: "https://bitsnap.pl/panel/login",
+      origin: "https://bitsnap.pl",
+      search: "",
+    };
+    Object.defineProperty(fakeLocation, "href", {
+      get: () => "https://bitsnap.pl/panel/login",
+      set: (value: string) => {
+        navigated.push(value);
+      },
+      configurable: true,
+    });
+    const savedWindow = globalThis.window;
+    (globalThis as { window: unknown }).window = new Proxy(page.win, {
+      get(target, prop) {
+        if (prop === "location") return fakeLocation;
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      await mount();
+      assert.deepEqual(navigated, ["https://bitsnap.pl/panel/"]);
+    } finally {
+      (globalThis as { window: unknown }).window = savedWindow;
+    }
+  });
+
+  it("does not read the global * session on a shop login page", async () => {
+    setPanelConfig({ projectID: TEST_KEY, host: undefined });
+    const host = encodeURIComponent("https://bitsnap.pl");
+    page.win.localStorage.setItem(`bitsnap-panel-session:${host}:*`, "global-token");
+
+    const navigated: string[] = [];
+    const fakeLocation = {
+      origin: "https://bitsnap.pl",
+      search: "",
+      get href() {
+        return "https://bitsnap.pl/panel/demo/login";
+      },
+      set href(value: string) {
+        navigated.push(value);
+      },
+    };
+    const savedWindow = globalThis.window;
+    (globalThis as { window: unknown }).window = new Proxy(page.win, {
+      get(target, prop) {
+        if (prop === "location") return fakeLocation;
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      await mount();
+      assert.deepEqual(navigated, []);
+    } finally {
+      (globalThis as { window: unknown }).window = savedWindow;
+    }
+  });
+
+  it("does not read a shop session on the global (empty projectID) login page", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    const host = encodeURIComponent("https://bitsnap.pl");
+    page.win.localStorage.setItem(
+      `bitsnap-panel-session:${host}:${encodeURIComponent(TEST_KEY)}`,
+      "shop-token",
+    );
+
+    const navigated: string[] = [];
+    const fakeLocation = {
+      origin: "https://bitsnap.pl",
+      search: "",
+      get href() {
+        return "https://bitsnap.pl/panel/login";
+      },
+      set href(value: string) {
+        navigated.push(value);
+      },
+    };
+    const savedWindow = globalThis.window;
+    (globalThis as { window: unknown }).window = new Proxy(page.win, {
+      get(target, prop) {
+        if (prop === "location") return fakeLocation;
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      await mount();
+      assert.deepEqual(navigated, []);
+    } finally {
+      (globalThis as { window: unknown }).window = savedWindow;
+    }
+  });
 });

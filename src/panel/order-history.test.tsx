@@ -424,4 +424,312 @@ describe("order list (option A)", () => {
     await React.act(async () => button!.click());
     assert.equal(library, 1);
   });
+
+  it("shop panel: renders no shop pills and no per-row shop marks even if response has shops", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        toBinary(
+          GetOrdersResponseSchema,
+          create(GetOrdersResponseSchema, {
+            orders: [{ ...order("c_SHOP1111", "2025-11-02"), projectId: TEST_KEY }],
+            totalCount: 1,
+            shops: [
+              { projectId: TEST_KEY, name: "Mój Sklep", orderCount: 1 },
+              { projectId: "other", name: "Inny Sklep", orderCount: 2 },
+            ],
+          }),
+        ) as BodyInit,
+        { status: 200, headers: { "Content-Type": "application/proto" } },
+      )) as typeof fetch;
+
+    const container = await mountOrders();
+    assert.equal(container.querySelector("[data-shop-pills]"), null);
+    assert.equal(container.querySelector("[data-shop-mark]"), null);
+  });
+});
+
+describe("global all-shops order list (C4)", () => {
+  let Orders: typeof import("./components/PanelOrderHistory.tsx").default;
+  let GetOrdersResponseSchema: typeof import("../gen/proto/public/v1/public_api_pb").GetOrdersResponseSchema;
+  let GetOrdersRequestSchema: typeof import("../gen/proto/public/v1/public_api_pb").GetOrdersRequestSchema;
+  before(async () => {
+    Orders = (await import("./components/PanelOrderHistory.tsx")).default;
+    ({ GetOrdersResponseSchema, GetOrdersRequestSchema } = await import(
+      "../gen/proto/public/v1/public_api_pb"
+    ));
+  });
+
+  const makeOrder = (id: string, date: string, projectId: string, name = "Jan") => ({
+    id,
+    status: "paid",
+    totalAmount: 4900,
+    currency: "pln",
+    customerName: name,
+    createdAt: timestampFromDate(new Date(`${date}T10:00:00Z`)),
+    projectId,
+  });
+
+  const SHOPS = [
+    {
+      projectId: "shopA",
+      name: "Księgarnia Alfa",
+      imageUrl: "https://cdn.test/alfa.png",
+      orderCount: 2,
+    },
+    {
+      projectId: "shopB",
+      name: "Studio Beta",
+      orderCount: 1,
+    },
+  ];
+
+  async function mountGlobal(props: Partial<React.ComponentProps<typeof Orders>> = {}) {
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { TransportProvider } = await import("@connectrpc/connect-query");
+    const { getRpcTransport } = await import("../rpc-provider");
+    setPanelConfig({ projectID: "", host: undefined });
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await React.act(async () =>
+      root.render(
+        <TransportProvider transport={getRpcTransport("https://bitsnap.pl")}>
+          <QueryClientProvider client={client}>
+            <Orders
+              projectID=""
+              accessToken="global-token"
+              openOrderDetails={() => {}}
+              {...props}
+            />
+          </QueryClientProvider>
+        </TransportProvider>,
+      ),
+    );
+    await settle();
+    await settle();
+    return container;
+  }
+
+  it("shows shop pills and per-row shop marks on 'Wszystkie', passes orderProject on open, and hides marks when filtered to one shop", async () => {
+    const requested: Array<{ projectId: string; offset: number }> = [];
+    let releaseShopB: (() => void) | undefined;
+    const shopBGate = new Promise<void>((resolve) => {
+      releaseShopB = resolve;
+    });
+    globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+      const req = fromBinary(
+        GetOrdersRequestSchema,
+        new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()),
+      );
+      requested.push({ projectId: req.projectId, offset: req.offset });
+      if (req.projectId === "") {
+        return new Response(
+          toBinary(
+            GetOrdersResponseSchema,
+            create(GetOrdersResponseSchema, {
+              orders: [
+                makeOrder("c_ALFA0001", "2025-11-05", "shopA"),
+                makeOrder("", "2025-11-02", "shopB"),
+                makeOrder("c_BETA0001", "2025-11-01", "shopB"),
+              ],
+              totalCount: 3,
+              shops: SHOPS,
+            }),
+          ) as BodyInit,
+          { status: 200, headers: { "Content-Type": "application/proto" } },
+        );
+      }
+      await shopBGate;
+      return new Response(
+        toBinary(
+          GetOrdersResponseSchema,
+          create(GetOrdersResponseSchema, {
+            orders: [
+              makeOrder("", "2025-11-02", "shopB"),
+              makeOrder("c_BETA0001", "2025-11-01", "shopB"),
+            ],
+            totalCount: 2,
+            shops: [],
+          }),
+        ) as BodyInit,
+        { status: 200, headers: { "Content-Type": "application/proto" } },
+      );
+    }) as typeof fetch;
+
+    const opened: Array<[string, string | undefined]> = [];
+    const container = await mountGlobal({
+      openOrderDetails: (id, proj) => opened.push([id, proj]),
+    });
+
+    // Pills shown, "Wszystkie" selected.
+    const group = container.querySelector('[role="group"][aria-label="Filtr sklepu"]');
+    assert.ok(group);
+    const pills = [...group!.querySelectorAll<HTMLButtonElement>("button")];
+    assert.equal(pills.length, 3);
+    assert.equal(pills[0]!.getAttribute("aria-pressed"), "true");
+
+    const liveCountNode = container.querySelector("[data-shop-pills-count]");
+    assert.ok(liveCountNode, "live-region count node is mounted");
+    assert.equal(liveCountNode!.textContent, "3 zamówienia");
+
+    // Per-row shop marks shown on both open and legacy rows, and global rows use lg:grid-cols- without md:grid-cols-.
+    const rows = [...container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]")];
+    assert.equal(rows.length, 2);
+    assert.ok(rows[0]!.querySelector("[data-shop-mark]"));
+    assert.match(rows[0]!.getAttribute("aria-label") ?? "", /Księgarnia Alfa/);
+    assert.match(rows[1]!.getAttribute("aria-label") ?? "", /Studio Beta/);
+    for (const row of rows) {
+      assert.match(row.className, /\blg:grid-cols-/);
+      assert.doesNotMatch(row.className, /\bmd:grid-cols-/);
+    }
+
+    const legacyRow = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.ok(legacyRow, "global legacy row rendered");
+    assert.ok(legacyRow.querySelector("[data-shop-mark]"), "legacy row shows ShopMark on Wszystkie");
+    assert.match(legacyRow.textContent ?? "", /Studio Beta/);
+    assert.match(legacyRow.className, /\blg:grid-cols-/);
+    assert.doesNotMatch(legacyRow.className, /\bmd:grid-cols-/);
+
+    // Clicking a row passes both orderId and order's projectId.
+    await React.act(async () => rows[1]!.click());
+    assert.deepEqual(opened, [["c_BETA0001", "shopB"]]);
+
+    // Selecting "Studio Beta" fires shopQuery with projectId="shopB"; live-region node stays mounted while pending.
+    await React.act(async () => pills[2]!.click());
+    await settle(20);
+    assert.equal(
+      container.querySelector("[data-shop-pills-count]"),
+      liveCountNode,
+      "live-region node stays mounted while shopQuery is pending",
+    );
+    assert.equal(liveCountNode!.textContent, "");
+
+    releaseShopB!();
+    await settle();
+    await settle();
+    assert.equal(
+      container.querySelector("[data-shop-pills-count]"),
+      liveCountNode,
+      "live-region node stays mounted after shopQuery resolves",
+    );
+    assert.equal(liveCountNode!.textContent, "2 zamówienia");
+    assert.deepEqual(
+      requested.map((r) => r.projectId),
+      ["", "shopB"],
+    );
+    const filteredRows = [...container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]")];
+    assert.equal(filteredRows.length, 1);
+    assert.equal(filteredRows[0]!.querySelector("[data-shop-mark]"), null);
+    assert.doesNotMatch(filteredRows[0]!.getAttribute("aria-label") ?? "", /Studio Beta/);
+    const filteredLegacy = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.ok(filteredLegacy);
+    assert.equal(filteredLegacy.querySelector("[data-shop-mark]"), null);
+    assert.match(container.textContent ?? "", /2 zamówienia/);
+  });
+
+  it("does not fire shopQuery for an unresolved or hand-typed shop param (C-10)", async () => {
+    const requestedProjectIds: string[] = [];
+    globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+      const req = fromBinary(
+        GetOrdersRequestSchema,
+        new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()),
+      );
+      requestedProjectIds.push(req.projectId);
+      return new Response(
+        toBinary(
+          GetOrdersResponseSchema,
+          create(GetOrdersResponseSchema, {
+            orders: [
+              makeOrder("c_ALFA0001", "2025-11-05", "shopA"),
+              makeOrder("c_BETA0001", "2025-11-01", "shopB"),
+            ],
+            totalCount: 2,
+            shops: SHOPS,
+          }),
+        ) as BodyInit,
+        { status: 200, headers: { "Content-Type": "application/proto" } },
+      );
+    }) as typeof fetch;
+
+    const container = await mountGlobal({ shop: "nonexistentShop", onShopChange: () => {} });
+    assert.deepEqual(requestedProjectIds, [""]);
+    const pills = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+    assert.equal(pills[0]!.getAttribute("aria-pressed"), "true");
+  });
+
+  it("keeps pills visible when shopQuery fails or returns empty with a 'Pokaż wszystkie' recovery", async () => {
+    let mode: "error" | "empty" = "error";
+    globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+      const req = fromBinary(
+        GetOrdersRequestSchema,
+        new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()),
+      );
+      if (req.projectId === "") {
+        return new Response(
+          toBinary(
+            GetOrdersResponseSchema,
+            create(GetOrdersResponseSchema, {
+              orders: [makeOrder("c_ALFA0001", "2025-11-05", "shopA")],
+              totalCount: 1,
+              shops: SHOPS,
+            }),
+          ) as BodyInit,
+          { status: 200, headers: { "Content-Type": "application/proto" } },
+        );
+      }
+      if (mode === "error") return new Response(null, { status: 503 });
+      return new Response(
+        toBinary(
+          GetOrdersResponseSchema,
+          create(GetOrdersResponseSchema, { orders: [], totalCount: 0, shops: [] }),
+        ) as BodyInit,
+        { status: 200, headers: { "Content-Type": "application/proto" } },
+      );
+    }) as typeof fetch;
+
+    const container = await mountGlobal();
+    const betaPill = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')][2]!;
+    await React.act(async () => betaPill.click());
+    await settle();
+    await settle();
+    // Error under still-visible pills.
+    assert.ok(container.querySelector("[data-shop-pills]"));
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się pobrać zamówień/);
+
+    // Retry returns empty filter state with "Pokaż wszystkie".
+    mode = "empty";
+    const retry = container.querySelector<HTMLButtonElement>('[role="alert"] button')!;
+    await React.act(async () => retry.click());
+    await settle();
+    await settle();
+    assert.ok(container.querySelector("[data-shop-pills]"));
+    assert.match(container.textContent ?? "", /Brak zamówień w tym sklepie/);
+    const showAll = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent === "Pokaż wszystkie",
+    )!;
+    await React.act(async () => showAll.click());
+    await settle();
+    assert.equal(container.querySelectorAll("[data-order-row=open]").length, 1);
+  });
+
+  it("tolerates an older server response without shops[] or order projectId (F13)", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        toBinary(
+          GetOrdersResponseSchema,
+          create(GetOrdersResponseSchema, {
+            orders: [makeOrder("c_OLD00001", "2025-11-05", "")],
+            totalCount: 1,
+          }),
+        ) as BodyInit,
+        { status: 200, headers: { "Content-Type": "application/proto" } },
+      )) as typeof fetch;
+
+    const container = await mountGlobal();
+    assert.equal(container.querySelector("[data-shop-pills]"), null);
+    assert.equal(container.querySelector("[data-shop-mark]"), null);
+    assert.equal(container.querySelectorAll("[data-order-row=open]").length, 1);
+  });
 });

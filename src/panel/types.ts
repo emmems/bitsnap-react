@@ -36,6 +36,10 @@ export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
   orderId?: string;
+  /** `state: "order-details"` on the global panel: hashed id of the order's shop. */
+  orderProject?: string;
+  /** Global panel shop filter pill (hashed project id). Shared by Library and Orders. */
+  shop?: string;
   returnId?: string;
   /** `state: "course"`: `UserProduct.accessId` of the open course. */
   course?: string;
@@ -47,6 +51,8 @@ export type PanelSearchParamsType = {
   thread?: string;
   /** `state: "messages"`: id of the open channel. */
   channel?: string;
+  /** `state: "returns"`: `"mine"` opens the "Moje zwroty" tab. */
+  returnsTab?: "mine";
 };
 
 export interface PanelProps {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, before, beforeEach, describe, it } from "node:test";
-import { create, toBinary, type DescMessage, type MessageInitShape } from "@bufbuild/protobuf";
+import { create, fromBinary, toBinary, type DescMessage, type MessageInitShape } from "@bufbuild/protobuf";
 import { setupReactPage, TEST_KEY } from "@/src/analytics/react-testing";
 import {
   FailureMessage,
+  UserPanelGetProductsRequestSchema,
   UserPanelGetProductsResponseSchema,
+  UserProductSchema,
   UserProductType,
 } from "../gen/proto/public/v1/public_api_pb";
 import {
@@ -124,7 +126,16 @@ afterEach(async () => {
 
 const settle = (ms = 60) => React.act(async () => void (await new Promise((r) => setTimeout(r, ms))));
 
-async function mountGrid(options: { projectID?: string; product?: string; setParams?: (params: import("./types").PanelSearchParamsType) => void; openCourse?: (id: string) => void } = {}) {
+async function mountGrid(options: {
+  projectID?: string;
+  product?: string;
+  shop?: string;
+  setParams?: (
+    params: import("./types").PanelSearchParamsType,
+    setOptions?: import("./hooks/useUrlSearchParams").SetUrlSearchParamsOptions,
+  ) => void;
+  openCourse?: (id: string) => void;
+} = {}) {
   const container = page.win.document.createElement("div");
   page.win.document.body.appendChild(container);
   const root = createRoot(container);
@@ -137,7 +148,7 @@ async function mountGrid(options: { projectID?: string; product?: string; setPar
           accessToken="panel-token"
           loginURL="/panel/login"
           activeScreen="products"
-          params={{ state: "products", product: options.product }}
+          params={{ state: "products", product: options.product, shop: options.shop }}
           setParams={options.setParams ?? (() => {})}
           openCourse={options.openCourse ?? (() => {})}
         />
@@ -852,5 +863,212 @@ describe("product detail pages (option A)", () => {
     const container = await mountGrid({ product: "audio-a1" });
     assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Nie udało się wczytać audiobooka/);
     assert.doesNotMatch(container.textContent ?? "", /Wybierz rozdział/);
+  });
+});
+
+describe("global library shop pills and shared products query (C7, C7a)", () => {
+  const twoShopProducts = () =>
+    proto(UserPanelGetProductsResponseSchema, {
+      result: {
+        case: "success",
+        value: {
+          products: [
+            {
+              projectId: "shopA",
+              projectName: "Sklep Alfa",
+              accessId: "a1",
+              productName: "Ebook Alfa",
+              productType: UserProductType.FILE,
+            },
+            {
+              projectId: "shopB",
+              projectName: "Sklep Beta",
+              accessId: "b1",
+              productName: "Kurs Beta",
+              productType: UserProductType.COURSE,
+            },
+          ],
+        },
+      },
+    });
+
+  it("shows ShopPills on the global panel with 2+ shops, filters without refetching, and replaces history on click", async () => {
+    products = twoShopProducts;
+    const calls: Array<{ params: import("./types").PanelSearchParamsType; options?: { replace?: boolean } }> = [];
+    const unfiltered = await mountGrid({
+      projectID: "",
+      setParams: (params, options) => calls.push({ params, options }),
+    });
+    assert.equal(unfiltered.querySelector("[data-shop-pills-count]")?.textContent, "2 produkty");
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+    requests.length = 0;
+
+    const container = await mountGrid({
+      projectID: "",
+      shop: "shopA",
+      setParams: (params, options) => calls.push({ params, options }),
+    });
+    const group = container.querySelector('[role="group"][aria-label="Filtr sklepu"]');
+    assert.ok(group, "shop pills shown on global panel");
+    assert.equal(container.querySelector("[data-shop-pills-count]")?.textContent, "1 produkt");
+    assert.ok(container.textContent?.includes("Ebook Alfa"));
+    assert.ok(!container.textContent?.includes("Kurs Beta"));
+    assert.equal(requests.filter((u) => u.endsWith("/UserPanelGetProducts")).length, 1);
+
+    const betaPill = [...group!.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+      b.textContent?.includes("Sklep Beta"),
+    )!;
+    await React.act(async () => betaPill.click());
+    assert.equal(calls[0]?.params.shop, "shopB");
+    assert.equal(calls[0]?.params.state, "products");
+    assert.equal(calls[0]?.options?.replace, true);
+  });
+
+  it("writes activeScreen instead of stale params.state when clicking a shop pill", async () => {
+    const { ProductsComponent } = await import("./components/PanelProductGrid.tsx");
+    const calls: Array<{ params: import("./types").PanelSearchParamsType; options?: { replace?: boolean } }> = [];
+    const container = await mountPanelView(
+      <ProductsComponent
+        projectID=""
+        accessToken="panel-token"
+        products={[
+          create(UserProductSchema, {
+            projectId: "shopA",
+            projectName: "Sklep Alfa",
+            accessId: "a1",
+            productName: "Ebook Alfa",
+            productType: UserProductType.FILE,
+          }),
+          create(UserProductSchema, {
+            projectId: "shopB",
+            projectName: "Sklep Beta",
+            accessId: "b1",
+            productName: "Kurs Beta",
+            productType: UserProductType.COURSE,
+          }),
+        ]}
+        activeScreen="products"
+        params={{ state: "returns" }}
+        setParams={(params, options) => calls.push({ params, options })}
+        openCourse={() => {}}
+      />,
+    );
+    const alfaPill = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find((b) =>
+      b.textContent?.includes("Sklep Alfa"),
+    )!;
+    await React.act(async () => alfaPill.click());
+    assert.deepEqual(calls, [{ params: { state: "products", shop: "shopA" }, options: { replace: true } }]);
+  });
+
+  it("formats productsCount plural forms in pl and en", async () => {
+    const { getProductTexts } = await import("./components/products/texts");
+    const pl = getProductTexts("pl");
+    assert.equal(pl.productsCount(0), "0 produktów");
+    assert.equal(pl.productsCount(1), "1 produkt");
+    assert.equal(pl.productsCount(2), "2 produkty");
+    assert.equal(pl.productsCount(5), "5 produktów");
+    assert.equal(pl.productsCount(12), "12 produktów");
+    assert.equal(pl.productsCount(22), "22 produkty");
+
+    const en = getProductTexts("en");
+    assert.equal(en.productsCount(0), "0 products");
+    assert.equal(en.productsCount(1), "1 product");
+    assert.equal(en.productsCount(2), "2 products");
+  });
+
+  it("never renders ShopPills on a shop panel", async () => {
+    products = twoShopProducts;
+    const container = await mountGrid({ projectID: "shopA", shop: "shopA" });
+    assert.equal(container.querySelector("[data-shop-pills]"), null);
+    assert.ok(container.textContent?.includes("Ebook Alfa"));
+    assert.ok(!container.textContent?.includes("Kurs Beta"));
+  });
+
+  it("resolves deep-linked products and courses from the unfiltered list even while filtered to another shop", async () => {
+    products = twoShopProducts;
+    const openedCourses: string[] = [];
+    await mountGrid({
+      projectID: "",
+      shop: "shopA",
+      product: "course-b1",
+      openCourse: (id) => openedCourses.push(id),
+    });
+    assert.deepEqual(openedCourses, ["b1"]);
+  });
+
+  it("renders a compact filter empty state with 'Pokaż wszystkie' instead of PanelProductsEmpty", async () => {
+    const { ProductsComponent } = await import("./components/PanelProductGrid.tsx");
+    const cleared: Array<{ shop?: string; replace?: boolean }> = [];
+    const container = await mountPanelView(
+      <ProductsComponent
+        projectID=""
+        accessToken="panel-token"
+        products={[
+          create(UserProductSchema, {
+            projectId: "shopA",
+            projectName: "Sklep Alfa",
+            accessId: "a1",
+            productName: "Ebook Alfa",
+            productType: UserProductType.FILE,
+          }),
+        ]}
+        shops={[
+          { projectId: "shopA", name: "Sklep Alfa", count: 1 },
+          { projectId: "shopEmpty", name: "Sklep Pusty", count: 0 },
+        ]}
+        activeScreen="products"
+        params={{ state: "products", shop: "shopEmpty" }}
+        setParams={(next, opts) => cleared.push({ shop: next.shop, replace: opts?.replace })}
+        openCourse={() => {}}
+      />,
+    );
+    assert.equal(container.querySelector('[data-testid="panel-empty"]'), null);
+    assert.match(container.textContent ?? "", /Brak produktów w tym sklepie/);
+    const showAll = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent === "Pokaż wszystkie",
+    )!;
+    assert.ok(showAll);
+    await React.act(async () => showAll.click());
+    assert.deepEqual(cleared, [{ shop: undefined, replace: true }]);
+  });
+
+  it("PanelProductGrid and usePanelChat share one query key and send identical projectId", async () => {
+    const { usePanelChat } = await import("./chat-visibility.ts");
+    const seenProjectIds: string[] = [];
+    globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.endsWith("/UserPanelGetProducts")) {
+        const req = fromBinary(
+          UserPanelGetProductsRequestSchema,
+          new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()),
+        );
+        seenProjectIds.push(req.projectId);
+        return twoShopProducts();
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+
+    function BothCallers({ projectID }: { projectID: string }) {
+      usePanelChat("panel-token", projectID);
+      return (
+        <PanelProductGrid
+          projectID={projectID}
+          accessToken="panel-token"
+          loginURL="/panel/login"
+          activeScreen="products"
+          params={{ state: "products" }}
+          setParams={() => {}}
+          openCourse={() => {}}
+        />
+      );
+    }
+
+    await mountPanelView(<BothCallers projectID="shopA" />);
+    assert.deepEqual(seenProjectIds, ["shopA"], "single fetch shared by both callers");
+
+    seenProjectIds.length = 0;
+    await mountPanelView(<BothCallers projectID="" />);
+    assert.deepEqual(seenProjectIds, [""], "single fetch shared by both callers on global panel");
   });
 });

@@ -42,6 +42,7 @@ export function buyerSession(options: Pick<PanelOptions, "projectKey" | "config"
     // The snippet accepts pk_ as an alias for the public ID used by the buyer panel.
     const publicKey = projectKey.replace(/^pk_/, "");
     for (const key of new Set([projectKey, publicKey, `pk_${publicKey}`])) {
+      if (!key.trim()) continue;
       const token = getPanelSession(key, challengeOrigin);
       if (token) return { token, email: getPanelEmail(key, challengeOrigin)?.trim().toLowerCase() };
     }
