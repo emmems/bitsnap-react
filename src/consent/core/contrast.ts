@@ -25,3 +25,21 @@ export function onColor(background: string): string {
     ? "#ffffff"
     : "#111111";
 }
+
+/** Move along the same hue towards the endpoint with greater contrast. */
+export function ensure(color: string, background: string, minimum: number): string {
+  if (contrastRatio(color, background) >= minimum) return color;
+  const channels = parse(color);
+  const end = contrastRatio("#fff", background) > contrastRatio("#000", background) ? 255 : 0;
+  let low = 0;
+  let high = 256;
+  const mix = (step: number) => "#" + channels.map((value) =>
+    Math.round(value + (end - value) * step / 256).toString(16).padStart(2, "0"),
+  ).join("");
+  while (high - low > 1) {
+    const middle = (low + high) >> 1;
+    if (contrastRatio(mix(middle), background) >= minimum) high = middle;
+    else low = middle;
+  }
+  return mix(high);
+}

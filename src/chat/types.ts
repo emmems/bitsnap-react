@@ -189,3 +189,21 @@ export type ChatRealtimeEvent =
 
 /** How a conversation hears about new messages. */
 export type ChatLiveMode = "connecting" | "live" | "polling" | "off";
+
+export type VisitorThread = {
+  thread: {
+    id: string;
+    composerLocked: boolean;
+    unread?: number;
+    limitsLeft: { consecutive?: number; hour?: number; thread?: number };
+  } | null;
+  messages: ChatMessage[];
+  hasMore: boolean;
+  messageMax?: number;
+};
+
+export type VisitorMessageInput = {
+  body: string;
+  clientId: string;
+  pageUrl?: string;
+};

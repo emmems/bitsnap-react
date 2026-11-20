@@ -1,7 +1,7 @@
-const panelSessionKey = (projectID: string, host?: string) =>
+export const panelSessionKey = (projectID: string, host?: string) =>
   `bitsnap-panel-session:${encodeURIComponent(host ?? "https://bitsnap.pl")}:${encodeURIComponent(projectID)}`;
 
-const panelEmailKey = (projectID: string, host?: string) =>
+export const panelEmailKey = (projectID: string, host?: string) =>
   `bitsnap-panel-email:${encodeURIComponent(host ?? "https://bitsnap.pl")}:${encodeURIComponent(projectID)}`;
 
 export function getPanelSession(projectID?: string, host?: string) {

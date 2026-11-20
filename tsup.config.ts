@@ -96,6 +96,16 @@ const analyticsEmbed: Options = {
   globalName: "BitsnapAnalyticsEmbed",
 };
 
+const liveChatEmbeds: Options = {
+  ...consentEmbed,
+  entry: {
+    "bitsnap-chat": "src/live-chat/loader.ts",
+    "bitsnap-chat-panel": "src/live-chat/panel/index.ts",
+  },
+  globalName: undefined,
+  define: { BITSNAP_REACT_EMBED_VERSION: JSON.stringify(version) },
+};
+
 export default defineConfig((overrideOptions) => {
   const isWatch = !!overrideOptions.watch;
   const shouldPublish = !!overrideOptions.env?.publish;
@@ -138,5 +148,5 @@ export default defineConfig((overrideOptions) => {
     },
   };
 
-  return [library, consentEmbed, analyticsEmbed];
+  return [library, consentEmbed, analyticsEmbed, liveChatEmbeds];
 });

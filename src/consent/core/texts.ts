@@ -12,7 +12,7 @@ export const DEFAULT_TEXTS: Record<ConsentLocale, ConsentTexts> = {
     close: "Zamknij",
     necessaryTitle: "Niezbędne",
     necessaryDescription:
-      "Potrzebne do działania strony: koszyk, zapamiętanie Twojego wyboru, bezpieczeństwo. Nie można ich wyłączyć.",
+      "Potrzebne do działania strony: koszyk, zapamiętanie Twojego wyboru, bezpieczeństwo i czat ze sklepem, jeśli jest włączony. Nie można ich wyłączyć.",
     analyticsTitle: "Statystyki",
     analyticsDescription:
       "Pomagają nam zrozumieć, jak odwiedzający korzystają ze strony, żebyśmy mogli ją ulepszać.",
@@ -35,7 +35,7 @@ export const DEFAULT_TEXTS: Record<ConsentLocale, ConsentTexts> = {
     close: "Close",
     necessaryTitle: "Necessary",
     necessaryDescription:
-      "Needed for the site to work: the cart, remembering your choice, security. They cannot be turned off.",
+      "Needed for the site to work: the cart, remembering your choice, security, and shop chat when enabled. They cannot be turned off.",
     analyticsTitle: "Analytics",
     analyticsDescription:
       "Help us understand how visitors use the site, so we can improve it.",
