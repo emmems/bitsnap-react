@@ -41,7 +41,7 @@ export function usePanelChat(
 ): PanelChat {
   const { data } = useQuery(
     rpcProvider.publicApi.userPanelGetProducts,
-    { accessToken: accessToken ?? "" },
+    { accessToken: accessToken ?? "", projectId: projectID },
     { enabled: Boolean(accessToken) },
   );
   const result = data?.result.case === "success" ? data.result.value : undefined;

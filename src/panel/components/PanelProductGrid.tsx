@@ -27,12 +27,17 @@ import { getProductTexts } from "./products/texts";
 import { richTextToPlainText } from "@/src/lib/render.text";
 import { clearQrCache } from "./products/ticket/qr-cache";
 import { fromJsonString } from "@bufbuild/protobuf";
+import type { SetUrlSearchParamsOptions } from "../hooks/useUrlSearchParams";
 import type { PanelScreen, PanelSearchParamsType } from "../types";
 import PanelProductDetails from "./PanelProductDetails";
 import { clearPanelSession, getPanelEmail } from "../session-storage";
 import { usePanelConfig } from "../PanelProvider";
 import { useModelFiles, type ModelFilesLoad } from "./model-files-load";
 import { productsOfShop } from "../shop-scope";
+import { selectedShop, shopsOfProducts, type ShopOption } from "../shop-filter";
+import { getPanelTexts } from "../texts";
+import { PanelEmptyState } from "./shared/PanelEmptyState";
+import { ShopPills } from "./shared/ShopPills";
 
 export { productsOfShop };
 
@@ -45,7 +50,10 @@ interface PanelProductGridComponentProps {
   loginURL: string;
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
-  setParams: (params: PanelSearchParamsType) => void;
+  setParams: (
+    params: PanelSearchParamsType,
+    options?: SetUrlSearchParamsOptions,
+  ) => void;
   openCourse: (accessId: string) => void;
   /** Opens "Wiadomości" (CHAT and COMMUNITY products). */
   openMessages?: () => void;
@@ -68,7 +76,8 @@ const PanelProductGridComponent = ({
     error: productsError,
     refetch,
   } = useQuery(rpcProvider.publicApi.userPanelGetProducts, {
-    accessToken: accessToken,
+    accessToken: accessToken ?? "",
+    projectId: projectID,
   });
   const modelFiles = useModelFiles(accessToken, projectID);
   // The server answers with the buyer's purchases from every Bitsnap shop;
@@ -156,6 +165,7 @@ const PanelProductGridComponent = ({
 
   return (
     <ProductsComponent
+      projectID={projectID}
       accessToken={accessToken}
       products={productsList}
       activeScreen={activeScreen}
@@ -302,12 +312,18 @@ function PanelProductsError({ onRetry }: { onRetry: () => void }) {
 export default PanelProductGridComponent;
 
 interface ProductsComponentProps {
+  projectID?: string;
   accessToken: string;
   products: UserProduct[];
+  /** Optional explicit shop list override (defaults to `shopsOfProducts(products)`). */
+  shops?: readonly ShopOption[];
   filesSection?: ReactNode;
   activeScreen: PanelScreen;
   params: PanelSearchParamsType;
-  setParams: (params: PanelSearchParamsType) => void;
+  setParams: (
+    params: PanelSearchParamsType,
+    options?: SetUrlSearchParamsOptions,
+  ) => void;
   openCourse: (accessId: string) => void;
   openMessages?: () => void;
 }
@@ -320,9 +336,11 @@ export function opensMessages(product: UserProduct): boolean {
   );
 }
 
-const ProductsComponent = ({
+export const ProductsComponent = ({
+  projectID = "",
   accessToken,
   products,
+  shops: shopsProp,
   filesSection,
   activeScreen,
   params,
@@ -331,6 +349,23 @@ const ProductsComponent = ({
   openMessages,
 }: ProductsComponentProps) => {
   const t = getProductTexts();
+  const panelTexts = getPanelTexts();
+  const isGlobal = !projectID;
+  const shops = useMemo(
+    () =>
+      !isGlobal
+        ? []
+        : shopsProp ?? shopsOfProducts(products, panelTexts.shopUnknown),
+    [isGlobal, shopsProp, products, panelTexts.shopUnknown],
+  );
+  const activeShop = isGlobal ? selectedShop(shops, params.shop) : undefined;
+  const visibleProducts = useMemo(
+    () => (activeShop ? productsOfShop(products, activeShop) : products),
+    [activeShop, products],
+  );
+
+  // Resolve deep links against the unfiltered list so a shop filter never
+  // hides the product or course a URL points to.
   const [selectedProduct, setSelectedProduct] = useState(() =>
     resolvePanelProduct(params.product, products),
   );
@@ -343,6 +378,9 @@ const ProductsComponent = ({
       product: product ? panelProductKey(product) : undefined,
       state: "products",
     });
+  };
+  const setShopFilter = (shop: string | undefined) => {
+    setParams({ state: params.state, shop }, { replace: true });
   };
 
   useEffect(() => {
@@ -398,8 +436,39 @@ const ProductsComponent = ({
           {t.intro}
         </p>
       )}
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {products.map((product) => {
+      {isGlobal && shops.length >= 2 && (
+        <ShopPills
+          shops={shops}
+          value={activeShop}
+          onChange={setShopFilter}
+          label={panelTexts.shopFilterLabel}
+          allLabel={panelTexts.shopFilterAll}
+          unknownShopLabel={panelTexts.shopUnknown}
+          allCount={products.length}
+          countText={t.productsCount(visibleProducts.length)}
+          className="mt-4"
+        />
+      )}
+      {visibleProducts.length === 0 && activeShop != null ? (
+        <PanelEmptyState
+          className="mt-6 max-w-md"
+          headingLevel={3}
+          title={t.emptyShopFilterTitle}
+          description={t.emptyShopFilterText}
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => setShopFilter(undefined)}
+            >
+              {t.showAllShops}
+            </Button>
+          }
+        />
+      ) : (
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {visibleProducts.map((product) => {
           const [label, action, Icon] =
             product.productType === UserProductType.AUDIO
               ? ([t.audio, t.listen, Headphones] as const)
@@ -445,7 +514,8 @@ const ProductsComponent = ({
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
       {filesSection}
     </>
   );
