@@ -14,6 +14,11 @@ const pl = {
   emptyOtherShops:
     "Kupujesz też w innych sklepach na Bitsnapie? Wszystkie swoje produkty zobaczysz w jednym miejscu:",
   emptyAllPurchases: "Zobacz wszystkie zakupy",
+  emptyShopFilterTitle: "Brak produktów w tym sklepie",
+  emptyShopFilterText: "Wybierz inny sklep albo zobacz wszystkie swoje produkty.",
+  showAllShops: "Pokaż wszystkie",
+  productsCount: (count: number) =>
+    `${count} ${plural(count, "produkt", "produkty", "produktów")}`,
   productsError: "Nie udało się wczytać Twoich produktów.",
   audio: "Audio",
   files: "Pliki",
@@ -92,6 +97,11 @@ const en: typeof pl = {
   emptyOtherShops:
     "Shopping in other shops on Bitsnap too? See all your products in one place:",
   emptyAllPurchases: "See all purchases",
+  emptyShopFilterTitle: "No products in this shop",
+  emptyShopFilterText: "Choose another shop or view all your products.",
+  showAllShops: "Show all",
+  productsCount: (count: number) =>
+    `${count} ${count === 1 ? "product" : "products"}`,
   productsError: "Your products could not be loaded.",
   audio: "Audio",
   files: "Files",
