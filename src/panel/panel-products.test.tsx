@@ -21,6 +21,8 @@ let createRoot: typeof import("react-dom/client").createRoot;
 let PanelProvider: typeof import("./PanelProvider.tsx").PanelProvider;
 let PanelProductGrid: typeof import("./components/PanelProductGrid.tsx").default;
 let decidePanelProducts: typeof import("./components/PanelProductGrid.tsx").decidePanelProducts;
+let productsOfShop: typeof import("./components/PanelProductGrid.tsx").productsOfShop;
+let allPurchasesURL: typeof import("./components/PanelProductGrid.tsx").allPurchasesURL;
 
 before(async () => {
   React = await import("react");
@@ -29,6 +31,8 @@ before(async () => {
   const grid = await import("./components/PanelProductGrid.tsx");
   PanelProductGrid = grid.default;
   decidePanelProducts = grid.decidePanelProducts;
+  productsOfShop = grid.productsOfShop;
+  allPurchasesURL = grid.allPurchasesURL;
 });
 
 const SESSION_KEY = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:${encodeURIComponent(TEST_KEY)}`;
@@ -51,12 +55,13 @@ const roots: Array<{ unmount: () => void }> = [];
 const originalError = console.error;
 const originalWarn = console.warn;
 
-const productList = (count: number) =>
+const productList = (count: number, projectId?: string) =>
   proto(UserPanelGetProductsResponseSchema, {
     result: {
       case: "success",
       value: {
         products: Array.from({ length: count }, (_, index) => ({
+          ...(projectId != null ? { projectId } : {}),
           accessId: `acc-${index}`,
           productName: `Ebook ${index}`,
           productType: UserProductType.FILE,
@@ -119,7 +124,7 @@ afterEach(async () => {
 
 const settle = (ms = 60) => React.act(async () => void (await new Promise((r) => setTimeout(r, ms))));
 
-async function mountGrid(options: { product?: string; setParams?: (params: import("./types").PanelSearchParamsType) => void; openCourse?: (id: string) => void } = {}) {
+async function mountGrid(options: { projectID?: string; product?: string; setParams?: (params: import("./types").PanelSearchParamsType) => void; openCourse?: (id: string) => void } = {}) {
   const container = page.win.document.createElement("div");
   page.win.document.body.appendChild(container);
   const root = createRoot(container);
@@ -128,7 +133,7 @@ async function mountGrid(options: { product?: string; setParams?: (params: impor
     root.render(
       <PanelProvider analytics={false}>
         <PanelProductGrid
-          projectID={TEST_KEY}
+          projectID={options.projectID ?? TEST_KEY}
           accessToken="panel-token"
           loginURL="/panel/login"
           activeScreen="products"
@@ -215,6 +220,115 @@ describe("panel products screen", () => {
     const container = await mountGrid();
     assert.equal(container.querySelector('[data-testid="model-files"]'), null);
     assert.match(container.textContent ?? "", /Ebook 0/);
+  });
+});
+
+// The server answers with the buyer's purchases from every shop; a shop's
+// panel lists its own, and its empty state points to the all-shops panel.
+describe("shop scope of the products screen", () => {
+  const link = (container: HTMLElement) =>
+    container.querySelector<HTMLAnchorElement>("[data-all-purchases-link]");
+  const button = (container: HTMLElement) =>
+    container.querySelector<HTMLAnchorElement>("[data-all-purchases-button]");
+
+  it("keeps only this shop's products and the ones without a shop id", () => {
+    const list = [
+      { projectId: TEST_KEY, accessId: "mine" },
+      { projectId: "other-shop", accessId: "theirs" },
+      { projectId: "", accessId: "unknown" },
+    ] as never[];
+    const ids = (shop: string) =>
+      productsOfShop(list, shop).map((p: { accessId: string }) => p.accessId);
+    assert.deepEqual(ids(TEST_KEY), ["mine", "unknown"]);
+    assert.deepEqual(ids(""), ["mine", "theirs", "unknown"]);
+  });
+
+  it("links bitsnap.pl's panel, or a local dev server's, never a seller's own API host", () => {
+    assert.equal(allPurchasesURL(undefined), "https://bitsnap.pl/panel");
+    assert.equal(allPurchasesURL(""), "https://bitsnap.pl/panel");
+    assert.equal(allPurchasesURL("https://bitsnap.pl/"), "https://bitsnap.pl/panel");
+    assert.equal(allPurchasesURL("http://localhost:4321"), "http://localhost:4321/panel");
+    // The README's API name and a seller's own domain serve no panel page.
+    assert.equal(allPurchasesURL("https://api.bitsnap.pl"), "https://bitsnap.pl/panel");
+    assert.equal(allPurchasesURL("https://sklep.example.test"), "https://bitsnap.pl/panel");
+    assert.equal(allPurchasesURL("not a url"), "https://bitsnap.pl/panel");
+  });
+
+  it("shows the empty state with a link and a button when everything is from another shop", async () => {
+    products = () => productList(2, "other-shop");
+    const container = await mountGrid();
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'), container.innerHTML);
+    assert.equal(link(container)?.getAttribute("href"), "https://bitsnap.pl/panel");
+    assert.equal(link(container)?.textContent, "bitsnap.pl/panel");
+    assert.equal(button(container)?.getAttribute("href"), "https://bitsnap.pl/panel");
+    assert.equal(button(container)?.tagName, "A");
+    assert.ok(!container.textContent?.includes("Ebook 0"), "another shop's product must not be listed");
+    assert.ok(signedIn(), "an empty shop must not sign the buyer out");
+  });
+
+  it("lists this shop's products next to another shop's", async () => {
+    products = () =>
+      proto(UserPanelGetProductsResponseSchema, {
+        result: {
+          case: "success",
+          value: {
+            products: [
+              { projectId: TEST_KEY, accessId: "a", productName: "Mine", productType: UserProductType.FILE },
+              { projectId: "other-shop", accessId: "b", productName: "Theirs", productType: UserProductType.FILE },
+            ],
+          },
+        },
+      });
+    const container = await mountGrid();
+    assert.ok(container.textContent?.includes("Mine"), container.innerHTML);
+    assert.ok(!container.textContent?.includes("Theirs"));
+    assert.equal(link(container), null);
+  });
+
+  it("shows the empty state, not an error, to a buyer with no purchases anywhere", async () => {
+    // The server answers PRDUCTS_NOT_FOUND, not an empty list, in that case.
+    products = () =>
+      proto(UserPanelGetProductsResponseSchema, { result: { case: "failure", value: FailureMessage.PRDUCTS_NOT_FOUND } });
+    const container = await mountGrid();
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'), container.innerHTML);
+    assert.equal(container.querySelector('[data-testid="panel-error"]'), null);
+    assert.equal(button(container)?.getAttribute("href"), "https://bitsnap.pl/panel");
+    assert.ok(signedIn());
+  });
+
+  it("names the e-mail the panel looked for", async () => {
+    page.win.localStorage.setItem(
+      `bitsnap-panel-email:${encodeURIComponent("https://bitsnap.pl")}:${encodeURIComponent(TEST_KEY)}`,
+      "ann@example.com",
+    );
+    products = () => productList(0);
+    const container = await mountGrid();
+    assert.match(container.textContent ?? "", /ann@example\.com/);
+  });
+
+  it("still lists this shop's 3D files when every access product is another shop's", async () => {
+    products = () => productList(2, "other-shop");
+    modelFiles = () => purchased(ModelFileState.AVAILABLE);
+    const container = await mountGrid();
+    assert.ok(container.querySelector('[data-testid="model-files"]'), container.innerHTML);
+    assert.equal(container.querySelector('[data-testid="panel-empty"]'), null);
+    assert.ok(!container.textContent?.includes("Ebook 0"));
+  });
+
+  it("opens the grid, not the details, for a link to another shop's product", async () => {
+    products = () => productList(1, "other-shop");
+    const container = await mountGrid({ product: "acc-0" });
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'), container.innerHTML);
+    assert.ok(!container.textContent?.includes("Ebook 0"));
+  });
+
+  it("shows no link on the all-shops panel itself", async () => {
+    products = () => productList(0);
+    const container = await mountGrid({ projectID: "" });
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'), container.innerHTML);
+    assert.equal(link(container), null);
+    assert.equal(button(container), null);
+    assert.ok(!container.textContent?.includes("w tym sklepie"));
   });
 });
 
