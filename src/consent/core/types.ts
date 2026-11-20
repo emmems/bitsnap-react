@@ -108,6 +108,7 @@ export type ConsentOptions = {
 };
 
 export type BitsnapConsentApi = {
+  inset?(): number;
   /**
    * Whose choice this banner holds: `project` keeps one cookie per project key
    * (`bitsnap_consent_<key>`), `global` the site-wide `bitsnap_consent`.

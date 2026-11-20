@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getPanelConfig } from "../panel/config";
 
-export type TurnstileAction = "panel_login" | "free_chat_claim" | "contact_submit";
+import { challengeUrl, parseTurnstileMessage as parseMessage, type TurnstileAction, type TurnstileBinding } from "./protocol";
+
+export { challengeUrl, type TurnstileAction, type TurnstileBinding } from "./protocol";
+
+export function parseTurnstileMessage(origin: string, data: unknown, action: TurnstileAction, expectedOrigin = challengeOrigin(), binding?: TurnstileBinding) {
+  return parseMessage(origin, data, action, expectedOrigin, binding);
+}
+
 export function challengeOrigin(host = getPanelConfig().host): string {
   try {
     const url = new URL(host || "https://bitsnap.pl");
@@ -11,32 +18,6 @@ export function challengeOrigin(host = getPanelConfig().host): string {
   return "https://bitsnap.pl";
 }
 const TOKEN_LIFETIME_MS = 5 * 60 * 1000;
-
-/** Bound to one form: the challenge page echoes both values back and the receiver ignores any other form's messages. */
-export type TurnstileBinding = { formContext?: string; attempt?: string };
-
-export function challengeUrl(origin: string, action: TurnstileAction, language: string, pageOrigin: string, binding: TurnstileBinding = {}): string {
-  const params = [`action=${encodeURIComponent(action)}`, `origin=${encodeURIComponent(pageOrigin)}`, `locale=${language}`];
-  if (binding.formContext) params.push(`formContext=${encodeURIComponent(binding.formContext)}`);
-  if (binding.attempt) params.push(`attempt=${encodeURIComponent(binding.attempt)}`);
-  return `${origin}/challenge?${params.join("&")}`;
-}
-
-export function parseTurnstileMessage(origin: string, data: unknown, action: TurnstileAction, expectedOrigin = challengeOrigin(), binding: TurnstileBinding = {}):
-  | { kind: "token"; token: string }
-  | { kind: "disabled" | "failure" }
-  | null {
-  if (origin !== expectedOrigin || !data || typeof data !== "object") return null;
-  const message = data as Record<string, unknown>;
-  if (message.type !== "bitsnap:turnstile" || message.action !== action) return null;
-  if (binding.formContext && message.formContext !== binding.formContext) return null;
-  if (binding.attempt && message.attempt !== binding.attempt) return null;
-  if (message.disabled === true) return { kind: "disabled" };
-  if (message.failure === true) return { kind: "failure" };
-  return typeof message.token === "string" && message.token
-    ? { kind: "token", token: message.token }
-    : null;
-}
 
 /** Bitsnap-hosted Turnstile surface for merchants' own origins. */
 export function TurnstileChallenge({ action, locale = "pl", host, formContext, attempt, onToken, onFailure }: {

@@ -25,6 +25,7 @@ export type UIOptions = {
 };
 
 export type ConsentUI = {
+  inset(): number;
   /** `focus` moves keyboard focus into the banner; leave it off when the banner opens on page load. */
   showBanner(focus?: boolean): void;
   showSettings(): void;
@@ -412,5 +413,5 @@ export function createUI(options: UIOptions): ConsentUI {
     layer = "none";
   }
 
-  return { showBanner, showSettings, hide, destroy };
+  return { showBanner, showSettings, hide, destroy, inset: () => banner?.getBoundingClientRect().height ?? 0 };
 }
