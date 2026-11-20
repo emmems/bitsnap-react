@@ -248,6 +248,16 @@ Rules:
   `/payment/manualPayment/<project>/<order>` page is a placed order paid
   outside Bitsnap, so the cart is cleared at once.
 - Express buttons (Apple Pay, Google Pay) are separate online flows.
+- Warm-up (`cart-warmup.ts`, since 1.31.0): the inner `CartComponent` registers
+  its `QueryClient` and provider, and at the first idle moment
+  (`requestIdleCallback`, 500 ms timeout; `setTimeout` fallback) prefetches the
+  `cart-products` and `cart-available-countries` queries. Hover/focus of the
+  cart button, `Bitsnap.warmUp()` and `ProductList` after add also prefetch
+  `cart-payment-methods` (needs a stored country). Keys and `staleTime` come
+  from `cart-queries.ts`, shared with the drawer: change a key there, never in
+  one place. Nothing runs on the server, with an empty cart or, for idle and
+  hover, with `prefetch={false}`. It must never send a cart event or write the
+  cart. Test: `cart-warmup.test.tsx`.
 - Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
 
 ## Chat (`ChatThread`, `Channel`, panel "Wiadomości")

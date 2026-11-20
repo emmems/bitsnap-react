@@ -136,24 +136,29 @@ function isImageURL(value: unknown): value is string {
 const DISCOUNT_STATUSES = ["ACTIVE", "SCHEDULED", "EXPIRED", "DISABLED"];
 const DISCOUNT_TYPES = ["FIXED", "PERCENTAGE"];
 
-/** A new pricing object from known fields, or `undefined` when anything is wrong. */
+/**
+ * A new pricing object from known fields, or `undefined` when anything is
+ * wrong. A missing or malformed `referencePrice` (an older backend) reads as
+ * "no price history", so the line keeps its sale price.
+ */
 function parsePricing(raw: unknown): ProductPricing | undefined {
   if (
     !isRecord(raw) ||
     !isFiniteNumber(raw.regularPrice) ||
     !isFiniteNumber(raw.effectivePrice) ||
     !isBoundedString(raw.currency, MAX_SHORT_LENGTH) ||
-    !isBoundedString(raw.priceVersion, MAX_PRICE_VERSION_LENGTH) ||
-    !isRecord(raw.referencePrice) ||
-    typeof raw.referencePrice.historyAvailable !== "boolean"
+    !isBoundedString(raw.priceVersion, MAX_PRICE_VERSION_LENGTH)
   ) {
     return undefined;
   }
-  const reference = raw.referencePrice;
+  const given = raw.referencePrice;
+  const reference: Record<string, unknown> =
+    isRecord(given) &&
+    typeof given.historyAvailable === "boolean" &&
+    (given.amount === undefined || isFiniteNumber(given.amount))
+      ? given
+      : {};
   const historyAvailable = reference.historyAvailable === true;
-  if (reference.amount !== undefined && !isFiniteNumber(reference.amount)) {
-    return undefined;
-  }
   if (
     raw.nextPriceChangeAt !== undefined &&
     !isFiniteNumber(raw.nextPriceChangeAt)
@@ -172,7 +177,7 @@ function parsePricing(raw: unknown): ProductPricing | undefined {
     },
     priceVersion: raw.priceVersion,
   };
-  if (reference.amount !== undefined) {
+  if (isFiniteNumber(reference.amount)) {
     pricing.referencePrice.amount = reference.amount;
   }
   if (raw.nextPriceChangeAt !== undefined) {
@@ -238,19 +243,12 @@ function parseDetails(raw: unknown): CartLineDetails | undefined {
     }
   }
 
-  if (raw.image_url != null) {
-    if (!isImageURL(raw.image_url)) {
-      return undefined;
-    }
+  // A relative or `data:` image is left out; the entry (and its price) stays.
+  if (isImageURL(raw.image_url)) {
     details.image_url = raw.image_url;
   }
-  if (raw.images !== undefined) {
-    if (!Array.isArray(raw.images) || !raw.images.every(isImageURL)) {
-      return undefined;
-    }
-    if (raw.images.length > 0) {
-      details.images = [raw.images[0] as string];
-    }
+  if (Array.isArray(raw.images) && isImageURL(raw.images[0])) {
+    details.images = [raw.images[0]];
   }
 
   if (raw.isDeliverable !== undefined) {
@@ -292,11 +290,9 @@ function parseDetails(raw: unknown): CartLineDetails | undefined {
         recurring.subscriptionSchedule as number;
     }
   }
-  if (raw.pricing !== undefined) {
-    const pricing = parsePricing(raw.pricing);
-    if (pricing == null) {
-      return undefined;
-    }
+  // A bad pricing is left out (the gate never reads snapshot pricing).
+  const pricing = parsePricing(raw.pricing);
+  if (pricing != null) {
     details.pricing = pricing;
   }
   return details;

@@ -270,7 +270,9 @@ async function releaseProducts() {
 }
 
 /** Another tab writes the cart. */
-async function otherTabWrites(products: { id: string; productID: string; quantity: number; priceVersion?: string }[]) {
+async function otherTabWrites(
+  products: { id: string; productID: string; quantity: number; priceVersion?: string; amount?: number }[],
+) {
   const checkout = JSON.parse(page.win.localStorage.getItem("checkout")!);
   const newValue = JSON.stringify({ ...checkout, products });
   page.win.localStorage.setItem("checkout", newValue);
@@ -601,20 +603,43 @@ describe("instant drawer: price gate (D18)", () => {
     assert.equal(buys().length, 2, "no loop");
   });
 
-  it("data from before the open is revalidated with no-cache on the click", async () => {
+  it("data from before the open is asked again at the open; wallets and the click wait for it (m3)", async () => {
     await mount();
     await add("pa");
     await open();
     await settle();
     await close();
     setPrice("pa", 2500, "va2");
+    productsMode = "pending";
+    const before = productRequests().length;
     await open();
     await settle();
+    assert.equal(productRequests().length, before + 1, "the cached answer is asked again");
+    assert.equal(wallets()!.hasAttribute("inert"), true, "a cached answer does not unlock the wallets");
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 0, "the click waits for the answer");
+    productsMode = "ok";
+    await releaseProducts();
+    assert.equal(buys().length, 1);
+    assert.equal((buys()[0].body as { items: { priceVersion?: string }[] }).items[0].priceVersion, "va2");
+  });
+
+  it("a click that falls back to no-cache still buys the fresh version", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    await close();
+    setPrice("pa", 2500, "va2");
+    productsMode = "error";
+    await open();
+    await settle();
+    productsMode = "ok";
     const before = productRequests().length;
     lookAtCart();
     await clickNext();
-    const asked = productRequests().slice(before);
-    assert.deepEqual(asked.map((r) => r.cache), ["no-cache"]);
+    assert.deepEqual(productRequests().slice(before).map((r) => r.cache), ["no-cache"]);
     assert.equal((buys()[0].body as { items: { priceVersion?: string }[] }).items[0].priceVersion, "va2");
   });
 
@@ -871,6 +896,233 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
     await settle(60);
     assert.equal(wallets()!.querySelectorAll('[data-bitsnap-checkout-slot="paymentButtons"]').length, 2, "Google Pay is back");
     assert.ok(oneClickRequests().length > 0);
+  });
+});
+
+// ------------------------------------------------------- gate review fixes
+
+describe("instant drawer: gate review fixes (N2, N5, m1, m2, m5)", () => {
+  const priceUpdated = () => doc().querySelector('[data-bitsnap-checkout-state="price-updated"]');
+  const walletsUpdating = () => doc().querySelector('[data-bitsnap-checkout-notice="wallets-updating"]');
+  const failedRow = () => doc().querySelector('[role="alert"]');
+  const buyItems = (index: number) =>
+    (buys()[index].body as { items: { id: string; quantity: number; priceVersion?: string; amount?: number }[] }).items;
+
+  /** `/payment-methods` answers only when `releaseMethods()` is called. */
+  let heldMethods: Array<() => void>;
+  function holdMethods() {
+    heldMethods = [];
+    paymentMethods = () =>
+      new Promise<Response>((resolve) =>
+        heldMethods.push(() => resolve(json({ success: true, choice: null }))),
+      ) as unknown as Response;
+  }
+  async function releaseMethods() {
+    await React.act(async () => {
+      for (const release of heldMethods.splice(0)) release();
+    });
+    await settle();
+  }
+
+  it("N2: a reopened drawer counts the seen time again; a click within 1 s sends no /buy before 1 s", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    lookAtCart(5000);
+    await close();
+    await open();
+    await settle();
+    assert.equal(wallets()!.hasAttribute("inert"), false, "the answer asked at the reopen unlocks the wallets");
+    await clickNext();
+    assert.equal(buys().length, 0, "the earlier open does not count");
+    await settle(500);
+    assert.equal(buys().length, 0, "still under a second");
+    await settle(800);
+    assert.equal(buys().length, 1);
+  });
+
+  it("m1: the wait-out marks nothing: no price-updated state, wallets stay active, no updating note", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    assert.equal(wallets()!.hasAttribute("inert"), false);
+    await clickNext();
+    // Seen during the wait; asserted after it, so a failure leaves no wait running.
+    const seen: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      if (buys().length > 0) seen.push("buy");
+      if (priceUpdated() != null) seen.push("price-updated");
+      if (walletsUpdating() != null) seen.push("walletsUpdating");
+      if (wallets()?.hasAttribute("inert")) seen.push("inert");
+      await settle(200);
+    }
+    await settle(400);
+    assert.deepEqual([...new Set(seen)], [], "nothing marked or announced during the wait");
+    assert.equal(buys().length, 1);
+    assert.equal(reviewNotice(), null);
+  });
+
+  it("m2: a cart change during the wait asks the server again instead of failing", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    await clickNext();
+    // Another tab adds a line; its answer is still on the way when the wait ends.
+    productsMode = "pending";
+    await otherTabWrites([...storedLines(), { id: "x2", productID: "pb", quantity: 1 }]);
+    await settle(1300);
+    productsMode = "ok";
+    await releaseProducts();
+    assert.equal(buys().length, 0, "the new line has not been seen");
+    assert.equal(failedRow(), null, "not the 'could not load' row");
+    assert.ok(reviewNotice(), "asks to review the prices");
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.deepEqual(buyItems(0).map((item) => item.priceVersion), ["va1", "vb1"]);
+  });
+
+  it("a classic line (no server version) clicked within 1 s shows reviewPrices, then buys", async () => {
+    catalog.set("pk", { ...product("pk", "Classic", 1200, ""), pricing: undefined });
+    await mount();
+    await add("pk");
+    await open();
+    await settle();
+    await clickNext();
+    await settle(1200);
+    assert.equal(buys().length, 0, "no wait-out without a version");
+    assert.ok(reviewNotice());
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.equal(buyItems(0)[0].priceVersion, undefined);
+  });
+
+  it("a price-changed recheck that passes (same price, new version) lets the second click buy", async () => {
+    await mount();
+    await add("pa");
+    await open();
+    await settle();
+    lookAtCart();
+    setPrice("pa", 2500, "va2");
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.equal(buyItems(0)[0].priceVersion, "va1", "the drawer still had va1");
+    assert.equal(storedLines()[0].priceVersion, "va2", "adopted silently by the recheck");
+    assert.equal(priceUpdated(), null, "nothing to mark");
+    assert.equal(failedRow(), null);
+    await clickNext();
+    assert.equal(buys().length, 2);
+    assert.equal(buyItems(1)[0].priceVersion, "va2");
+  });
+
+  it("N5: a line without a version added by another tab while the payment options load runs the gate again", async () => {
+    await mount();
+    await add("pa");
+    holdMethods();
+    await open();
+    await settle();
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 0, "waits for the payment options");
+    await otherTabWrites([...storedLines(), { id: "x3", productID: "pc", quantity: 1 }]);
+    await releaseMethods();
+    await settle(100);
+    assert.equal(buys().length, 0, "the new line was not seen");
+    assert.ok(reviewNotice());
+  });
+
+  it("N5: a pay-what-you-want amount changed by another tab before /buy stops, the next click pays the shown amount", async () => {
+    catalog.set("pw", product("pw", "Tip", 2500, "vw1", { priceType: "pay_what_you_want" }));
+    await mount();
+    await add("pw", 1, { amount: 1500 });
+    holdMethods();
+    await open();
+    await settle();
+    lookAtCart();
+    await clickNext();
+    const [line] = storedLines();
+    await otherTabWrites([{ ...line, amount: 900 }]);
+    await releaseMethods();
+    assert.equal(buys().length, 0, "the new amount was not on screen when the gate passed");
+    assert.ok(reviewNotice());
+    assert.equal(total(), PLN("9,00"));
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.equal(buyItems(0)[0].amount, 900);
+  });
+
+  it("N5: a quantity change re-runs the gate and buys; a second change stops as marked", async () => {
+    await mount();
+    await add("pa");
+    holdMethods();
+    await open();
+    await settle();
+    lookAtCart();
+    await clickNext();
+    let [line] = storedLines();
+    await otherTabWrites([{ ...line, quantity: 2 }]);
+    await releaseMethods();
+    // The second attempt waits for the options of the new cart.
+    [line] = storedLines();
+    await otherTabWrites([{ ...line, quantity: 3 }]);
+    await releaseMethods();
+    await settle(100);
+    assert.equal(buys().length, 0, "moved twice: stop");
+    assert.ok(reviewNotice());
+
+    paymentMethods = () => json({ success: true, choice: null });
+    await releaseMethods();
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.equal(buyItems(0)[0].quantity, 3);
+  });
+
+  it("N5: one quantity change while the options load re-runs the gate and buys the new quantity", async () => {
+    await mount();
+    await add("pa");
+    holdMethods();
+    await open();
+    await settle();
+    lookAtCart();
+    await clickNext();
+    const [line] = storedLines();
+    await otherTabWrites([{ ...line, quantity: 2 }]);
+    await releaseMethods();
+    await releaseMethods();
+    await settle(100);
+    assert.equal(buys().length, 1);
+    assert.equal(buyItems(0)[0].quantity, 2);
+    assert.equal(reviewNotice(), null);
+  });
+
+  it("m5: a line the server no longer knows leaves the local cart on a fresh answer, with no remove event", async () => {
+    await mount();
+    await add("pa");
+    await add("pb");
+    const layer = page.win as unknown as { dataLayer?: { event?: string }[] };
+    layer.dataLayer = [];
+    const events = () => layer.dataLayer!.filter((event) => event.event === "remove_from_cart");
+    catalog.delete("pb");
+    lookAtCart(31_000); // the answer from the add is stale
+    productsMode = "pending";
+    await open();
+    await settle();
+    assert.deepEqual(names(), ["Mug", "Cap"], "painted from the snapshot");
+    assert.deepEqual(storedLines().map((l) => l.productID), ["pa", "pb"], "never on snapshot data");
+    productsMode = "ok";
+    await releaseProducts();
+    await settle(60);
+    assert.deepEqual(names(), ["Mug"]);
+    assert.deepEqual(storedLines().map((l) => l.productID), ["pa"]);
+    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 1, "the badge follows");
+    assert.equal(events().length, 0);
+    lookAtCart();
+    await clickNext();
+    assert.deepEqual(buyItems(0).map((item) => item.id), ["pa"]);
   });
 });
 

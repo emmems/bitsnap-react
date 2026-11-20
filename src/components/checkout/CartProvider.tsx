@@ -646,6 +646,11 @@ export function readLocalCartLines(): LocalCartLine[] {
   return (getCheckout().products ?? []).map((line) => ({ ...line }));
 }
 
+/** The country stored with the cart, `undefined` when none (reads only, writes nothing). */
+export function readCheckoutCountry(): string | undefined {
+  return getCheckout().country;
+}
+
 /** Stable signature of the local cart content: one `productID:quantity` per line, sorted. */
 export function readLocalCartSignature(): string {
   return readLocalCartLines()

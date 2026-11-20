@@ -94,6 +94,8 @@ export async function addProductToCart(
   if (target.analytics != null) {
     trackProductAdded(target.analytics, product);
   }
+  // The drawer opens next: fill its cache with the new line's product.
+  Bitsnap.warmUp();
 
   if (target.showCart) {
     Bitsnap.showCart();

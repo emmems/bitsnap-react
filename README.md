@@ -102,6 +102,10 @@ defaults, overridable through `texts`).
 - **Video, audio and rich descriptions load their libraries on first use.**
   `hls.js` and `dompurify` are no longer in the cart bundle; a video or audio
   stream starts a moment later the first time it plays.
+- **The cart loads before it opens.** With items in the cart, the cart asks
+  for their products and the shop's countries at the first idle moment after
+  the page loads, so opening it needs no wait. See
+  [Performance](#performance). `prefetch={false}` turns it off.
 
 ## 1.29.0
 
@@ -339,6 +343,53 @@ Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,
 - Configurable project ID
 - Customizable host URL
 - Supports test/production environments
+
+## Performance
+
+The cart loads its data before the buyer opens it, so the drawer shows the
+items at once.
+
+- With items in the cart, `<BitsnapCheckout>` asks for the products of the
+  cart lines (`GET /products`) and the shop's countries (`GET /countries`) at
+  the first idle moment after the page loads.
+- When the pointer or the focus reaches the cart button, it also asks for the
+  payment options (`POST /payment-methods`).
+- After "add to cart" from `ProductList`, it does the same, so the new item is
+  ready before the drawer opens.
+- An answer that is still fresh, or a request that is still running, is never
+  asked for again.
+- With an empty cart nothing is sent. Nothing is sent on the server.
+- The cart's product ids go to Bitsnap (or your custom `host`) even if the
+  buyer never opens the cart. No cookies and no personal data go with them.
+- It only fills a cache. The price is still checked before "Next step", and no
+  cart analytics event is sent.
+
+Turn it off for one cart with `prefetch={false}`:
+
+```tsx
+<BitsnapCheckout projectID="..." prefetch={false} />
+```
+
+The cart then loads when it opens, as before.
+
+If your page opens the cart from its own button, call `Bitsnap.warmUp()` when
+the pointer or the focus reaches that button:
+
+```tsx
+import { Bitsnap } from "bitsnap-react";
+
+<button
+  onPointerEnter={() => Bitsnap.warmUp()}
+  onFocus={() => Bitsnap.warmUp()}
+  onClick={() => Bitsnap.showCart()}
+>
+  Cart
+</button>;
+```
+
+`Bitsnap.warmUp()` needs a mounted `<BitsnapCheckout>`. It does nothing on the
+server or with an empty cart. `prefetch={false}` does not stop it: you call it
+on purpose.
 
 ## Checkout appearance
 

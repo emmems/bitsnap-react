@@ -3,6 +3,7 @@ import { visitorHeaders } from "@/src/analytics/core";
 import { clientHeaders } from "@/src/lib/client-header";
 import { getCheckoutMethods, getLocale, getProjectID } from "./CartProvider";
 import { HOST } from "./constants";
+import { warmCart } from "./cart-warmup";
 import { buyErrorFromResponse } from "./buy-error";
 import { buildURL } from "./helper.methods";
 import { Err } from "./lib/err";
@@ -66,6 +67,16 @@ export namespace Bitsnap {
 
   export function hideCart() {
     useCheckoutStore.setState({ isCartVisible: false });
+  }
+
+  /**
+   * Loads the cart's products, countries and payment options now, so the
+   * drawer opens without waiting. For pages that open the cart from their own
+   * UI (call it on hover or focus of that button). Needs a mounted
+   * `<BitsnapCheckout>`; does nothing on the server or with an empty cart.
+   */
+  export function warmUp() {
+    warmCart(true);
   }
 }
 

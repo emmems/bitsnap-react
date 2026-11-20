@@ -1,6 +1,7 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/src/lib/utils";
 import {
@@ -10,7 +11,8 @@ import {
 } from "./appearance.context";
 import type { CheckoutAppearance } from "./appearance";
 import CartComponentContent from "./CartComponentContent";
-import CartProvider from "./CartProvider";
+import CartProvider, { getLocale } from "./CartProvider";
+import { registerWarmTarget, warmCart, whenIdle } from "./cart-warmup";
 import { CheckoutTextsProvider, useCheckoutText } from "./texts.context";
 import type { CheckoutTexts } from "./texts";
 
@@ -22,9 +24,30 @@ interface Props {
   texts?: Partial<CheckoutTexts>;
   /** DOM id of the panel, for `aria-controls` of the button that opens it. */
   panelId?: string;
+  /** Fill the cart's cache at the first idle moment. `false` turns it off. */
+  prefetch?: boolean;
 }
 
-function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
+function CartComponent({
+  isVisible,
+  shouldHide,
+  panelId,
+  locale,
+  prefetch,
+}: Props) {
+  const queryClient = useQueryClient();
+  // Tells the warm-up (idle, hover, `Bitsnap.warmUp()`) which cache the drawer reads.
+  useEffect(() => {
+    const forget = registerWarmTarget({
+      queryClient,
+      locale: locale ?? getLocale(),
+    });
+    const cancel = prefetch === false ? undefined : whenIdle(() => warmCart());
+    return () => {
+      cancel?.();
+      forget();
+    };
+  }, [queryClient, locale, prefetch]);
   const [parent] = useAutoAnimate(/* optional config */);
   // The drawer renders inside the checkout root: the stylesheet is scoped to `.bitsnap-react`.
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);

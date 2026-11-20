@@ -7,6 +7,7 @@ import {
   getProjectID,
   localCartVersionSnapshot,
   readLocalCartLines,
+  removeLocalCartLines,
   subscribeToLocalCart,
   type CartProductsAnswer,
   type LocalCartLine,
@@ -388,14 +389,44 @@ export function useCartView(locale: string): CartViewState {
     return revalidate(true);
   }
 
+  /** Runs the gate on what is stored now; the caller commits `result.state`. */
   function runGate(): { result: PriceGateResult; prior: PriceGateState; view: CartView } {
     const prior = session.gate;
     const now = Date.now();
     const view = currentView(now);
-    const result = runPriceGate(prior, view, now);
-    session.gate = result.state;
-    return { result, prior, view };
+    return { result: runPriceGate(prior, view, now), prior, view };
   }
+
+  /**
+   * Removes the lines an answer from after the open did not know, so `/buy`,
+   * the badge and the wallets see what the drawer shows (1.30 only hid them).
+   * Never on the snapshot or an answer from before the open; no analytics.
+   */
+  function dropUnknownLines(): void {
+    const gone = new Set(
+      [...session.missing].filter(([, at]) => at >= openedAt).map(([id]) => id),
+    );
+    if (
+      gone.size > 0 &&
+      readLocalCartLines().some((line) => gone.has(line.productID))
+    ) {
+      try {
+        removeLocalCartLines([...gone].map((id) => ({ id, quantity: Infinity })));
+      } catch {
+        // still hidden from the view
+      }
+    }
+  }
+  React.useEffect(dropUnknownLines);
+
+  // The wallets wait for an answer from after the open (`gateFresh`, D12): an
+  // answer cached before it (an earlier open, the warm-up) is asked again once.
+  const stale = view.lines.some((item) => item.confirmed && !item.gateFresh);
+  React.useEffect(() => {
+    if (stale && session.floor == null && !query.isFetching) {
+      void query.refetch();
+    }
+  }, [productIDs.join()]);
 
   /**
    * A block only because the drawer opened less than `PRICE_SEEN_MS` ago, on
@@ -443,30 +474,38 @@ export function useCartView(locale: string): CartViewState {
     }
   }
 
-  async function checkPrices(): Promise<"pass" | "marked" | "failed"> {
-    let { result, prior, view } = runGate();
-    if (result.result === "needs-fresh") {
-      if (!(await freshenForGate())) {
-        rerender();
-        return "failed";
-      }
-      ({ result, prior, view } = runGate());
+  /** The gate, asking the server first when a line has no answer from after the open. */
+  async function askGate(): Promise<ReturnType<typeof runGate> | undefined> {
+    const run = runGate();
+    if (run.result.result !== "needs-fresh") {
+      return run;
     }
-    if (result.result === "marked") {
-      const wait = waitInsteadOfMark(prior, result, view, Date.now());
-      if (wait != null) {
-        await new Promise((resolve) => setTimeout(resolve, wait));
-        ({ result } = runGate());
-      }
+    return (await freshenForGate()) ? runGate() : undefined;
+  }
+
+  async function checkPrices(): Promise<"pass" | "marked" | "failed"> {
+    let run = await askGate();
+    // A block only for the seen time is waited out with nothing marked on
+    // screen meanwhile: the marks of that run are not committed (m1).
+    const wait =
+      run?.result.result === "marked"
+        ? waitInsteadOfMark(run.prior, run.result, run.view, Date.now())
+        : undefined;
+    if (wait != null) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      // The cart may have changed meanwhile: ask again rather than fail (m2).
+      run = await askGate();
+    }
+    const result = run?.result;
+    if (result != null) {
+      session.gate = result.state;
     }
     rerender();
-    if (result.result === "needs-fresh") {
-      return "failed";
-    }
-    if (result.result === "pass") {
+    if (result?.result === "pass") {
+      dropUnknownLines();
       return applyAdoptions(result) ? "pass" : "failed";
     }
-    return "marked";
+    return result?.result === "marked" ? "marked" : "failed";
   }
 
   async function recheckPrices(): Promise<"pass" | "marked" | "failed"> {
@@ -479,6 +518,7 @@ export function useCartView(locale: string): CartViewState {
       return "failed";
     }
     const { result } = runGate();
+    session.gate = result.state;
     rerender();
     if (result.result === "pass") {
       return applyAdoptions(result) ? "pass" : "failed";

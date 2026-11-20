@@ -511,11 +511,15 @@ export function runPriceGate(
 // ------------------------------------------------------------------ wallets
 
 /**
- * Every wallet button is inert while any local line is unconfirmed or carries
- * an unaccepted price mark (D12, N1).
+ * Every wallet button is inert while any local line has no answer from after
+ * the drawer opened (`gateFresh`) or carries an unaccepted price mark (D12,
+ * N1). Not `confirmed`: the wallet order is priced from the server catalog at
+ * authorisation with no version or amount check (instapay
+ * `server/public-api/public-api.service.ts` `authorizeOneClickPayment`), so an
+ * answer cached before the open is not enough.
  */
 export function walletsInert(view: Pick<CartView, "lines">): boolean {
-  return view.lines.some((item) => !item.confirmed || item.marked);
+  return view.lines.some((item) => !item.gateFresh || item.marked);
 }
 
 /** What the wallet buttons take as `items`. */

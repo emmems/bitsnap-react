@@ -6,8 +6,11 @@ import {
   getCartLines,
   getProjectID,
   readLocalCartLines,
+  readLocalCartSignature,
   useCartProvider,
+  type LocalCartLine,
 } from "./CartProvider";
+import { cartCountriesQuery, cartPaymentMethodsQuery } from "./cart-queries";
 import {
   catalogUnitPrice,
   hasPayWhatYouWantLine,
@@ -153,6 +156,12 @@ const PAYMENT_METHODS_DEBOUNCE_MS = 300;
 /** `cart_opened` waits this long for the server before it reports what it has. */
 const CART_OPENED_FALLBACK_MS = 2000;
 
+/** What `/buy` prices per line: id, quantity, amount, stored version (N5). */
+const contentOf = (lines: LocalCartLine[]) =>
+  JSON.stringify(lines.map((l) => [l.id, l.quantity, l.amount, l.priceVersion]));
+const amountsOf = (lines: LocalCartLine[]) =>
+  JSON.stringify(lines.map((l) => [l.id, l.amount]));
+
 /**
  * `value`, following it with a delay. The first defined value is not delayed;
  * `flush()` catches up at once.
@@ -216,10 +225,9 @@ function useCartControllerState(localeProp?: string): CartController {
     mutationFn: provider.redirectToNextStep,
   });
 
-  const { data: availableCountries } = useQuery({
-    queryKey: ["cart-available-countries"],
-    queryFn: provider.getAvailableCountries,
-  });
+  const { data: availableCountries } = useQuery(
+    cartCountriesQuery(provider.getAvailableCountries),
+  );
   const { data: isApplePayAvailable } = useQuery({
     queryKey: ["cart-one-click-payment"],
     queryFn: provider.checkIfApplePayIsAvailable,
@@ -250,19 +258,13 @@ function useCartControllerState(localeProp?: string): CartController {
     PAYMENT_METHODS_DEBOUNCE_MS,
   );
   const paymentMethodsQuery = (signature: string | undefined) =>
-    ({
-      queryKey: [
-        "cart-payment-methods",
-        getProjectID(),
-        locale,
-        selectedCountry,
-        signature,
-      ],
-      queryFn: async (): Promise<Choice | null> =>
-        provider.getPaymentMethodChoice().catch(() => null),
-      staleTime: 60_000,
-      retry: false,
-    }) as const;
+    cartPaymentMethodsQuery(
+      getProjectID(),
+      locale,
+      selectedCountry,
+      signature,
+      provider.getPaymentMethodChoice,
+    );
   const {
     data: paymentMethodChoiceData,
     isPlaceholderData: isPaymentMethodChoicePlaceholder,
@@ -405,62 +407,76 @@ function useCartControllerState(localeProp?: string): CartController {
       useCheckoutStore.getState().setNotice(undefined);
 
       // The buyer must have seen every price they pay (D18): "Next step" never
-      // sends `/buy` on snapshot data or on a price shown too briefly.
-      setIsCheckingPrices(true);
-      let gate: "pass" | "marked" | "failed";
-      try {
-        gate = await cart.checkPrices();
-      } finally {
-        setIsCheckingPrices(false);
-      }
-      if (gate === "failed") {
-        setGateFailed(true);
-        return;
-      }
-      if (gate === "marked") {
-        setShowReviewPrices(true);
-        return;
-      }
-      setShowReviewPrices(false);
-
-      // A click before the choice arrived waits for it (at most the request
-      // timeout); a choice the buyer has not seen yet is shown, not used. The
-      // last choice shown in the meantime is used if the new one still offers
-      // the selected method. A key that still lags behind a quantity change
-      // is caught up first (N7).
-      const localSignature =
-        cart.localSignature.length === 0 || selectedCountry == null
-          ? undefined
-          : cart.localSignature;
-      let choice = paymentMethodChoice;
-      let paymentMethod =
-        choice != null
-          ? effectivePaymentMethod(choice, selectedPaymentMethod)
-          : undefined;
-      if (
-        localSignature != null &&
-        (paymentMethodChoiceData === undefined ||
-          isPaymentMethodChoicePlaceholder ||
-          cartSignature !== localSignature)
-      ) {
-        flushCartSignature();
-        setIsWaitingForChoice(true);
+      // sends `/buy` on snapshot data or on a price shown too briefly. `/buy`
+      // is built from storage, so a change from another tab while the payment
+      // options load runs the gate again, and a second one stops (N5). A
+      // changed `amount` stops at once: the gate never looks at amounts.
+      let paymentMethod: PaymentMethod | undefined;
+      for (let attempt = 0; ; attempt++) {
+        setIsCheckingPrices(true);
+        let gate: "pass" | "marked" | "failed";
         try {
-          choice = await queryClient
-            .fetchQuery(paymentMethodsQuery(localSignature))
-            .catch(() => null);
+          gate = await cart.checkPrices();
         } finally {
-          setIsWaitingForChoice(false);
+          setIsCheckingPrices(false);
         }
-        if (choice == null) {
-          paymentMethod = undefined;
-        } else if (paymentMethod == null || !choice.methods.includes(paymentMethod)) {
-          // Let the buyer see the options first; focus moves to the selected one.
-          window.setTimeout(() => {
-            paymentMethodsRef.current
-              ?.querySelector<HTMLInputElement>("input:checked")
-              ?.focus();
-          }, 0);
+        if (gate === "failed") {
+          setGateFailed(true);
+          return;
+        }
+        if (gate === "marked") {
+          setShowReviewPrices(true);
+          return;
+        }
+        setShowReviewPrices(false);
+        const gated = readLocalCartLines();
+
+        // A click before the choice arrived waits for it (at most the request
+        // timeout); a choice the buyer has not seen yet is shown, not used. The
+        // last choice shown in the meantime is used if the new one still offers
+        // the selected method. A key that still lags behind a quantity change
+        // is caught up first (N7).
+        const signature = readLocalCartSignature();
+        const localSignature =
+          signature.length === 0 || selectedCountry == null ? undefined : signature;
+        let choice = paymentMethodChoice;
+        paymentMethod =
+          choice != null
+            ? effectivePaymentMethod(choice, selectedPaymentMethod)
+            : undefined;
+        if (
+          localSignature != null &&
+          (paymentMethodChoiceData === undefined ||
+            isPaymentMethodChoicePlaceholder ||
+            cartSignature !== localSignature)
+        ) {
+          flushCartSignature();
+          setIsWaitingForChoice(true);
+          try {
+            choice = await queryClient
+              .fetchQuery(paymentMethodsQuery(localSignature))
+              .catch(() => null);
+          } finally {
+            setIsWaitingForChoice(false);
+          }
+          if (choice == null) {
+            paymentMethod = undefined;
+          } else if (paymentMethod == null || !choice.methods.includes(paymentMethod)) {
+            // Let the buyer see the options first; focus moves to the selected one.
+            window.setTimeout(() => {
+              paymentMethodsRef.current
+                ?.querySelector<HTMLInputElement>("input:checked")
+                ?.focus();
+            }, 0);
+            return;
+          }
+        }
+        const current = readLocalCartLines();
+        if (contentOf(current) === contentOf(gated)) {
+          break;
+        }
+        if (attempt > 0 || amountsOf(current) !== amountsOf(gated)) {
+          setShowReviewPrices(true);
           return;
         }
       }
@@ -481,7 +497,7 @@ function useCartControllerState(localeProp?: string): CartController {
             items: lines.map((item) => ({
               id: item.line.productID,
               name: item.details?.name ?? "",
-              price: item.details?.price ?? 0,
+              price: item.unitPrice ?? 0,
               quantity: item.line.quantity,
               currency: item.details?.currency ?? "PLN",
             })),

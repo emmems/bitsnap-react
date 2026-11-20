@@ -10,6 +10,7 @@ import type { CheckoutAppearance } from "./appearance";
 import type { CheckoutTexts } from "./texts";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
+import { warmCart } from "./cart-warmup";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
@@ -57,6 +58,13 @@ export type BitsnapCartProps = {
    * visitor's device.
    */
   analytics?: AnalyticsOption;
+  /**
+   * Loads the products and the payment options of a non-empty cart before the
+   * buyer opens it: at the first idle moment after the page loads, and when
+   * the pointer or the focus reaches the cart button. On by default; `false`
+   * turns it off (the cart then loads when it opens).
+   */
+  prefetch?: boolean;
 };
 
 const visuallyHidden: React.CSSProperties = {
@@ -81,6 +89,7 @@ function BitsnapCart({
   appearance,
   texts,
   analytics,
+  prefetch,
 }: BitsnapCartProps) {
   const instrument = useInstrument(projectID, analytics, "cart");
   // Cart changes made outside of components (`Bitsnap.addProductToCart`) are reported here.
@@ -88,6 +97,7 @@ function BitsnapCart({
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
   const panelId = `bitsnap-cart-${useId()}`;
+  const onIntent = prefetch === false ? undefined : () => warmCart(true);
   const text = (key: CheckoutTextKey) =>
     getCheckoutText(key, locale ?? getLocale(), texts);
   // The `window.cart` handlers are created once and must read the latest props.
@@ -276,6 +286,8 @@ function BitsnapCart({
       <button
         type="button"
         onClick={() => (isCartVisible ? hideCart() : showCart())}
+        onPointerEnter={onIntent}
+        onFocus={onIntent}
         aria-label={
           children
             ? undefined
@@ -351,6 +363,7 @@ function BitsnapCart({
           locale={locale}
           appearance={appearance}
           texts={texts}
+          prefetch={prefetch}
           panelId={panelId}
           shouldHide={() => {
             hideCart();

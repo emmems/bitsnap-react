@@ -658,6 +658,14 @@ describe("wallet state (N1, N2)", () => {
     assert.equal(walletsInert(snapshotOnly), true);
   });
 
+  it("is inert on a confirmed answer from before the open; the server prices wallets without a version check (m3)", () => {
+    const cached = buildCartView([line("l1", "a")], {}, freshOf([details("a")], ["a"], false, []), NOW);
+    assert.equal(cached.lines[0]!.confirmed, true);
+    assert.equal(walletsInert(cached), true);
+    const oneStale = buildCartView([line("l1", "a"), line("l2", "b")], {}, freshOf([details("a"), details("b")], ["a", "b"], false, ["a"]), NOW);
+    assert.equal(walletsInert(oneStale), true);
+  });
+
   it("walletItems is the whole local cart, in local order, with metadata and catalog prices", () => {
     const sale = details("b", { price: 2000, isDeliverable: true });
     sale.pricing!.effectivePrice = 1800;

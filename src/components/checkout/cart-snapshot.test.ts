@@ -244,12 +244,25 @@ describe("hand-written validation (D3)", () => {
     }
   });
 
-  it("rejects data: and over-long image URLs", () => {
-    assert.equal(parse(rawEntry("p", { details: details("p", { image_url: "data:image/png;base64,AAAA" }) })), undefined);
-    assert.equal(parse(rawEntry("p", { details: details("p", { image_url: "javascript:alert(1)" }) })), undefined);
-    assert.equal(parse(rawEntry("p", { details: details("p", { image_url: `https://a.example/${"x".repeat(600)}` }) })), undefined);
-    assert.equal(parse(rawEntry("p", { details: details("p", { images: ["data:image/png;base64,AAAA"] }) })), undefined);
-    assert.equal(parse(rawEntry("p", { details: details("p", { images: "https://a.example/1.jpg" }) })), undefined);
+  it("drops a relative, data:, javascript: or over-long image and keeps the entry with its price (m4)", () => {
+    for (const image_url of [
+      "data:image/png;base64,AAAA",
+      "javascript:alert(1)",
+      "/img/a.jpg",
+      `https://a.example/${"x".repeat(600)}`,
+      42,
+    ]) {
+      const entry = parse(rawEntry("p", { details: details("p", { image_url }) }));
+      assert.ok(entry, String(image_url));
+      assert.equal(entry.details.image_url, null);
+      assert.equal(entry.details.pricing?.priceVersion, "v1");
+    }
+    for (const images of [["data:image/png;base64,AAAA"], "https://a.example/1.jpg", [{}]]) {
+      const entry = parse(rawEntry("p", { details: details("p", { images }) }));
+      assert.ok(entry, JSON.stringify(images));
+      assert.equal("images" in entry.details, false);
+    }
+    assert.deepEqual(parse(rawEntry("p", { details: details("p", { images: ["https://a.example/1.jpg", "data:x"] }) }))!.details.images, ["https://a.example/1.jpg"]);
     assert.ok(parse(rawEntry("p", { details: details("p", { image_url: null }) })));
   });
 
@@ -266,26 +279,40 @@ describe("hand-written validation (D3)", () => {
     assert.ok(!("tricky" in entry.details.pricing!.referencePrice));
   });
 
-  it("drops the entry on a bad pricing instead of repairing it", () => {
+  it("drops a bad pricing and keeps the entry at its price (m4)", () => {
     for (const patch of [
       { regularPrice: "10" },
       { effectivePrice: Number.NaN },
       { currency: "" },
       { priceVersion: "" },
       { priceVersion: 3 },
-      { referencePrice: null },
-      { referencePrice: { historyAvailable: "no" } },
-      { referencePrice: { historyAvailable: true, amount: "5" } },
       { nextPriceChangeAt: "soon" },
       { discount: { id: "d", type: "FIXED", value: 1, status: "PAUSED" } },
       { discount: { id: "d", type: "WEIRD", value: 1, status: "ACTIVE" } },
       { discount: "10%" },
     ]) {
-      assert.equal(
-        parse(rawEntry("p", { details: details("p", { pricing: pricing(patch) }) })),
-        undefined,
-        JSON.stringify(patch),
-      );
+      const entry = parse(rawEntry("p", { details: details("p", { pricing: pricing(patch) }) }));
+      assert.ok(entry, JSON.stringify(patch));
+      assert.equal(entry.details.price, 1000);
+      assert.equal("pricing" in entry.details, false, JSON.stringify(patch));
+    }
+    assert.equal("pricing" in parse(rawEntry("p", { details: details("p", { pricing: "x" }) }))!.details, false);
+  });
+
+  it("keeps a pricing without a usable referencePrice (older backend) as no price history (m4)", () => {
+    const { referencePrice: _omitted, ...partial } = pricing({ effectivePrice: 800 });
+    for (const raw of [
+      partial,
+      pricing({ effectivePrice: 800, referencePrice: null }),
+      pricing({ effectivePrice: 800, referencePrice: { historyAvailable: "no" } }),
+      pricing({ effectivePrice: 800, referencePrice: { historyAvailable: true, amount: "5" } }),
+    ]) {
+      const entry = parse(rawEntry("p", { details: details("p", { pricing: raw }) }));
+      assert.ok(entry, JSON.stringify(raw));
+      assert.equal(entry.details.pricing?.effectivePrice, 800, "the sale price stays");
+      assert.equal(entry.details.pricing?.priceVersion, "v1");
+      assert.equal(entry.details.pricing?.referencePrice.historyAvailable, false);
+      assert.equal("amount" in entry.details.pricing!.referencePrice, false);
     }
   });
 
@@ -380,10 +407,21 @@ describe("limits, expiry, prune", () => {
     assert.deepEqual(readSnapshot("pl-PL", env(storage)), {});
   });
 
-  it("skips an answer that would not read back", () => {
+  it("skips an answer that would not read back, and writes one with a bad image without it", () => {
     const storage = memoryStorage();
-    writeSnapshot("pl-PL", [{ productID: "p1", details: details("p1", { image_url: "data:x" }) }, { productID: "p2", details: details("p2") }], ["p1", "p2"], env(storage));
-    assert.deepEqual(Object.keys(readSnapshot("pl-PL", env(storage))), ["p2"]);
+    writeSnapshot(
+      "pl-PL",
+      [
+        { productID: "p1", details: details("p1", { image_url: "data:x" }) },
+        { productID: "p2", details: details("p2") },
+        { productID: "p3", details: details("p3", { price: Number.NaN }) },
+      ],
+      ["p1", "p2", "p3"],
+      env(storage),
+    );
+    const read = readSnapshot("pl-PL", env(storage));
+    assert.deepEqual(Object.keys(read).sort(), ["p1", "p2"]);
+    assert.equal(read.p1!.details.image_url, null);
   });
 
   it("treats a price as expired once nextPriceChangeAt (seconds) has passed", () => {
@@ -584,7 +622,7 @@ describe("hostile and oversized input", () => {
     );
     const read = readSnapshot("pl-PL", env(storage));
     assert.equal(read.p1!.details.pricing?.priceVersion, long);
-    assert.ok(!read.p2);
+    assert.equal("pricing" in read.p2!.details, false, "the absurd version is not stored");
   });
 
   it("cuts a long name instead of dropping the entry and its price version", () => {
