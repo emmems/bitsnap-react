@@ -792,7 +792,12 @@ describe("instant drawer: pay what you want (N5)", () => {
     assert.equal(total(), PLN("15,00"));
     assert.equal(doc().querySelector('[data-bitsnap-checkout-state="price-updated"]'), null);
     await clickNext();
-    assert.equal(buys().length, 1, "skips the gate");
+    // No version check, only the seen rule (S13): a click within 1 s waits it out.
+    assert.equal(buys().length, 0, "the amount is on screen for less than 1 s");
+    assert.equal(doc().querySelector('[data-bitsnap-checkout-state="price-updated"]'), null);
+    await settle(1100);
+    assert.equal(buys().length, 1);
+    assert.equal(reviewNotice(), null);
     assert.equal((buys()[0].body as { items: { amount?: number }[] }).items[0].amount, 1500);
   });
 
@@ -820,6 +825,7 @@ describe("instant drawer: pay what you want (N5)", () => {
     await settle();
     assert.equal(total(), PLN("0,00"), "the charged total");
     assert.ok(doc().querySelector('[data-bitsnap-checkout-slot="checkoutButton"]'), "the button stays");
+    lookAtCart();
     await clickNext();
     assert.equal((buys()[0].body as { items: { amount?: number }[] }).items[0].amount, 0);
   });
@@ -1158,6 +1164,41 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, S15)", () => {
     await releaseMethods();
     assert.equal(buys().length, 1);
     assert.equal(buyItems(0)[0].amount, 900);
+  });
+
+  it("S12: an amount written between the gate's read and the dispatch is not accepted as approved", async () => {
+    catalog.set("pw", product("pw", "Tip", 2500, "vw1", { priceType: "pay_what_you_want" }));
+    await mount();
+    await add("pa");
+    await add("pw", 1, { amount: 1500 });
+    setPrice("pa", 2500, "va2"); // same price, new version: the gate adopts it
+    await open();
+    await settle();
+    lookAtCart();
+    // Another tab's amount lands right after the gate read storage: the
+    // adoption write carries it.
+    const proto = page.win.Storage.prototype;
+    const setItem = proto.setItem;
+    let injected = false;
+    proto.setItem = function (this: Storage, key: string, value: string) {
+      if (!injected && key === "checkout" && value.includes('"va2"')) {
+        injected = true;
+        const checkout = JSON.parse(value);
+        checkout.products = checkout.products.map((l: { productID: string }) =>
+          l.productID === "pw" ? { ...l, amount: 900 } : l,
+        );
+        value = JSON.stringify(checkout);
+      }
+      return setItem.call(this, key, value);
+    };
+    try {
+      await clickNext();
+    } finally {
+      proto.setItem = setItem;
+    }
+    assert.ok(injected, "the adoption wrote storage");
+    assert.deepEqual(buys().map((_, i) => buyItems(i).find((item) => item.id === "pw")?.amount), [], "no /buy");
+    assert.ok(reviewNotice());
   });
 
   it("N5: a quantity change re-runs the gate and buys; a second change stops as marked", async () => {

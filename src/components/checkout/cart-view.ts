@@ -20,7 +20,7 @@ import {
 
 /**
  * - `amount`: the buyer's own price is honoured: priced at `line.amount`,
- *   skips the version check; gated only after it changed on screen (S13).
+ *   skips the version check; gated by the seen rule alone (S13).
  * - `suggested`: a pay-what-you-want product without a chosen amount; the
  *   server charges the suggested price, `pricing.regularPrice ?? price`, never a
  *   discounted one (instapay `product.resolver.helper.ts`
@@ -420,9 +420,10 @@ export type PriceGateResult = {
 
 /**
  * "Next step" gate (D18), run on a view whose lines the server answered after
- * the drawer opened. A pay-what-you-want line at its `amount` is only gated
- * while it carries a mark (its amount changed on screen, S13): the marked
- * amount must have been on screen for `PRICE_SEEN_MS`. Per other line, with the stored version `L` and the fresh version `F` (possibly
+ * the drawer opened. A pay-what-you-want line at its `amount` has no version
+ * (`F` counts as none), so only the seen rule applies: the drawer must have
+ * shown that amount and currency for `PRICE_SEEN_MS`, even without a mark
+ * (S13). Per other line, with the stored version `L` and the fresh version `F` (possibly
  * none: classic products send no `pricing`, and the server skips its own check
  * for a line without a `priceVersion` and for pay-what-you-want lines, so for
  * those the seen rule is the only protection):
@@ -472,11 +473,9 @@ export function runPriceGate(
 
   for (const item of view.lines) {
     const lineId = item.line.id;
+    // An amount skips the version check but not the seen rule: the drawer must
+    // have shown this amount for `PRICE_SEEN_MS`, mark or not (S13).
     const amount = item.payWhatYouWant === "amount";
-    // An amount is gated only once it changed on screen (S13), by the seen rule.
-    if (amount && !marks.has(lineId)) {
-      continue;
-    }
     const fresh = amount ? undefined : freshVersion(item);
     // A line without a version is marked with "" and never adopts one.
     const current = fresh ?? "";

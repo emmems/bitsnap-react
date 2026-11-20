@@ -498,6 +498,23 @@ describe("price gate (D18)", () => {
     assert.equal(trackPrices(EMPTY_PRICE_GATE_STATE, view, NOW).marks.size, 0);
   });
 
+  it("an amount without a mark passes only when the drawer showed that amount for >= 1 s (S13)", () => {
+    const d = details("a", { priceType: "pay_what_you_want" });
+    const view = viewOf([line("l1", "a", { amount: 900 })], [d]);
+    // Another tab wrote 900; the drawer still shows 1500 (no storage event yet).
+    const older = runPriceGate(stateOf({ l1: seenLongAgo(1500) }), view, NOW);
+    assert.equal(older.result, "marked");
+    assert.deepEqual(older.state.marks.get("l1"), { priceVersion: "", shownPrice: 900, markedAt: NOW });
+    assert.equal(runPriceGate(EMPTY_PRICE_GATE_STATE, view, NOW).result, "marked", "never shown");
+    const young = runPriceGate(stateOf({ l1: { price: 900, currency: "PLN", since: NOW - 50 } }), view, NOW);
+    assert.equal(young.result, "marked");
+    const otherCurrency = runPriceGate(stateOf({ l1: { price: 900, currency: "EUR", since: NOW - PRICE_SEEN_MS - 1 } }), view, NOW);
+    assert.equal(otherCurrency.result, "marked");
+    const seen = runPriceGate(stateOf({ l1: seenLongAgo(900) }), view, NOW);
+    assert.equal(seen.result, "pass");
+    assert.deepEqual(seen.adopt, []);
+  });
+
   it("a server answer without pricing is gated by the seen rule alone (N1)", () => {
     const d = details("a");
     delete d.pricing;

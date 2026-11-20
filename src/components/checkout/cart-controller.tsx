@@ -426,7 +426,7 @@ function useCartControllerState(
       // sends `/buy` on snapshot data or on a price shown too briefly. `/buy`
       // is built from storage, so a change from another tab while the payment
       // options load runs the gate again, and a second one stops (N5). A
-      // changed `amount` stops at once: the gate never looks at amounts.
+      // changed `amount` stops at once: it was not on screen when approved.
       const opening = cart.opening();
       let paymentMethod: PaymentMethod | undefined;
       let shownAmounts: Record<string, number> = {};
@@ -455,7 +455,9 @@ function useCartControllerState(
         }
         shownAmounts = gate.shownAmounts;
         setShowReviewPrices(false);
-        const gated = readLocalCartLines();
+        // What the gate approved, not a later read: a write in between must not
+        // become the accepted content (S12).
+        const gated = gate.lines;
 
         // A click before the choice arrived waits for it (at most the request
         // timeout); a choice the buyer has not seen yet is shown, not used. The

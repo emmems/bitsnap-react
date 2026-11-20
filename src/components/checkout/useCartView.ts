@@ -47,9 +47,12 @@ export const INSTANT_CART = true;
 /** A snapshot price older than this shows the "refreshing" state while a revalidation runs. */
 const REFRESHING_AGE_MS = 60_000;
 
-/** `cancelled`: the drawer closed while the gate waited. */
+/**
+ * `cancelled`: the drawer closed while the gate waited. `lines`: the stored
+ * lines the gate approved, adopted versions included: what `/buy` may send (S12).
+ */
 export type PriceCheck =
-  | { result: "pass"; shownAmounts: Record<string, number> }
+  | { result: "pass"; shownAmounts: Record<string, number>; lines: LocalCartLine[] }
   | { result: "marked" | "failed" | "cancelled" };
 
 type Answered = {
@@ -324,9 +327,12 @@ export function useCartView(locale: string, open = true): CartViewState {
   }
 
   /** The view from what is stored right now (event handlers). */
-  function currentView(now: number): CartView {
+  function currentView(
+    now: number,
+    lines: readonly LocalCartLine[] = readLocalCartLines(),
+  ): CartView {
     return buildView(
-      readLocalCartLines(),
+      lines,
       INSTANT_CART ? readSnapshot(locale, { projectID }) : {},
       now,
     );
@@ -414,18 +420,32 @@ export function useCartView(locale: string, open = true): CartViewState {
     return revalidate(true);
   }
 
-  /** Runs the gate on what is stored now; the caller commits `result.state`. */
-  function runGate(): { result: PriceGateResult; prior: PriceGateState; view: CartView } {
+  /**
+   * Runs the gate on what is stored now; the caller commits `result.state`.
+   * `lines` is that one read, for the dispatch check (S12).
+   */
+  function runGate(): {
+    result: PriceGateResult;
+    prior: PriceGateState;
+    view: CartView;
+    lines: LocalCartLine[];
+  } {
     const prior = session.gate;
     const now = Date.now();
-    const view = currentView(now);
-    return { result: runPriceGate(prior, view, now), prior, view };
+    const lines = readLocalCartLines();
+    const view = currentView(now, lines);
+    return { result: runPriceGate(prior, view, now), prior, view, lines };
   }
 
   // The wallets wait for an answer from after the open (`gateFresh`, D12): an
   // answer cached before it (an earlier open, the warm-up) is asked again once,
-  // also when that request was still running at the open (S14).
-  const stale = view.lines.some((item) => item.confirmed && !item.gateFresh);
+  // also when that request was still running at the open (S14). A line that
+  // answer left out is asked again too (S14).
+  const stale =
+    view.lines.some((item) => item.confirmed && !item.gateFresh) ||
+    localLines.some(
+      (line) => (session.missing.get(line.productID) ?? Infinity) < openedAt,
+    );
   const fetchingAtOpen = React.useRef(query.isFetching);
   React.useEffect(() => {
     if (stale && session.floor == null && !query.isFetching) {
@@ -452,15 +472,22 @@ export function useCartView(locale: string, open = true): CartViewState {
     for (const [lineId] of result.state.marks) {
       const item = view.lines.find((entry) => entry.line.id === lineId);
       const current = item?.details?.pricing?.priceVersion;
-      if (
-        item == null ||
-        !current ||
-        item.line.priceVersion !== current ||
-        session.was.has(lineId)
-      ) {
+      const shown = prior.shown.get(lineId);
+      if (item == null || session.was.has(lineId)) {
         return undefined;
       }
-      const shown = prior.shown.get(lineId);
+      if (item.payWhatYouWant === "amount") {
+        // An amount waits only while the drawer shows that same amount (S13).
+        if (
+          shown == null ||
+          shown.price !== item.line.amount ||
+          shown.currency !== item.details?.currency
+        ) {
+          return undefined;
+        }
+      } else if (!current || item.line.priceVersion !== current) {
+        return undefined;
+      }
       wait = Math.max(
         wait,
         shown != null ? PRICE_SEEN_MS - (now - shown.since) : PRICE_SEEN_MS,
@@ -519,8 +546,19 @@ export function useCartView(locale: string, open = true): CartViewState {
     }
     rerender();
     if (result?.result === "pass") {
+      const adopted = new Map(
+        result.adopt.map((entry) => [entry.lineId, entry.priceVersion]),
+      );
       return applyAdoptions(result)
-        ? { result: "pass", shownAmounts: suggestedAmounts(run!.view) }
+        ? {
+            result: "pass",
+            shownAmounts: suggestedAmounts(run!.view),
+            lines: run!.lines.map((line) =>
+              adopted.has(line.id)
+                ? { ...line, priceVersion: adopted.get(line.id) }
+                : line,
+            ),
+          }
         : { result: "failed" };
     }
     return { result: result?.result === "marked" ? "marked" : "failed" };

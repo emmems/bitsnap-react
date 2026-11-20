@@ -380,6 +380,33 @@ describe("the drawer reads what the warm-up cached", () => {
     assert.equal(wallets!.hasAttribute("inert"), false);
   });
 
+  it("a warm-up running at the open that omits every item is asked again once it lands (S14)", async () => {
+    storeCart(["pa"]);
+    await mount();
+    holdProducts = true;
+    await React.act(async () => Bitsnap.warmUp());
+    await React.act(async () => Bitsnap.showCart());
+    await settle();
+    assert.equal(productCalls(), 1, "the open shares the running warm-up");
+    const mug = catalog.get("pa")!;
+    catalog.delete("pa"); // the warm-up's answer omits it
+    const release = async () => {
+      await React.act(async () => {
+        for (const run of pendingProducts.splice(0)) run();
+      });
+      await settle(80);
+    };
+    try {
+      await release();
+    } finally {
+      catalog.set("pa", mug); // the follow-up answer has it again
+    }
+    await release();
+    assert.equal(productCalls(), 2, "the omitted line got the follow-up /products");
+    assert.equal(doc().querySelector("[data-bitsnap-checkout-unavailable]"), null);
+    assert.equal(doc().querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
+  });
+
   it("another cart content is another key and is asked for", async () => {
     storeCart(["pa"]);
     await mount();
