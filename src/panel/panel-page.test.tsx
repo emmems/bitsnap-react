@@ -9,9 +9,12 @@ import {
 } from "@bufbuild/protobuf";
 import { setupReactPage, TEST_KEY } from "@/src/analytics/react-testing";
 import {
+  GetOrderHistoryRequestSchema,
+  GetOrderHistoryResponseSchema,
   GetOrdersResponseSchema,
   GetPublicOrderDetailsRequestSchema,
   GetPublicOrderDetailsResponseSchema,
+  UserPanelGetProductsResponseSchema,
 } from "../gen/proto/public/v1/public_api_pb";
 import { setPanelConfig } from "./config.ts";
 import { dropEmptyOrderId } from "./components/PanelPage.tsx";
@@ -59,7 +62,13 @@ const baseOrder = {
   comments: [{ id: 1, message: "Dziękujemy!", authorType: "seller", authorName: "Sklep" }],
   commentCount: 1,
 };
-const detailRequests: Array<{ orderId: string; accessToken: string; email?: string }> = [];
+const detailRequests: Array<{
+  projectId: string;
+  orderId: string;
+  accessToken: string;
+  email?: string;
+}> = [];
+const historyRequests: Array<{ projectId: string; orderId: string }> = [];
 const originalError = console.error;
 const originalWarn = console.warn;
 
@@ -72,11 +81,30 @@ beforeEach(() => {
   page.win.localStorage.clear();
   page.win.localStorage.setItem(SESSION_KEY, "panel-token");
   detailRequests.length = 0;
+  historyRequests.length = 0;
   detail = () => ({ result: { case: "order", value: baseOrder } });
   globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
     if (url.endsWith("/GetOrders")) {
       return proto(GetOrdersResponseSchema, { orders: [], totalCount: 0 });
+    }
+    if (url.endsWith("/UserPanelGetProducts")) {
+      return proto(UserPanelGetProductsResponseSchema, {
+        result: { case: "success", value: { products: [] } },
+      });
+    }
+    if (url.endsWith("/GetOrderHistory")) {
+      const request = fromBinary(
+        GetOrderHistoryRequestSchema,
+        new Uint8Array(init?.body as ArrayBuffer),
+      );
+      historyRequests.push({
+        projectId: request.projectId,
+        orderId: request.orderId,
+      });
+      return proto(GetOrderHistoryResponseSchema, {
+        result: { case: "success", value: { entries: [], nextPageToken: "" } },
+      });
     }
     if (url.endsWith("/GetPublicOrderDetails")) {
       const request = fromBinary(
@@ -84,6 +112,7 @@ beforeEach(() => {
         new Uint8Array(init?.body as ArrayBuffer),
       );
       detailRequests.push({
+        projectId: request.projectId,
         orderId: request.orderId,
         accessToken: request.accessToken ?? "",
         ...(request.email ? { email: request.email } : {}),
@@ -137,10 +166,19 @@ describe("dropEmptyOrderId", () => {
     assert.equal(dropEmptyOrderId(`?state=${q("order-details")}&orderId=`), `?state=${q("orders")}`);
     assert.equal(dropEmptyOrderId(`?state=${q("order-details")}`), `?state=${q("orders")}`);
     assert.equal(dropEmptyOrderId(`?orderId=${q("  ")}`), "");
+    assert.equal(
+      dropEmptyOrderId(`?state=${q("order-details")}&orderId=${q("")}&orderProject=${q("shopB")}`),
+      `?state=${q("orders")}`,
+    );
+    assert.equal(dropEmptyOrderId(`?orderProject=${q("shopB")}`), "");
   });
 
   it("leaves a real id and other screens alone", () => {
     assert.equal(dropEmptyOrderId(`?state=${q("order-details")}&orderId=${q("ord_1")}`), null);
+    assert.equal(
+      dropEmptyOrderId(`?state=${q("order-details")}&orderId=${q("ord_1")}&orderProject=${q("shopB")}`),
+      null,
+    );
     assert.equal(dropEmptyOrderId(`?state=${q("products")}`), null);
     assert.equal(dropEmptyOrderId(""), null);
   });
@@ -170,7 +208,11 @@ describe("Panel", () => {
 
   it("opens an order with the buyer's session", async () => {
     await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}`);
-    assert.deepEqual(detailRequests[0], { orderId: "ord_1", accessToken: "panel-token" });
+    assert.deepEqual(detailRequests[0], {
+      projectId: TEST_KEY,
+      orderId: "ord_1",
+      accessToken: "panel-token",
+    });
   });
 
   it("shows the order as a receipt for a logged-in buyer: no e-mail check, no comment form", async () => {
@@ -252,7 +294,12 @@ describe("Panel", () => {
     await submit();
     await settle();
     await settle();
-    assert.deepEqual(detailRequests.at(-1), { orderId: "ord_1", accessToken: "", email: "zly@example.test" });
+    assert.deepEqual(detailRequests.at(-1), {
+      projectId: TEST_KEY,
+      orderId: "ord_1",
+      accessToken: "",
+      email: "zly@example.test",
+    });
     assert.equal(main.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
     assert.match(main.querySelector("[role=alert]")?.textContent ?? "", /nie pasuje do zamówienia/);
     assert.doesNotMatch(main.textContent ?? "", /Nie możemy otworzyć/);
@@ -316,6 +363,74 @@ describe("Panel", () => {
     await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
     await settle();
     assert.equal(page.win.document.querySelector("main h1")?.textContent, "Zamówienia");
+  });
+
+  it("global panel: uses orderProject for order details and timeline, and keeps raw string values like 1e5", async () => {
+    const globalSessionKey = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:*`;
+    setPanelConfig({ projectID: "", host: undefined });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalSessionKey, "global-token");
+
+    const container = await mountAt(`?state=${q("order-details")}&orderId=${q("ord_9")}&orderProject=1e5`);
+    assert.equal(detailRequests[0]?.projectId, "1e5");
+    assert.equal(detailRequests[0]?.orderId, "ord_9");
+    assert.equal(detailRequests[0]?.accessToken, "global-token");
+    assert.deepEqual(historyRequests[0], { projectId: "1e5", orderId: "ord_9" });
+
+    // Going back clears both orderId and orderProject.
+    const back = [...container.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Zamówienia"),
+    )!;
+    await React.act(async () => back.click());
+    await settle();
+    assert.equal(page.win.location.search.includes("orderProject"), false);
+    assert.equal(page.win.location.search.includes("orderId"), false);
+  });
+
+  it("shop panel: ignores orderProject in the URL and uses the panel projectID", async () => {
+    await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}&orderProject=${q("otherShop")}`);
+    assert.equal(detailRequests[0]?.projectId, TEST_KEY);
+    assert.equal(historyRequests[0]?.projectId, TEST_KEY);
+  });
+
+  it("global panel: a 401 on an order with orderProject clears the * session, not the shop session", async () => {
+    const host = encodeURIComponent("https://bitsnap.pl");
+    const globalKey = `bitsnap-panel-session:${host}:*`;
+    const shopKey = `bitsnap-panel-session:${host}:shopB`;
+    setPanelConfig({ projectID: "", host: undefined, loginURL: "#global-out" });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalKey, "global-token");
+    page.win.localStorage.setItem(shopKey, "shop-token");
+    detail = () =>
+      new Response(JSON.stringify({ code: "unauthenticated", message: "expired" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+
+    await mountAt(`?state=${q("order-details")}&orderId=${q("ord_1")}&orderProject=${q("shopB")}`);
+    assert.equal(page.win.localStorage.getItem(globalKey), null);
+    assert.equal(page.win.localStorage.getItem(shopKey), "shop-token");
+    assert.equal(page.win.location.hash, "#global-out");
+  });
+
+  it("global panel: hides Returns in navigation and maps returns / return-details to products", async () => {
+    const globalKey = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:*`;
+    setPanelConfig({ projectID: "", host: undefined });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalKey, "global-token");
+
+    const container = await mountAt(`?state=${q("returns")}`);
+    const navButtons = [...container.querySelectorAll("nav button")].map((b) => b.textContent);
+    assert.deepEqual(navButtons, ["Biblioteka", "Zamówienia", "Konto"]);
+    assert.equal(container.querySelector("nav [aria-current=page]")?.textContent, "Biblioteka");
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'));
+
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+
+    const detailsContainer = await mountAt(`?state=${q("return-details")}&returnId=${q("ret_1")}`);
+    assert.equal(detailsContainer.querySelector("nav [aria-current=page]")?.textContent, "Biblioteka");
+    assert.ok(detailsContainer.querySelector('[data-testid="panel-empty"]'));
   });
 });
 

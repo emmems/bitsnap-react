@@ -23,9 +23,12 @@ import { PanelEmptyState } from "./shared/PanelEmptyState";
 interface PanelOrderHistoryComponentProps {
   projectID: string;
   accessToken: string;
-  openOrderDetails: (orderId: string) => void;
+  openOrderDetails: (orderId: string, orderProject?: string) => void;
   /** Action of the empty state ("Przejdź do biblioteki"); hidden without it. */
   openLibrary?: () => void;
+  /** Selected shop filter from URL (`shop` param), global panel only. */
+  shop?: string;
+  onShopChange?: (shop: string | undefined) => void;
 }
 
 /** Orders per "Pokaż więcej" step. */

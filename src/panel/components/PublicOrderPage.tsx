@@ -23,6 +23,12 @@ interface Props {
    * that the order cannot be opened instead of rendering nothing.
    */
   orderID?: string;
+  /**
+   * Shop of the order when opened from the global all-shops panel. Used only
+   * for `getPublicOrderDetails` and `useOrderTimeline`; session reads, logout
+   * clearing, and analytics keep the panel's own `projectID`.
+   */
+  orderProjectID?: string;
   initialEmail?: string;
   /**
    * Panel session of the buyer. When omitted, the session stored by the
@@ -65,6 +71,7 @@ function isUnauthenticated(error: unknown): boolean {
 
 function OrderPageContent({
   orderID,
+  orderProjectID,
   initialEmail,
   onBack,
   accessToken: accessTokenProp,
@@ -73,6 +80,7 @@ function OrderPageContent({
   lead,
 }: Props & { lead?: ReactNode }) {
   const { projectID, host, loginURL } = usePanelConfig();
+  const effectiveProjectID = orderProjectID?.trim() || projectID || "";
   const instrument = useInstrument(projectID, analytics, "order");
   const locale = getLocale();
   const texts = getPanelTexts(locale);
@@ -89,7 +97,7 @@ function OrderPageContent({
   const query = useQuery(
     rpcProvider.publicApi.getPublicOrderDetails,
     {
-      projectId: projectID ?? "",
+      projectId: effectiveProjectID,
       orderId: orderId ?? "",
       email: verifyEmail || undefined,
       // The server checks a valid session before the e-mail, so a typed
@@ -124,7 +132,7 @@ function OrderPageContent({
   const order = fetched ?? (verifyEmail !== "" ? previous : null);
 
   const timeline = useOrderTimeline({
-    projectID,
+    projectID: effectiveProjectID,
     accessToken,
     orderId,
     locale,
@@ -223,7 +231,7 @@ function StandaloneOrderPage(props: Props) {
     >
       <div className="mx-auto flex w-full max-w-[960px] flex-col">
         <OrderPageContent
-          key={props.orderID?.trim() ?? ""}
+          key={`${props.orderID?.trim() ?? ""}:${props.orderProjectID?.trim() ?? ""}`}
           {...props}
           lead={<StandaloneLogo />}
         />
@@ -239,7 +247,12 @@ function StandaloneOrderPage(props: Props) {
  */
 function PublicOrderPage(props: Props) {
   if (props.variant === "panel") {
-    return <OrderPageContent key={props.orderID?.trim() ?? ""} {...props} />;
+    return (
+      <OrderPageContent
+        key={`${props.orderID?.trim() ?? ""}:${props.orderProjectID?.trim() ?? ""}`}
+        {...props}
+      />
+    );
   }
   return <StandaloneOrderPage {...props} />;
 }

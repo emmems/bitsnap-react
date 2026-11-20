@@ -61,8 +61,10 @@ export function dropEmptyOrderId(search: string): string | null {
   const orderId = readJSON(raw);
   const hasId = typeof orderId === "string" ? orderId.trim() !== "" : orderId != null;
   const opensDetails = readJSON(state) === "order-details";
-  if (hasId || (raw == null && !opensDetails)) return null;
+  const hasOrderProject = params.has("orderProject");
+  if (hasId || (raw == null && !opensDetails && !hasOrderProject)) return null;
   params.delete("orderId");
+  params.delete("orderProject");
   if (opensDetails) params.set("state", JSON.stringify("orders"));
   const next = params.toString();
   return next === "" ? "" : `?${next}`;
@@ -88,6 +90,10 @@ export type PanelSearchParamsType = {
   product?: string;
   state: PanelScreen;
   orderId?: string;
+  /** `state: "order-details"` on the global panel: hashed id of the order's shop. */
+  orderProject?: string;
+  /** Global panel shop filter pill (hashed project id). Shared by Library and Orders. */
+  shop?: string;
   returnId?: string;
   /** `state: "course"`: `UserProduct.accessId` of the open course. */
   course?: string;
@@ -102,6 +108,8 @@ export type PanelSearchParamsType = {
   /** `state: "returns"`: `"mine"` opens the "Moje zwroty" tab. */
   returnsTab?: "mine";
 };
+
+const RAW_STRING_PARAM_KEYS = ["shop", "orderProject"] as const;
 
 const PanelPage = ({
   returnsAppearance,
@@ -141,6 +149,7 @@ const PanelPage = ({
     }
   }
 
+  const isGlobal = !projectID;
   const [panelParentRef] = useAutoAnimate();
   const isScreen = (value: unknown): value is PanelScreen =>
     [
@@ -150,36 +159,43 @@ const PanelPage = ({
       "plans",
       "orders",
       "order-details",
-      "returns",
-      "return-details",
+      ...(isGlobal ? [] : ["returns", "return-details"]),
       "course",
       "messages",
     ].includes(value as string);
+  const resolveScreen = (value: unknown): PanelScreen =>
+    isScreen(value) ? value : "products";
 
   useCleanOrderIdOnLoad();
-  const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>({
-    product: undefined,
-    state: "products",
-    orderId: undefined,
-    returnId: undefined,
-    course: undefined,
-    item: undefined,
-    chatProject: undefined,
-    thread: undefined,
-    channel: undefined,
-    returnsTab: undefined,
-  });
-
-  const [activeScreen, setActiveScreen] = useState<PanelScreen>(
-    isScreen(params.state) ? params.state : "products",
+  const [params, setParams] = useUrlSearchParams<PanelSearchParamsType>(
+    {
+      product: undefined,
+      state: "products",
+      orderId: undefined,
+      orderProject: undefined,
+      shop: undefined,
+      returnId: undefined,
+      course: undefined,
+      item: undefined,
+      chatProject: undefined,
+      thread: undefined,
+      channel: undefined,
+      returnsTab: undefined,
+    },
+    { rawStringKeys: RAW_STRING_PARAM_KEYS },
   );
 
-  const handleOpenOrderDetails = (orderID: string) => {
+  const [activeScreen, setActiveScreen] = useState<PanelScreen>(() =>
+    resolveScreen(params.state),
+  );
+
+  const handleOpenOrderDetails = (orderID: string, orderProject?: string) => {
     // An old order without an id has no details page; stay on the list.
     if (!orderID.trim()) return;
     setParams({
       state: "order-details",
       orderId: orderID,
+      orderProject: isGlobal ? orderProject?.trim() || undefined : undefined,
     });
     setActiveScreen("order-details");
   };
@@ -188,15 +204,18 @@ const PanelPage = ({
     setParams({
       state: "orders",
       orderId: undefined,
+      orderProject: undefined,
     });
     setActiveScreen("orders");
   };
 
   // Navigation starts a screen from scratch, so ids of the previous screen
-  // must not leak into it.
+  // must not leak into it. `shop` is kept so the pill selection survives
+  // switching between Library and Orders.
   const navigate = (next: { product?: string; state: PanelScreen }) =>
     setParams({
       orderId: undefined,
+      orderProject: undefined,
       returnId: undefined,
       course: undefined,
       item: undefined,
@@ -252,6 +271,10 @@ const PanelPage = ({
     "return-details",
   ];
   useEffect(() => {
+    if (isGlobal && (params.state === "returns" || params.state === "return-details")) {
+      setActiveScreen("products");
+      return;
+    }
     if (!isScreen(params.state)) return;
     if (
       historyScreens.includes(params.state) ||
@@ -260,11 +283,12 @@ const PanelPage = ({
       setActiveScreen(params.state);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.state]);
+  }, [params.state, isGlobal]);
 
   const openScreen = (state: PanelScreen) => {
-    navigate({ state, product: undefined });
-    setActiveScreen(state);
+    const target = resolveScreen(state);
+    navigate({ state: target, product: undefined });
+    setActiveScreen(target);
   };
 
   const orderId = params.orderId?.trim() || undefined;
@@ -318,6 +342,7 @@ useEffect(() => {
         email={email}
         projectID={projectID}
         showMessages={chat.visible || activeScreen === "messages"}
+        showReturns={!isGlobal}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto w-full p-5 pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-5">
@@ -379,6 +404,12 @@ useEffect(() => {
             accessToken={accessToken ?? ""}
             openOrderDetails={handleOpenOrderDetails}
             openLibrary={() => openScreen("products")}
+            shop={isGlobal ? params.shop : undefined}
+            onShopChange={
+              isGlobal
+                ? (shop) => setParams({ shop }, { replace: true })
+                : undefined
+            }
           />
         )}
 
@@ -387,12 +418,16 @@ useEffect(() => {
           <PublicOrderPage
             variant="panel"
             orderID={orderId}
+            orderProjectID={
+              projectID ? undefined : params.orderProject?.trim() || undefined
+            }
             accessToken={accessToken ?? undefined}
             onBack={handleBackToOrders}
           />
         )}
 
-        {(activeScreen === "returns" || activeScreen === "return-details") &&
+        {!isGlobal &&
+          (activeScreen === "returns" || activeScreen === "return-details") &&
           accessToken && (
             <PanelReturnsComponent
               projectID={projectID ?? ""}
