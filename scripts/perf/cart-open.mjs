@@ -949,6 +949,11 @@ function criteria(o, results, floorMs) {
   // A4: the POST /payment-methods starts with the open and does not wait for /products.
   // On `reopen` no POST is fine only as a cached answer: the first open of the same run must have sent one that was
   // answered (`cacheSource`). Every POST from the start of the setup to SETTLE_MS after the paint is counted.
+  // The run's recorded timeline entry of its first POST /payment-methods (matched by start time).
+  const warmUpAnswered = (x) => {
+    const post = x.requests?.find((q) => q.method === "POST" && q.path.includes("/payment-methods") && q.startMs === x.paymentMethodsStartMs);
+    return post != null && post.endMs != null && !post.failed && (post.status ?? 200) < 400 && post.endMs <= (x.mountMs ?? 0) + 5;
+  };
   for (const n of ["cold-no-snapshot", "cold-immediate", "reopen"]) {
     const r = by[n];
     if (!r) {
@@ -978,8 +983,10 @@ function criteria(o, results, floorMs) {
       }
       // Every POST in the window counts: the open sends one. A second one (a re-send, a late one) is a fail.
       if (x.paymentMethodPostCount > 1) extra++;
-      // A POST that started before the click is not an open-path request: a failure of its own.
-      if (x.paymentMethodsBeforeClick) before++;
+      // A POST that started before the click is not an open-path request: a failure of its own, except the one warm-up
+      // POST of the hover/focus intent (slice 4): the only POST in the window, answered (not failed, status < 400) by the
+      // time the drawer mounted (5 ms clock slack). A second POST or one the open had to wait for still fails.
+      if (x.paymentMethodsBeforeClick && !(x.paymentMethodPostCount === 1 && warmUpAnswered(x))) before++;
       if (finite(x.mountMs)) delays.push(Math.max(0, x.paymentMethodsStartMs - x.mountMs));
       else noMount++;
       // "Waits for /products": starts only after a /products that really took network time.
@@ -990,7 +997,7 @@ function criteria(o, results, floorMs) {
     const delayOk = delays.length === 0 ? noMount === 0 : within(delayP95, 50);
     add("A4", n, delayOk && before === 0 && noMount === 0 && waited === 0 && none === 0 && failed === 0 && extra === 0 && noCache === 0,
       `POST /payment-methods p95 ${delays.length ? fmt(delayP95) : "-"} <= 50 ms after the drawer mounts${delayOk ? "" : " (missed)"}; ` +
-        `${before} started before the click, ${waited} waited for /products, ${extra} sent more than one POST in the window, ` +
+        `${before} started before the click (and not an answered warm-up), ${waited} waited for /products, ${extra} sent more than one POST in the window, ` +
         `${mustPost ? `${none} without a POST (required here)` : `${noCache} without a POST and without an answered first-open POST to serve it (no POST is accepted only as a cached answer)`}, ` +
         `${noMount} without a drawer mount time, ${failed} run(s) did not open`);
   }

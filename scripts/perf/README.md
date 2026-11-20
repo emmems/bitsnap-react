@@ -106,7 +106,14 @@ node scripts/perf/cart-open.mjs --sdk dist --runs 20 --warmup 5 --check \
 - A4 is a p95 over the runs, measured from the drawer's first commit (`mountMs`: the dialog appears in the DOM),
   not from the click. A p95 later than 50 ms after the mount, a POST that starts after a `/products` that took
   network time (and was still running at the click), or more than one POST in the request window, is a fail. A POST
-  that started before the click fails separately ("started before the click"; no 50 ms cut). Cold scenarios must
+  that started before the click fails separately ("started before the click"; no 50 ms cut), with one exception, the
+  slice 4 warm-up (decided 2026-11-20): the cart button's `pointerenter` / focus intent warms `/payment-methods`, so one
+  POST that started before the click passes when it is the **only** POST for that cart in the window and it was answered
+  (not failed, status < 400) by the time the drawer mounted (`mountMs`, 5 ms slack). A second POST, or a warm-up POST the
+  open had to wait for (still unanswered at the mount), still fails. The harness itself never hovers the cart button
+  (`MEASURE_OPEN` calls `element.click()` inside the page, which sends no pointer events); only `add-then-open` hovers
+  the add button, and A4 is not scored there. The exception is therefore a rule for the check, not something today's
+  runs exercise. Cold scenarios must
   send one. On `reopen`, no POST is a pass only as a cached answer: the first open of the same run must have sent a
   POST that was answered, otherwise "no POST" proves nothing and the row fails.
 - A7 `qty-burst`: exactly one `POST /payment-methods` for three clicks in 200 ms, in every run.
