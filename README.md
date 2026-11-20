@@ -417,21 +417,79 @@ built-in styles):
 | `skeleton`           | Loading placeholder                         |
 
 The same names are rendered as `data-bitsnap-checkout-slot` attributes, and the
-drawer/dropdown boundaries carry `data-bitsnap-checkout`, so plain CSS works too:
+checkout root carries `data-bitsnap-checkout`, so you can also target the slots
+from your own CSS. Read "Overriding the checkout's own styles" below first: a
+plain rule like `[data-bitsnap-checkout-slot="checkoutButton"] { … }` is not
+strong enough on its own.
 
 ```css
-/* brand hover and focus states that the library cannot express */
+/* A property the checkout does not set works with a single class. */
 .store-checkout-button:hover {
   filter: brightness(1.1);
 }
 
-[data-bitsnap-checkout-slot="countryOption"]:hover {
-  background: #eef2ff;
+/* A property the checkout sets needs the SDK selector plus one class. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"].store-checkout-button {
+  background-color: #635bff;
+  color: #ffffff;
 }
 ```
 
-Custom classes follow the normal CSS cascade; `className` is merged with `cn`, so
-conflicting Tailwind utilities from the library are resolved in your favor.
+### Overriding the checkout's own styles
+
+The checkout's stylesheet is not in a CSS cascade layer, so a host page's
+generic CSS (a `.w-full` class, a `button { background: transparent }` reset)
+no longer overrides the properties listed in the table below, such as the
+drawer's width and position or the checkout button's background, padding and
+margin. Properties the checkout leaves to its utility classes (the button's
+border radius, border and font size, for example) can still be changed by host
+CSS, as before. The same
+rule means that a class of yours only wins over a property the checkout sets
+if it is more specific. Every checkout rule has a specificity
+of at most (0,2,0): `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="…"]`.
+Its hover, focus, disabled and selected states are not more specific than that.
+
+To change a property the checkout sets, use one of these, in this order:
+
+1. **A token**, or the matching `--bitsnap-checkout-*` CSS variable set on
+   `[data-bitsnap-checkout]` in your CSS (see [Tokens](#tokens)). The drawer
+   width on screens from 768 px follows `--bitsnap-checkout-panel-width`.
+   A token passed in `appearance.tokens`, or a light-preset color under
+   `theme: "light"`, is written as an inline style on the checkout root, so the
+   same variable set in your CSS has no effect for it; change the token instead.
+   `--bitsnap-checkout-panel-width` is never set inline.
+2. **Inline `style`** on the slot: `appearance.elements.<slot>.style`. Inline
+   styles beat every stylesheet.
+3. **Tailwind's important modifier**, if your site uses Tailwind:
+   `className: "bg-black!"`. Tailwind v4 puts the `!` at the end (`bg-black!`);
+   the leading `!bg-black` is Tailwind v3 syntax and is deprecated in v4. Without
+   the `!`, a Tailwind v4 class loses to the checkout, because Tailwind v4 emits
+   its utilities in a cascade layer, and any unlayered rule beats any layered one.
+4. **The SDK selector plus one class**, as in the example above. It has a
+   specificity of (0,3,0) and wins in every state. A bare `.my-class` or
+   `[data-bitsnap-checkout-slot="…"]` (0,1,0) loses.
+
+A `className` that sets a property the checkout does not set keeps working as
+before. The checkout sets these properties:
+
+| Slot | Properties |
+| ---- | ---------- |
+| root (`[data-bitsnap-checkout]`) | `position`, `z-index`, `font-family`, `font-size` |
+| `panel` | `position`, `top`, `right`, `bottom`, `width`, `display`, `flex-direction`, `overflow-y`, `z-index`, `background-color`, `color` |
+| `overlay` | `position`, `top`, `right`, `bottom`, `left`, `z-index`, `cursor`, `background-color` |
+| `productList` | `margin-top` of the list (`ul`); `height`, `margin`, `border-width`, `border-style`, `border-color` of the separators (`hr`) |
+| `product` | `outline-color` when the product is unavailable |
+| `checkoutButton` | `margin`, `padding`, `font-weight`, `background-color`, `color`; `background-color` on hover; `opacity` and `cursor` when disabled |
+| `closeButton` | `padding`; `background-color` on hover |
+| `countryLabel` | `margin`, `color` |
+| `countryTrigger` | `padding`, `border-width`, `border-style`, `border-color` (also on keyboard focus), `background-color`; `width`, `max-width`, `height` of the flag |
+| `countryDropdown` | `z-index`, `background-color`, `color`, `border-color`, `border-width`, `border-style`, `border-radius` |
+| `countrySearch` | `background-color`; `color` of the input |
+| `countryOption` | `background-color` on hover, keyboard highlight and when selected |
+| `skeleton` | `background-color` |
+| `paymentMethods` | `margin`, `padding`; `margin-bottom`, `padding`, `color` of the legend |
+| `paymentMethodOption` | `border-color` (also on hover); `background-color` when selected; `outline` on keyboard focus; `cursor` and `opacity` when the choice is disabled; the radio's `appearance`, `width`, `height`, `margin`, `padding`, `border`, `border-radius`, `background-color`; `color` of the description |
+| `error`, `emptyState`, `deliveryText` | `color` |
 
 ### Tokens
 
@@ -440,8 +498,8 @@ conflicting Tailwind utilities from the library are resolved in your favor.
 | `fontFamily`              | The whole checkout                                      |
 | `fontSize`                | The whole checkout                                      |
 | `background`              | Panel, country trigger                                  |
-| `surface`                 | Country dropdown, search bar, loading skeletons, selected payment method |
-| `foreground`              | Titles, prices, total                                   |
+| `surface`                 | Country dropdown, search bar, selected payment method   |
+| `foreground`              | Titles, prices, total, country list                                   |
 | `mutedForeground`         | Empty cart, delivery note, country label, search field  |
 | `border`                  | Country trigger, dropdown, product separators, payment method cards |
 | `buttonBackground`        | "Next step" button                                      |
@@ -461,11 +519,16 @@ conflicting Tailwind utilities from the library are resolved in your favor.
   and does not reuse the panel's `setTheme`.
 - Apple Pay and Google Pay keep their native artwork and fonts; only the space
   around them is themed.
-- Layout, responsive widths and checkout actions are unchanged. Override widths
-  from your own CSS.
-- The country list is rendered in a portal. It receives the theme (colors, font,
-  focus ring and stacking) as soon as you pass an `appearance`; without one it
-  renders exactly as before.
+- The drawer is full width on phones, 350 px from 768 px and 420 px from
+  1280 px. To change the width on screens from 768 px, set
+  `--bitsnap-checkout-panel-width` on `[data-bitsnap-checkout]` in your CSS
+  (for example `[data-bitsnap-checkout] { --bitsnap-checkout-panel-width: 480px; }`).
+  A width class or a plain width rule on the `panel` slot loses.
+- The country list is rendered in a portal, outside the drawer. It receives the
+  theme (colors, font, focus ring and stacking) from the checkout, with or
+  without an `appearance`, and opens above the drawer. Its rules follow the same
+  specificity cap, so the same override options apply to `countryDropdown`,
+  `countrySearch` and `countryOption`.
 
 ## Returns
 

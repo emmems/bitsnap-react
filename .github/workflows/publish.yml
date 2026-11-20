@@ -54,6 +54,12 @@ jobs:
       - name: Run tests
         run: 'pnpm test'
 
+      - name: Package checks
+        run: 'pnpm test:package'
+
+      - name: Size budget
+        run: 'pnpm size'
+
       - name: Check whether this version is already on npm
         id: published
         run: |

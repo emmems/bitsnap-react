@@ -1,6 +1,7 @@
 .env
 dist
 .test-dist
+.size-tmp
 node_modules
 .DS_Store
 .vscode

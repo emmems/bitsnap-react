@@ -1,4 +1,4 @@
-import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel";
+import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel/config";
 import { create } from "@bufbuild/protobuf";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useState } from "react";

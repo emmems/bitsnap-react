@@ -31,7 +31,7 @@ export type CheckoutAppearanceTokens = {
   fontSize?: string;
   /** Panel background. */
   background?: string;
-  /** Raised surfaces: country dropdown, search bar, loading skeletons. */
+  /** Raised surfaces: country dropdown, search bar, selected payment method. */
   surface?: string;
   /** Main text color. */
   foreground?: string;
@@ -116,12 +116,7 @@ export type CheckoutAppearance = {
 
 export type ResolvedCheckoutAppearance = {
   theme: CheckoutTheme;
-  /**
-   * `true` as soon as the caller passed anything through `appearance`. The
-   * country dropdown is portalled outside of the checkout root, so it only
-   * receives the checkout boundary when the caller opted in - an omitted or
-   * empty `appearance` keeps the previous (unthemed) dropdown untouched.
-   */
+  /** `true` as soon as the caller passed anything through `appearance`. */
   isCustomized: boolean;
   /** Tokens that are in effect. Empty entries were dropped. */
   tokens: CheckoutAppearanceTokens;
@@ -131,11 +126,10 @@ export type ResolvedCheckoutAppearance = {
   /** Inline custom properties applied to the drawer root. */
   boundaryStyle: CSSProperties;
   /**
-   * Extra properties for the portalled country dropdown. The shared select
-   * content paints itself with `bg-popover`/`text-popover-foreground`, so those
-   * variables have to carry the checkout colors over to the portal. They are
-   * resolved eagerly because the dropdown is the only place where the built-in
-   * defaults differ from the drawer.
+   * Extra properties for the portalled country dropdown, applied with or
+   * without an `appearance`. The dropdown is its own `.bitsnap-react`
+   * boundary, where the shared shadcn variables hold their light defaults, so
+   * the ones its primitives read are resolved eagerly to the checkout colors.
    */
   dropdownStyle: CSSProperties;
 };
@@ -209,14 +203,34 @@ const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [
 ];
 
 /**
- * The portalled dropdown renders `bg-popover`/`text-popover-foreground` from the
- * shared primitives, so those two variables are resolved eagerly: without a
- * token they fall back to the dark values the checkout has always used.
+ * The portalled dropdown is a `.bitsnap-react` boundary of its own, where the
+ * shared shadcn variables hold their light defaults (the `.dark` variant only
+ * matches descendants). The variables its primitives read - the popover
+ * surface, the highlighted option (`focus:bg-accent`/`text-accent-foreground`)
+ * and the search separator (`border-border`) - are resolved eagerly. Without a
+ * token they read the `--bitsnap-checkout-*` variable a host may set in its own
+ * stylesheet (the dropdown carries `data-bitsnap-checkout`, so such a rule
+ * reaches it), then the dark values the checkout has always used.
  */
 function resolveDropdownStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
+  const fromHost = (variable: string, fallback: string) =>
+    `var(${variable}, ${fallback})`;
   return {
-    "--popover": tokens.surface ?? "var(--color-neutral-800)",
-    "--popover-foreground": tokens.foreground ?? "var(--color-neutral-200)",
+    "--popover":
+      tokens.surface ??
+      fromHost("--bitsnap-checkout-surface", "var(--color-neutral-800)"),
+    "--popover-foreground":
+      tokens.foreground ??
+      fromHost("--bitsnap-checkout-foreground", "var(--color-neutral-200)"),
+    "--accent":
+      tokens.hoverSurface ??
+      fromHost("--bitsnap-checkout-hover-surface", "var(--color-neutral-700)"),
+    "--accent-foreground":
+      tokens.foreground ??
+      fromHost("--bitsnap-checkout-foreground", "var(--color-neutral-200)"),
+    "--border":
+      tokens.border ??
+      fromHost("--bitsnap-checkout-border", "var(--color-neutral-700)"),
   } as CSSProperties;
 }
 

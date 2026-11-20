@@ -31,12 +31,8 @@ function CountrySelector({
 }: CountrySelectorProps) {
   const [query, setQuery] = useState("");
 
-  const {
-    isCustomized,
-    boundaryClassName,
-    boundaryStyle,
-    dropdownStyle,
-  } = useCheckoutAppearance();
+  const { boundaryClassName, boundaryStyle, dropdownStyle } =
+    useCheckoutAppearance();
   const countryTrigger = useCheckoutSlot("countryTrigger");
   const countryDropdown = useCheckoutSlot("countryDropdown");
   const countrySearch = useCheckoutSlot("countrySearch");
@@ -100,19 +96,24 @@ function CountrySelector({
         </SelectValue>
       </SelectTrigger>
       <SelectContent
-        data-bitsnap-checkout={isCustomized ? "dropdown" : undefined}
-        data-bitsnap-checkout-slot={isCustomized ? "countryDropdown" : undefined}
+        data-bitsnap-checkout="dropdown"
+        data-bitsnap-checkout-slot="countryDropdown"
         className={cn(
-          // The dropdown is portalled outside of the checkout root, so it only
-          // joins the checkout theme boundary once the caller opts into an
-          // appearance. Without it the content renders exactly as before.
-          isCustomized ? "bitsnap-react" : "",
+          // The dropdown is portalled to <body>, outside of the checkout root.
+          // Every library rule is scoped to `.bitsnap-react` (theme variables,
+          // utilities) or `[data-bitsnap-checkout]` (checkout.css), so the
+          // content has to be its own theme boundary, with or without an
+          // `appearance`: otherwise it has no stacking level and opens behind
+          // the drawer, unstyled. Prefixed utilities only match descendants
+          // of the boundary, so its own box (z-index, colors, border) is set
+          // by the `countryDropdown` rule in checkout.css.
+          "bitsnap-react",
           boundaryClassName,
-          "w-full max-h-80 max-w-[350px] z-[999999]",
           countryDropdown.className,
         )}
         style={{
-          ...(isCustomized ? { ...boundaryStyle, ...dropdownStyle } : undefined),
+          ...boundaryStyle,
+          ...dropdownStyle,
           ...countryDropdown.style,
         }}
         position="popper"

@@ -5,10 +5,10 @@ import { getCartLines, getProjectID, useCartProvider } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
 import { isErr } from "./lib/err";
 import { formatCurrency } from "./lib/round.number";
-import LoadingIndicator from "./LoadingIndicator";
 import SingleProduct from "./SingleProduct";
 import { Skeleton } from "./Skeleton";
-import { ApplePayButton, GooglePayButton } from "..";
+import ApplePayButton from "./ApplePay";
+import GooglePayButton from "./GooglePay";
 import { Spinner } from "@/src/ui/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/src/lib/utils";
@@ -422,6 +422,7 @@ const CartComponentContent = ({
           <button
             type="button"
             data-bitsnap-checkout-slot="checkoutButton"
+            data-bitsnap-checkout-retry=""
             onClick={() => {
               refetch().then().catch();
             }}

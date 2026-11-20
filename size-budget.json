@@ -1,0 +1,44 @@
+{
+  "fixtures": {
+    "analytics": {
+      "jsGzipKB": 6.8
+    },
+    "cart-main": {
+      "forbidStatic": [],
+      "jsGzipKB": 416.2
+    },
+    "cart-main-ns": {
+      "forbidStatic": [],
+      "jsGzipKB": 541.7
+    },
+    "catalog": {
+      "jsGzipKB": 26.5
+    },
+    "chat": {
+      "jsGzipKB": 74.8
+    },
+    "consent": {
+      "jsGzipKB": 12.1
+    },
+    "contact": {
+      "jsGzipKB": 28.3
+    },
+    "course": {
+      "jsGzipKB": 276.5
+    },
+    "models": {
+      "jsGzipKB": 16.9
+    },
+    "returns": {
+      "jsGzipKB": 112.1
+    },
+    "viewer3d": {
+      "jsGzipKB": 16.6
+    }
+  },
+  "css": {
+    "dist/index.css": 21.1
+  },
+  "maxDependencies": 28,
+  "tarballBytes": 1762251
+}

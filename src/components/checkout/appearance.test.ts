@@ -105,8 +105,21 @@ describe("resolveCheckoutAppearance", () => {
 
     const dropdownStyle = resolved.dropdownStyle as Record<string, string>;
 
-    assert.equal(dropdownStyle["--popover"], "var(--color-neutral-800)");
-    assert.equal(dropdownStyle["--popover-foreground"], "var(--color-neutral-200)");
+    assert.equal(dropdownStyle["--popover"], "var(--bitsnap-checkout-surface, var(--color-neutral-800))");
+    assert.equal(
+      dropdownStyle["--popover-foreground"],
+      "var(--bitsnap-checkout-foreground, var(--color-neutral-200))",
+    );
+    // A host that sets the checkout variables in its own CSS reaches the
+    // highlighted option too, so its text never keeps the dark default.
+    assert.equal(
+      dropdownStyle["--accent-foreground"],
+      "var(--bitsnap-checkout-foreground, var(--color-neutral-200))",
+    );
+    assert.equal(
+      dropdownStyle["--accent"],
+      "var(--bitsnap-checkout-hover-surface, var(--color-neutral-700))",
+    );
   });
 
   it("resolves the light preset for the dropdown", () => {

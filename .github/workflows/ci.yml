@@ -1,0 +1,63 @@
+# Pull-request and main checks: build, tests, type and package checks, and the
+# bundle size budget (`pnpm size`, budgets in size-budget.json).
+#
+# The size check measures what a consumer's bundler gets from `dist/`, so it
+# runs after `pnpm build`. It fails when a fixture is over its budget, when the
+# cart's static import graph contains a module it must not (see
+# scripts/check-size.mjs), or when package.json grows a dependency it should
+# not have. Lower a budget by hand in the PR that earns it.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build, test, size
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: 'pnpm install --frozen-lockfile'
+
+      - name: Build
+        run: 'pnpm build'
+
+      - name: Unit tests
+        run: 'pnpm test'
+
+      - name: Consumer types
+        run: 'pnpm test:types'
+
+      - name: Package checks
+        run: 'pnpm test:package'
+
+      - name: Size budget
+        run: 'pnpm size'
+
+      # Same tests as the `test:*-ssr` scripts, without their rebuilds: `dist/`
+      # comes from the Build step above.
+      - name: SSR tests
+        run: 'node --test test/returns-widget.ssr.test.cjs test/catalog.ssr.test.cjs test/course.ssr.test.cjs test/express.ssr.test.cjs'

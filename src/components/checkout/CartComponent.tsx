@@ -68,10 +68,9 @@ function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
             <Dialog.Overlay
               data-bitsnap-checkout-slot="overlay"
               aria-hidden="true"
-              className={cn(
-                "fixed top-0 right-0 left-0 bottom-0 cursor-pointer z-10",
-                overlay.className,
-              )}
+              // Position, stacking and cursor live in checkout.css, so a host
+              // page's utility classes cannot override them.
+              className={cn(overlay.className)}
               style={overlay.style}
               onClick={shouldHide}
             />
@@ -89,11 +88,10 @@ function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
                 returnFocusTo.current?.focus();
                 returnFocusTo.current = null;
               }}
-              className={cn(
-                // Scrolls when the summary and the payment choice do not fit (small phones).
-                "fixed z-20 top-0 right-0 bottom-0 w-full md:w-[350px] xl:w-[420px] flex flex-col overflow-y-auto",
-                panel.className,
-              )}
+              // Position, width, layout and scrolling live in checkout.css: a host
+              // page's own `.w-full` or `.fixed` would otherwise win (unlayered
+              // host CSS beats the library's layered utilities).
+              className={cn(panel.className)}
               style={panel.style}
               // The overlay closes the drawer on click; a close on pointer down would let the click through.
               onPointerDownOutside={(event) => event.preventDefault()}
@@ -118,10 +116,7 @@ function CartComponent({ isVisible, shouldHide, panelId, locale }: Props) {
                 <button
                   type="button"
                   data-bitsnap-checkout-slot="closeButton"
-                  className={cn(
-                    "rounded-xl p-2 transition",
-                    closeButton.className,
-                  )}
+                  className={cn("rounded-xl transition", closeButton.className)}
                   style={closeButton.style}
                   aria-label={closeText}
                   onClick={shouldHide}

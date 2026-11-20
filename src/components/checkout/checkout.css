@@ -17,208 +17,327 @@
  * "primary" one for the same token because that is what they render today;
  * those are marked below.
  *
- * The rules live in the `components` layer, so plain Tailwind utilities (and
- * any stylesheet the consuming application ships later) keep winning over them.
+ * The rules are NOT in a cascade layer. A host page's unlayered CSS (a
+ * Tailwind-style `.w-full`, a `button { background: transparent }` reset)
+ * beats every layered rule whatever its specificity, which left the drawer
+ * full width and the checkout button bare on real shops. Unlayered, these
+ * rules win by specificity instead, and the structural values the drawer
+ * cannot live without (position, width, button surface, margins) are set
+ * here rather than by utility classes.
+ *
+ * Specificity cap: every rule is at most (0,2,0), i.e.
+ * `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="x"]`. State and
+ * descendant qualifiers sit inside `:where()`, which adds nothing, so a
+ * merchant rule "SDK selector plus one class" (0,3,0) always wins, in every
+ * state. `cart-css.test.ts` enforces the cap. Within one component the state
+ * rule comes after the base rule (equal specificity, later wins).
+ *
+ * Lengths that replace Tailwind utilities are written the way those utilities
+ * compile, `calc(var(--spacing) * n)`, so they stay in rem and scale with the
+ * host's root font size exactly as before. Breakpoints are Tailwind's `md`
+ * (48rem) and `xl` (80rem).
  */
 
-@layer components {
-    [data-bitsnap-checkout] {
-        font-family: var(
-            --bitsnap-checkout-font-family,
-            var(
-                --default-font-family,
-                ui-sans-serif,
-                system-ui,
-                sans-serif,
-                "Apple Color Emoji",
-                "Segoe UI Emoji",
-                "Segoe UI Symbol",
-                "Noto Color Emoji"
-            )
-        );
-        font-size: var(--bitsnap-checkout-font-size, inherit);
-    }
+/* The root carries an inline `z-index`, which only works on a positioned
+ * element. `useAutoAnimate` happens to set `position: relative` on it, but not
+ * under `prefers-reduced-motion`, so the stacking is set here explicitly. */
+[data-bitsnap-checkout="root"] {
+    position: relative;
+    z-index: 999999;
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"] {
-        background-color: var(--bitsnap-checkout-overlay, oklab(0 0 0 / 0.3));
-    }
+[data-bitsnap-checkout] {
+    font-family: var(
+        --bitsnap-checkout-font-family,
+        var(
+            --default-font-family,
+            ui-sans-serif,
+            system-ui,
+            sans-serif,
+            "Apple Color Emoji",
+            "Segoe UI Emoji",
+            "Segoe UI Symbol",
+            "Noto Color Emoji"
+        )
+    );
+    font-size: var(--bitsnap-checkout-font-size, inherit);
+}
 
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"] {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    cursor: pointer;
+    background-color: var(--bitsnap-checkout-overlay, oklab(0 0 0 / 0.3));
+}
+
+/* Full screen on phones, 350 px from `md`, 420 px from `xl`. The width
+ * on wider screens follows `--bitsnap-checkout-panel-width` when it is set. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    /* Scrolls when the summary and the payment choice do not fit (small phones). */
+    overflow-y: auto;
+    background-color: var(
+        --bitsnap-checkout-background,
+        var(--color-neutral-900)
+    );
+    color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+}
+
+@media (min-width: 48rem) {
     [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
-        background-color: var(
-            --bitsnap-checkout-background,
-            var(--color-neutral-900)
-        );
-        color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+        width: var(--bitsnap-checkout-panel-width, 350px);
     }
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="closeButton"]:hover {
-        background-color: var(
-            --bitsnap-checkout-hover-surface,
-            var(--color-neutral-700)
-        );
+@media (min-width: 80rem) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+        width: var(--bitsnap-checkout-panel-width, 420px);
     }
+}
 
-    /* Product separators render with `border-neutral-700` today. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] hr {
-        border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="closeButton"] {
+    padding: calc(var(--spacing) * 2);
+}
 
-    /* Only rendered with an outline when the product is unavailable. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="product"][data-bitsnap-checkout-unavailable] {
-        outline-color: var(--bitsnap-checkout-error, var(--color-red-600));
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="closeButton"]:where(:hover) {
+    background-color: var(
+        --bitsnap-checkout-hover-surface,
+        var(--color-neutral-700)
+    );
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
-        background-color: var(
-            --bitsnap-checkout-button-background,
-            var(--color-neutral-300)
-        );
-        color: var(--bitsnap-checkout-button-foreground, var(--color-neutral-800));
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(ul) {
+    margin-top: calc(var(--spacing) * 5);
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:hover:not(:disabled) {
-        background-color: var(
-            --bitsnap-checkout-button-hover-background,
-            var(--color-neutral-100)
-        );
-    }
+/* Product separators render with `border-neutral-700` today. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(hr) {
+    height: calc(var(--spacing) * 1);
+    margin: 0;
+    border-width: 1px 0 0;
+    border-style: solid;
+    border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
-        color: var(--bitsnap-checkout-error, var(--color-red-500));
-    }
+/* Only rendered with an outline when the product is unavailable. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="product"]:where([data-bitsnap-checkout-unavailable]) {
+    outline-color: var(--bitsnap-checkout-error, var(--color-red-600));
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="emptyState"] {
-        color: var(
-            --bitsnap-checkout-muted-foreground,
-            var(--color-neutral-400)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
+    margin: calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+    font-weight: 700;
+    background-color: var(
+        --bitsnap-checkout-button-background,
+        var(--color-neutral-300)
+    );
+    color: var(--bitsnap-checkout-button-foreground, var(--color-neutral-800));
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="deliveryText"] {
-        color: var(--bitsnap-checkout-muted-foreground, inherit);
-    }
+/* The "Next step" button sits in the summary column with a margin; the retry
+ * button that shares the slot sits in a padded block without one. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where([data-bitsnap-checkout-retry]) {
+    margin: 0;
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryLabel"] {
-        color: var(
-            --bitsnap-checkout-muted-foreground,
-            var(--color-neutral-400)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:hover:not(:disabled)) {
+    background-color: var(
+        --bitsnap-checkout-button-hover-background,
+        var(--color-neutral-100)
+    );
+}
 
-    /* Skeletons render with `bg-neutral-700` today, the dropdown with
-     * `neutral-800`; both follow the `surface` token once it is provided. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="skeleton"] {
-        background-color: var(
-            --bitsnap-checkout-surface,
-            var(--color-neutral-700)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:disabled) {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] {
-        background-color: var(
-            --bitsnap-checkout-background,
-            var(--color-neutral-900)
-        );
-        border-color: var(
-            --bitsnap-checkout-border,
-            var(--color-neutral-500)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
+    color: var(--bitsnap-checkout-error, var(--color-red-500));
+}
 
-    /* The portalled dropdown is its own theme boundary, so the slot selector
-       has to match the boundary element itself. Its background comes from the
-       shared `bg-popover` utility, which is driven by `--popover`, and it needs
-       an explicit stacking level because the portal lives outside of the drawer
-       stacking context. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryDropdown"],
-    [data-bitsnap-checkout-slot="countryDropdown"][data-bitsnap-checkout] {
-        z-index: 999999;
-        background-color: var(
-            --bitsnap-checkout-surface,
-            var(--color-neutral-800)
-        );
-        border-color: var(--bitsnap-checkout-border, var(--border));
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="emptyState"] {
+    color: var(
+        --bitsnap-checkout-muted-foreground,
+        var(--color-neutral-400)
+    );
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] {
-        background-color: var(
-            --bitsnap-checkout-surface,
-            var(--color-neutral-800)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="deliveryText"] {
+    color: var(--bitsnap-checkout-muted-foreground, inherit);
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] input {
-        color: var(
-            --bitsnap-checkout-muted-foreground,
-            var(--color-neutral-400)
-        );
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryLabel"] {
+    margin: 0 0 0 calc(var(--spacing) * 3);
+    color: var(
+        --bitsnap-checkout-muted-foreground,
+        var(--color-neutral-400)
+    );
+}
 
-    /* Options have no hover background today, hence the `transparent` fallback. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:hover {
-        background-color: var(--bitsnap-checkout-hover-surface, transparent);
-    }
+/* Skeletons have always rendered `neutral-700`, whatever the tokens: the
+ * `surface` token (#f9fafb in the light preset) would make them invisible on a
+ * light panel. Change them with `appearance.elements.skeleton`. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="skeleton"] {
+    background-color: var(--color-neutral-700);
+}
 
-    /* Listed after `:hover` so the selected option keeps its own surface. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"][data-state="checked"] {
-        background-color: var(
-            --bitsnap-checkout-hover-surface,
-            var(--color-neutral-700)
-        );
-    }
-    /* Payment method choice (only when the shop offers paying by hand). Cards
-     * use the border token, the selected one the foreground color and the
-     * surface; the radios follow the foreground. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] legend {
-        color: var(--bitsnap-checkout-foreground, inherit);
-    }
+/* Border width and padding are what the shared select trigger renders today;
+ * set here so a host `button { padding: 0 }` or `* { border-width: 0 }` reset
+ * cannot strip them. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] {
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+    border-width: 1px;
+    border-style: solid;
+    background-color: var(
+        --bitsnap-checkout-background,
+        var(--color-neutral-900)
+    );
+    border-color: var(
+        --bitsnap-checkout-border,
+        var(--color-neutral-500)
+    );
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] {
-        border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
-    }
+/* Keyboard focus draws the ring-coloured border of the shared select trigger. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"]:where(:focus-visible) {
+    border-color: var(--bitsnap-checkout-focus-ring, var(--ring));
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:hover {
-        border-color: var(
-            --bitsnap-checkout-muted-foreground,
-            var(--color-neutral-500)
-        );
-    }
+/* The flag sits before the country name at `h-4`. A host `img { height: auto }`
+ * reset would draw it at its natural size and push the name out of the
+ * one-line trigger. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] :where(img) {
+    width: auto;
+    max-width: none;
+    height: calc(var(--spacing) * 4);
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"][data-selected] {
-        border-color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
-        background-color: var(--bitsnap-checkout-surface, var(--color-neutral-800));
-    }
+/* The portalled dropdown is its own theme boundary, so the slot selector
+   has to match the boundary element itself. Utilities are prefixed as
+   descendants of `.bitsnap-react` and never reach the boundary, so its box
+   (stacking level, surface, text, border) is set here. The stacking level is
+   explicit because the portal lives outside of the drawer stacking context. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryDropdown"],
+[data-bitsnap-checkout-slot="countryDropdown"][data-bitsnap-checkout] {
+    z-index: 999999;
+    background-color: var(
+        --bitsnap-checkout-surface,
+        var(--color-neutral-800)
+    );
+    color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--bitsnap-checkout-border, var(--border));
+    border-radius: calc(var(--radius) - 0.125rem);
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:has(input:focus-visible) {
-        outline: 2px solid
-            var(--bitsnap-checkout-focus-ring, var(--color-neutral-400));
-        outline-offset: 2px;
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] {
+    background-color: var(
+        --bitsnap-checkout-surface,
+        var(--color-neutral-800)
+    );
+}
 
-    /* Drawn by hand: a native unchecked radio is a white disc on the dark panel. */
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"] {
-        appearance: none;
-        margin: 0;
-        border-radius: 9999px;
-        border: 1.5px solid
-            var(--bitsnap-checkout-muted-foreground, var(--color-neutral-400));
-        background-color: transparent;
-        outline: none;
-    }
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] :where(input) {
+    color: var(
+        --bitsnap-checkout-muted-foreground,
+        var(--color-neutral-400)
+    );
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"]:checked {
-        border: 5px solid var(--bitsnap-checkout-foreground, var(--color-neutral-200));
-    }
+/* Radix highlights (and focuses) the option under the pointer and the one
+ * reached with the arrow keys; both render the shared `bg-accent` unless the
+ * `hoverSurface` token is set. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where(:hover, [data-highlighted]) {
+    background-color: var(--bitsnap-checkout-hover-surface, var(--accent));
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-payment-method-description] {
-        color: var(
-            --bitsnap-checkout-muted-foreground,
-            var(--color-neutral-400)
-        );
-    }
+/* Listed after `:hover` / `[data-highlighted]` so the selected option keeps its own surface. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where([data-state="checked"]) {
+    background-color: var(
+        --bitsnap-checkout-hover-surface,
+        var(--color-neutral-700)
+    );
+}
 
-    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"]:disabled [data-bitsnap-checkout-slot="paymentMethodOption"] {
-        cursor: not-allowed;
-        opacity: 0.6;
-    }
+/* Payment method choice (only when the shop offers paying by hand). Cards
+ * use the border token, the selected one the foreground color and the
+ * surface; the radios follow the foreground. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] {
+    margin: calc(var(--spacing) * 4) calc(var(--spacing) * 2) calc(var(--spacing) * 2);
+    padding: 0;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] :where(legend) {
+    margin-bottom: calc(var(--spacing) * 1);
+    padding: 0 calc(var(--spacing) * 1);
+    color: var(--bitsnap-checkout-foreground, inherit);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] {
+    border-color: var(--bitsnap-checkout-border, var(--color-neutral-700));
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:hover) {
+    border-color: var(
+        --bitsnap-checkout-muted-foreground,
+        var(--color-neutral-500)
+    );
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where([data-selected]) {
+    border-color: var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+    background-color: var(--bitsnap-checkout-surface, var(--color-neutral-800));
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:has(input:focus-visible)) {
+    outline: 2px solid
+        var(--bitsnap-checkout-focus-ring, var(--color-neutral-400));
+    outline-offset: 2px;
+}
+
+/* Drawn by hand: a native unchecked radio is a white disc on the dark panel.
+ * Size (`size-4`) and top offset (`mt-0.5`) are set here too, so a host
+ * `input` reset cannot stretch or move it. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]) {
+    appearance: none;
+    flex-shrink: 0;
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    margin: calc(var(--spacing) * 0.5) 0 0;
+    padding: 0;
+    border-radius: 9999px;
+    border: 1.5px solid
+        var(--bitsnap-checkout-muted-foreground, var(--color-neutral-400));
+    background-color: transparent;
+    outline: none;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]:checked) {
+    border: 5px solid var(--bitsnap-checkout-foreground, var(--color-neutral-200));
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-payment-method-description] {
+    color: var(
+        --bitsnap-checkout-muted-foreground,
+        var(--color-neutral-400)
+    );
+}
+
+[data-bitsnap-checkout] :where([data-bitsnap-checkout-slot="paymentMethods"]:disabled) [data-bitsnap-checkout-slot="paymentMethodOption"] {
+    cursor: not-allowed;
+    opacity: 0.6;
 }

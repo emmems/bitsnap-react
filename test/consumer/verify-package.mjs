@@ -422,7 +422,11 @@ assert.ok(
     }
   }
   const gzipped = gzipSync(embed, { level: 9 }).length;
-  assert.ok(gzipped < 8 * 1024, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8192)`);
+  // 8.25 KB since 1.29.1: making `bitsnap.site` a Bitsnap host and keeping cookies off shared
+  // roots (host list, parent-domain split, full-chain expiry) took the script from ~8.08 KB to
+  // 8.21 KB. Trimming the new code saved only a few bytes; the rest is the validated event
+  // contract the tracker shares with the collector.
+  assert.ok(gzipped < 8448, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8448)`);
 }
 
 // 3D viewer: `bitsnap-react/viewer3d` is ESM only and the only entry that can
@@ -604,11 +608,37 @@ assert.match(
 
 const css = readFileSync(join(dist, "index.css"), "utf8");
 
-assert.match(
-  css,
-  /@layer components\{\[data-bitsnap-checkout\]/,
-  "checkout appearance rules are missing or no longer in the components layer",
-);
+// 1.30.0 ships the checkout rules unlayered on purpose: inside `@layer components`
+// the host's own unlayered CSS beat the cart. They must be present and outside every
+// `@layer` block, at any nesting depth.
+/** Top-level-and-nested spans [start, end) of every `@layer <names> { ... }` block in `source`. */
+function layerBlocks(source) {
+  const spans = [];
+  const opener = /@layer\s+[^{};]*\{/g;
+  let match;
+  while ((match = opener.exec(source))) {
+    let depth = 1;
+    let i = opener.lastIndex;
+    for (; i < source.length && depth > 0; i += 1) {
+      if (source[i] === "{") depth += 1;
+      else if (source[i] === "}") depth -= 1;
+    }
+    spans.push([match.index, i]);
+  }
+  return spans;
+}
+{
+  const checkoutRules = [...css.matchAll(/\[data-bitsnap-checkout/g)].map((m) => m.index);
+  assert.ok(checkoutRules.length > 0, "checkout appearance rules are missing from the packaged CSS");
+  const blocks = layerBlocks(css);
+  assert.ok(blocks.length > 0, "the layer scanner found no @layer block: it would pass vacuously");
+  const layered = checkoutRules.filter((at) => blocks.some(([start, end]) => at >= start && at < end));
+  assert.equal(
+    layered.length,
+    0,
+    `${layered.length} checkout rule(s) sit inside an @layer block; they must be unlayered (e.g. near: ${css.slice(layered[0] ?? 0, (layered[0] ?? 0) + 60)})`,
+  );
+}
 assert.ok(
   !css.includes(".bitsnap-react [data-bitsnap-checkout"),
   "checkout appearance rules must not be rewritten into descendant selectors",
