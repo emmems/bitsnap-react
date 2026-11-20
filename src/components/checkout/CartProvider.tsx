@@ -780,11 +780,11 @@ function getCheckout(): Checkout {
     // A copy: callers push lines into the result, which must never reach the
     // shared default.
     if (value == null) {
-      return structuredClone(emptyCheckout);
+      return { ...emptyCheckout, products: [] };
     }
     return checkoutSchema.parse(JSON.parse(value));
   } catch (e) {
-    return structuredClone(emptyCheckout);
+    return { ...emptyCheckout, products: [] };
   }
 }
 
@@ -1113,7 +1113,7 @@ export const getCheckoutMethods: (
       }
     },
     async clearCart(): Promise<Err | void> {
-      const empty = structuredClone(emptyCheckout);
+      const empty = { ...emptyCheckout, products: [] };
       empty.country = getCheckout()?.country;
       saveCheckout(empty);
       updateNumberOfProductsInCart();

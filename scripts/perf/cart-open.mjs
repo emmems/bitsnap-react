@@ -407,18 +407,14 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
     // The time is the frame that shows the rows, not the mutation that made them qualify: when the condition is first
     // met, wait for the next frame (rAF, then a task after it is painted) and check again in it and after it. A
     // condition that no longer holds there is not a paint: keep waiting.
-    const check = () => {
+    // Called from the frame poll (`inFrame`), the rows already qualify inside a frame, so only the task after its
+    // paint is awaited; a mutation outside a frame waits for the next frame first.
+    const check = (inFrame = false) => {
       if (done || pending) return;
       scan();
       if (!rowsReady()) return;
       pending = true;
-      requestAnimationFrame(() => {
-        if (done) return;
-        scan();
-        if (!rowsReady()) {
-          pending = false;
-          return;
-        }
+      const afterPaint = () => {
         setTimeout(() => {
           if (done) return;
           scan();
@@ -429,14 +425,27 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
           const ms = performance.now() - t0;
           finish({ ok: true, itemsMs: ms, paintMs: ms });
         }, 0);
+      };
+      if (inFrame === true) {
+        afterPaint();
+        return;
+      }
+      requestAnimationFrame(() => {
+        if (done) return;
+        scan();
+        if (!rowsReady()) {
+          pending = false;
+          return;
+        }
+        afterPaint();
       });
     };
     // Attribute changes (hidden -> visible) and layout-only changes (a row growing from 0 height) are not text
     // mutations: watch attributes too and re-check every frame.
-    const observer = new MutationObserver(check);
+    const observer = new MutationObserver(() => check());
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
     const poll = () => {
-      check();
+      check(true);
       if (!done) frame = requestAnimationFrame(poll);
     };
     const timer = setTimeout(() => {
