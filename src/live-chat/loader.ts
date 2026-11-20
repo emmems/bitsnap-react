@@ -43,6 +43,17 @@ export function init(script: HTMLScriptElement | null) {
     .launcher span{position:absolute;top:-2px;right:-2px;background:#171a20;color:white;border:2px solid white;border-radius:12px;min-width:16px;padding:0 3px;font:700 12px/19px system-ui}
     .loader-status{position:fixed;bottom:calc(84px + var(--inset) + var(--offset));left:var(--left);right:var(--right);z-index:2147482000;padding:10px 14px;background:#171a20;color:white;border-radius:8px;font:14px system-ui}
     @media(max-width:479px){.launcher{width:52px;height:52px}.launcher[aria-expanded=true]{display:none}}
+    @keyframes in{from{opacity:0;transform:translateY(12px) scale(.98)}}
+    @keyframes out{to{opacity:0;transform:translateY(12px) scale(.98)}}
+    @keyframes icon{from{opacity:0;transform:rotate(-60deg) scale(.6)}}
+    .panel-target .chat{animation:in .22s cubic-bezier(.2,.8,.2,1);transform-origin:bottom right}
+    :host([data-left]) .panel-target .chat{transform-origin:bottom left}
+    .panel-target[data-closing] .chat{animation:out .2s ease-in forwards;pointer-events:none}
+    .launcher{transition:transform .15s ease-out}
+    .launcher:hover{transform:scale(1.05)}
+    .launcher:active{transform:scale(.95)}
+    .launcher[data-moved] svg{animation:icon .2s ease-out}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   </style><button class="launcher" type="button" aria-expanded="false" aria-controls="bitsnap-chat-dialog" aria-haspopup="dialog"><svg class="closed-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-3.5-.7L4 21l1.2-4.1a8.5 8.5 0 1 1 15.3-5.4Z"/><path stroke-linecap="round" d="M8.5 11.5h7"/></svg><svg class="open-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg><span hidden aria-hidden="true"></span></button><div class="loader-status" role="status" hidden></div><div class="panel-target" hidden></div>`;
   if (nonce) root.querySelector("style")!.nonce = nonce;
   const launcher = root.querySelector("button")!;
@@ -53,6 +64,26 @@ export function init(script: HTMLScriptElement | null) {
   let panel: Panel | undefined;
   let loading: Promise<void> | undefined;
   let opened = false;
+  let closing = 0;
+  // Closing waits for the out animation before hiding; with reduced motion it hides at once.
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const showTarget = () => {
+    window.clearTimeout(closing);
+    delete target.dataset.closing;
+    target.hidden = false;
+  };
+  const hideTarget = () => {
+    window.clearTimeout(closing);
+    if (target.hidden || reduced?.matches) {
+      target.hidden = true;
+      return;
+    }
+    target.dataset.closing = "";
+    closing = window.setTimeout(() => {
+      target.hidden = true;
+      delete target.dataset.closing;
+    }, 200);
+  };
   const setBadge = (count: number) => {
     badge.hidden = count === 0;
     badge.textContent = String(count);
@@ -117,7 +148,7 @@ export function init(script: HTMLScriptElement | null) {
   const close = () => {
     opened = false;
     panel?.close();
-    target.hidden = true;
+    hideTarget();
     launcher.hidden = false;
     launcher.setAttribute("aria-expanded", "false");
     setBadge(Number(badge.textContent) || 0);
@@ -149,7 +180,7 @@ export function init(script: HTMLScriptElement | null) {
       panel ??= module.mount(options);
       if (!panel) throw new Error("protocol");
       updateInset();
-      target.hidden = false;
+      showTarget();
       launcher.setAttribute("aria-label", locale === "pl" ? "Zamknij czat" : "Close chat");
       panel.open();
     } catch (error) {
@@ -172,7 +203,10 @@ export function init(script: HTMLScriptElement | null) {
     refreshLook(value);
     if (reopen) void open();
   });
-  launcher.addEventListener("click", () => { if (opened) close(); else void open(); });
+  launcher.addEventListener("click", () => {
+    launcher.dataset.moved = "";
+    if (opened) close(); else void open();
+  });
   window.BitsnapChat = { open, close, toggle: async () => { if (opened) close(); else await open(); }, version: VERSION };
 }
 

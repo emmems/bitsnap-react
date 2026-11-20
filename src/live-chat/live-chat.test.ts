@@ -72,6 +72,44 @@ test("loader gates config, loads a matching protocol once and supports offline p
   assert.equal((root.host as HTMLElement).style.position, "static");
 });
 
+for (const reduced of [false, true]) {
+  test(`closing ${reduced ? "hides the panel at once with reduced motion" : "waits for the out animation, and reopening cancels it"}`, async (t) => {
+    const win = setup(t);
+    win.matchMedia = ((query: string) => ({
+      matches: reduced && query.includes("reduce"), addEventListener() {}, removeEventListener() {},
+    })) as unknown as typeof win.matchMedia;
+    const script = document.createElement("script");
+    script.src = "https://bitsnap.pl/embed/v1/bitsnap-chat.js";
+    script.dataset.project = "demo";
+    script.dataset.preview = "";
+    const inline = document.createElement("script");
+    inline.dataset.bitsnapChatConfig = "";
+    inline.type = "application/json";
+    inline.textContent = JSON.stringify(config);
+    document.body.append(inline);
+    window.BitsnapChatPanel = { protocol: PROTOCOL, mount: () => ({ open() {}, close() {} }) };
+    init(script);
+    const api = window.BitsnapChat!;
+    await api.open();
+    const target = document.querySelector("bitsnap-chat")!.shadowRoot!.querySelector<HTMLElement>(".panel-target")!;
+    assert.equal(target.hidden, false);
+    api.close();
+    if (reduced) {
+      assert.equal(target.hidden, true);
+      return;
+    }
+    assert.equal(target.hidden, false);
+    assert.ok("closing" in target.dataset);
+    await api.open();
+    assert.equal(target.hidden, false);
+    assert.ok(!("closing" in target.dataset));
+    api.close();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.equal(target.hidden, true);
+    assert.ok(!("closing" in target.dataset));
+  });
+}
+
 test("visitor client handles a null thread without messages", async () => {
   const client = createVisitorChatClient({ token: record.token, projectId: "18", fetch: async (url, init) => {
     assert.match(String(url), /\/v1\/visitor\/thread.*peek=1/);
