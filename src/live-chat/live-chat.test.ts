@@ -318,6 +318,8 @@ test("the hosted /c/ markup opens the conversation with its page credential", as
   assert.equal(report.searchParams.get("locale"), "en");
   assert.equal(polls, 1);
   assert.equal(localStorage.length, 0);
+  // A page load focuses nothing (no ring on the menu button).
+  assert.equal(root.activeElement, null);
   // The visitor came from an e-mail link: after a sent message no e-mail card appears.
   const field = root.querySelector("textarea")!;
   field.value = "Hello";

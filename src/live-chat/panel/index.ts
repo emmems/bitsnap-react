@@ -740,8 +740,8 @@ export function mount(options: PanelOptions): Panel | undefined {
       setTheme();
       viewport();
       render();
-      if (page || field.disabled || pageUnavailable) menuButton.focus();
-      else field.focus();
+      // The hosted /c/ page is a page, not a dialog: it opens with nothing focused, as any page does.
+      if (!page) (field.disabled || pageUnavailable ? menuButton : field).focus();
       dialog.addEventListener("input", activity, listener);
       dialog.addEventListener("click", activity, listener);
       dialog.addEventListener("focusin", activity, listener);
