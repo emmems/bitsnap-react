@@ -1,4 +1,5 @@
-import { domainCandidates } from "../consent/core/cookie";
+import { domainCandidates, domainsToExpire } from "../consent/core/cookie";
+import { isBitsnapHost } from "../consent/core/hosts";
 import { clientIdCookieName } from "./contract";
 import { randomBytes } from "./random";
 
@@ -29,12 +30,6 @@ function readCookie(doc: Document, name: string): string | null {
     if (index !== -1 && part.slice(0, index).trim() === name) return part.slice(index + 1).trim();
   }
   return null;
-}
-
-/** bitsnap.pl and its subdomains: many merchants share them, and the site-wide choice is bitsnap's own. */
-function isBitsnapHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return host === "bitsnap.pl" || host.endsWith(".bitsnap.pl");
 }
 
 /**
@@ -90,7 +85,8 @@ export function readVisitorCookie(doc: Document, projectKey: string): string | n
 /**
  * Sets the cookie on the widest registrable domain the browser accepts
  * (shortest suffix with two labels first, so `shop.example.co.uk` skips the
- * refused `co.uk`), host-only where no domain sticks (localhost, IP hosts).
+ * refused `co.uk`), host-only where no domain sticks (localhost, IP hosts) or
+ * the host sits on a root shared by sellers (`*.bitsnap.site`).
  */
 export function writeVisitorCookie(win: Window, projectKey: string, id: string): void {
   try {
@@ -118,7 +114,9 @@ export function deleteVisitorCookie(win: Window, projectKey: string): void {
       `${clientIdCookieName(projectKey)}=; Max-Age=0; Path=/; SameSite=Lax` +
       (win.location.protocol === "https:" ? "; Secure" : "");
     doc.cookie = base;
-    for (const domain of domainCandidates(win.location.hostname)) doc.cookie = `${base}; Domain=${domain}`;
+    // The full chain, `Domain=bitsnap.site` included: another seller's page may have put the cookie
+    // there, and expiring with an empty value never sets anything on a shared root.
+    for (const domain of domainsToExpire(win.location.hostname)) doc.cookie = `${base}; Domain=${domain}`;
   } catch {
     // best effort
   }
