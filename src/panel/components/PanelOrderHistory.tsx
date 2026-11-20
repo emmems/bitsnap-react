@@ -188,7 +188,7 @@ function PanelOrderHistory({
   const failed = query.isError && orders.length === 0;
   const showPills = isGlobal && shops.length >= 2;
   const liveCountText =
-    !firstLoad && !failed ? ordersCountText(texts, locale, totalCount) : undefined;
+    !firstLoad && !failed ? ordersCountText(texts, locale, totalCount) : "";
 
   return (
     <div

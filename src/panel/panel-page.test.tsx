@@ -7,17 +7,21 @@ import {
   type DescMessage,
   type MessageInitShape,
 } from "@bufbuild/protobuf";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { setupReactPage, TEST_KEY } from "@/src/analytics/react-testing";
 import {
   GetOrderHistoryRequestSchema,
   GetOrderHistoryResponseSchema,
+  GetOrdersRequestSchema,
   GetOrdersResponseSchema,
   GetPublicOrderDetailsRequestSchema,
   GetPublicOrderDetailsResponseSchema,
   UserPanelGetProductsResponseSchema,
+  UserProductType,
 } from "../gen/proto/public/v1/public_api_pb";
 import { setPanelConfig } from "./config.ts";
 import { dropEmptyOrderId } from "./components/PanelPage.tsx";
+import { useUrlSearchParams } from "./hooks/useUrlSearchParams.ts";
 
 const page = setupReactPage("https://shop.example.test/panel");
 
@@ -47,6 +51,8 @@ const roots: Array<{ unmount: () => void }> = [];
 let detail: (request: { email?: string; accessToken?: string }) =>
   | Response
   | MessageInitShape<typeof GetPublicOrderDetailsResponseSchema>;
+let ordersAnswer: (request: { projectId: string }) => MessageInitShape<typeof GetOrdersResponseSchema>;
+let productsAnswer: () => MessageInitShape<typeof UserPanelGetProductsResponseSchema>;
 const baseOrder = {
   orderId: "c_TEY3",
   status: "paid",
@@ -83,15 +89,19 @@ beforeEach(() => {
   detailRequests.length = 0;
   historyRequests.length = 0;
   detail = () => ({ result: { case: "order", value: baseOrder } });
+  ordersAnswer = () => ({ orders: [], totalCount: 0 });
+  productsAnswer = () => ({ result: { case: "success", value: { products: [] } } });
   globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
     if (url.endsWith("/GetOrders")) {
-      return proto(GetOrdersResponseSchema, { orders: [], totalCount: 0 });
+      const request = fromBinary(
+        GetOrdersRequestSchema,
+        new Uint8Array(init?.body as ArrayBuffer),
+      );
+      return proto(GetOrdersResponseSchema, ordersAnswer(request));
     }
     if (url.endsWith("/UserPanelGetProducts")) {
-      return proto(UserPanelGetProductsResponseSchema, {
-        result: { case: "success", value: { products: [] } },
-      });
+      return proto(UserPanelGetProductsResponseSchema, productsAnswer());
     }
     if (url.endsWith("/GetOrderHistory")) {
       const request = fromBinary(
@@ -181,6 +191,75 @@ describe("dropEmptyOrderId", () => {
     );
     assert.equal(dropEmptyOrderId(`?state=${q("products")}`), null);
     assert.equal(dropEmptyOrderId(""), null);
+  });
+});
+
+describe("useUrlSearchParams", () => {
+  const initialParams = {
+    state: "products" as string,
+    shop: undefined as string | undefined,
+    orderProject: undefined as string | undefined,
+  };
+  const rawKeys = ["shop", "orderProject"] as const;
+
+  it("uses replaceState when {replace:true}, pushState by default, and preserves raw string keys on popstate", async () => {
+    const pushCalls: string[] = [];
+    const replaceCalls: string[] = [];
+    const originalPush = page.win.history.pushState.bind(page.win.history);
+    const originalReplace = page.win.history.replaceState.bind(page.win.history);
+    page.win.history.pushState = (data: unknown, unused: string, url?: string | URL | null) => {
+      pushCalls.push(String(url ?? ""));
+      originalPush(data, unused, url);
+    };
+    page.win.history.replaceState = (data: unknown, unused: string, url?: string | URL | null) => {
+      replaceCalls.push(String(url ?? ""));
+      originalReplace(data, unused, url);
+    };
+
+    try {
+      let latest = initialParams;
+      let update!: (
+        next: Partial<typeof initialParams>,
+        opts?: { replace?: boolean },
+      ) => void;
+      function Harness() {
+        const [params, setParams] = useUrlSearchParams(initialParams, {
+          rawStringKeys: rawKeys,
+        });
+        latest = params;
+        update = setParams;
+        return null;
+      }
+
+      const container = page.win.document.createElement("div");
+      page.win.document.body.appendChild(container);
+      const root = createRoot(container);
+      roots.push(root);
+      await React.act(async () => root.render(<Harness />));
+
+      await React.act(async () => update({ shop: "shopA" }, { replace: true }));
+      assert.equal(replaceCalls.length, 1);
+      assert.equal(pushCalls.length, 0);
+      assert.equal(latest.shop, "shopA");
+
+      await React.act(async () => update({ state: "orders" }));
+      assert.equal(pushCalls.length, 1);
+      assert.equal(replaceCalls.length, 1);
+      assert.equal(latest.state, "orders");
+
+      originalReplace(null, "", "/panel?state=%22orders%22&shop=1e5&orderProject=1e5");
+      await React.act(async () =>
+        page.win.dispatchEvent(new page.win.PopStateEvent("popstate")),
+      );
+      assert.equal(latest.state, "orders");
+      assert.equal(latest.shop, "1e5");
+      assert.equal(typeof latest.shop, "string");
+      assert.equal(latest.orderProject, "1e5");
+      assert.equal(typeof latest.orderProject, "string");
+    } finally {
+      page.win.history.pushState = originalPush;
+      page.win.history.replaceState = originalReplace;
+    }
   });
 });
 
@@ -432,6 +511,191 @@ describe("Panel", () => {
     assert.equal(detailsContainer.querySelector("nav [aria-current=page]")?.textContent, "Biblioteka");
     assert.ok(detailsContainer.querySelector('[data-testid="panel-empty"]'));
   });
+
+  it("global panel: opening an order writes orderProject while keeping shop, and back clears orderProject while shop stays", async () => {
+    const globalKey = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:*`;
+    setPanelConfig({ projectID: "", host: undefined });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalKey, "global-token");
+
+    const shops = [
+      { projectId: "shopA", name: "Sklep Alfa", orderCount: 1 },
+      { projectId: "shopB", name: "Sklep Beta", orderCount: 1 },
+    ];
+    ordersAnswer = (req) => ({
+      orders: [
+        {
+          id: req.projectId === "shopB" ? "c_BETA0001" : "c_ALFA0001",
+          status: "paid",
+          totalAmount: 4900,
+          currency: "pln",
+          customerName: "Jan",
+          createdAt: timestampFromDate(new Date("2025-11-05T10:00:00Z")),
+          projectId: req.projectId === "shopB" ? "shopB" : "shopA",
+        },
+      ],
+      totalCount: 1,
+      shops: req.projectId === "" ? shops : [],
+    });
+
+    const container = await mountAt(`?state=${q("orders")}&shop=${q("shopB")}`);
+    const row = container.querySelector<HTMLButtonElement>("[data-order-row=open]")!;
+    assert.ok(row, "order row renders on filtered global orders");
+
+    await React.act(async () => row.click());
+    await settle();
+    await settle();
+
+    const openedParams = new URLSearchParams(page.win.location.search);
+    assert.equal(openedParams.get("state"), JSON.stringify("order-details"));
+    assert.equal(openedParams.get("orderId"), JSON.stringify("c_BETA0001"));
+    assert.equal(openedParams.get("orderProject"), JSON.stringify("shopB"));
+    assert.equal(openedParams.get("shop"), JSON.stringify("shopB"));
+    assert.equal(detailRequests[0]?.projectId, "shopB");
+    assert.equal(historyRequests[0]?.projectId, "shopB");
+
+    const back = [...container.querySelector("main")!.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Zamówienia"),
+    )!;
+    assert.ok(back, "back button in order details");
+    await React.act(async () => back.click());
+    await settle();
+
+    const backParams = new URLSearchParams(page.win.location.search);
+    assert.equal(backParams.get("state"), JSON.stringify("orders"));
+    assert.equal(backParams.has("orderId"), false);
+    assert.equal(backParams.has("orderProject"), false);
+    assert.equal(backParams.get("shop"), JSON.stringify("shopB"));
+  });
+
+  it("shop panel: opening an order from Orders omits orderProject from the URL", async () => {
+    ordersAnswer = () => ({
+      orders: [
+        {
+          id: "c_SHOP0001",
+          status: "paid",
+          totalAmount: 4900,
+          currency: "pln",
+          customerName: "Jan",
+          createdAt: timestampFromDate(new Date("2025-11-05T10:00:00Z")),
+          projectId: TEST_KEY,
+        },
+      ],
+      totalCount: 1,
+    });
+
+    const container = await mountAt(`?state=${q("orders")}`);
+    const row = container.querySelector<HTMLButtonElement>("[data-order-row=open]")!;
+    assert.ok(row);
+    await React.act(async () => row.click());
+    await settle();
+    await settle();
+
+    const params = new URLSearchParams(page.win.location.search);
+    assert.equal(params.get("state"), JSON.stringify("order-details"));
+    assert.equal(params.get("orderId"), JSON.stringify("c_SHOP0001"));
+    assert.equal(params.has("orderProject"), false);
+  });
+
+  it("global panel: shop filter survives navigate() between Library and Orders", async () => {
+    const globalKey = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:*`;
+    setPanelConfig({ projectID: "", host: undefined });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalKey, "global-token");
+
+    productsAnswer = () => ({
+      result: {
+        case: "success",
+        value: {
+          products: [
+            {
+              projectId: "shopA",
+              projectName: "Sklep Alfa",
+              accessId: "a1",
+              productName: "Ebook Alfa",
+              productType: UserProductType.FILE,
+            },
+            {
+              projectId: "shopB",
+              projectName: "Sklep Beta",
+              accessId: "b1",
+              productName: "Ebook Beta",
+              productType: UserProductType.FILE,
+            },
+          ],
+        },
+      },
+    });
+    ordersAnswer = (req) => ({
+      orders: [
+        {
+          id: "c_ALFA0001",
+          status: "paid",
+          totalAmount: 4900,
+          currency: "pln",
+          customerName: "Jan",
+          createdAt: timestampFromDate(new Date("2025-11-05T10:00:00Z")),
+          projectId: "shopA",
+        },
+      ],
+      totalCount: 1,
+      shops:
+        req.projectId === ""
+          ? [
+              { projectId: "shopA", name: "Sklep Alfa", orderCount: 1 },
+              { projectId: "shopB", name: "Sklep Beta", orderCount: 1 },
+            ]
+          : [],
+    });
+
+    const container = await mountAt(`?state=${q("products")}&shop=${q("shopA")}`);
+    const nav = container.querySelector("nav")!;
+    const ordersBtn = [...nav.querySelectorAll("button")].find((b) => b.textContent === "Zamówienia")!;
+    const libraryBtn = [...nav.querySelectorAll("button")].find((b) => b.textContent === "Biblioteka")!;
+
+    const pressedPill = () =>
+      container.querySelector('[role="group"] button[aria-pressed="true"]')?.textContent ?? "";
+    assert.match(pressedPill(), /Sklep Alfa/);
+
+    await React.act(async () => ordersBtn.click());
+    await settle();
+    await settle();
+    assert.equal(new URLSearchParams(page.win.location.search).get("shop"), JSON.stringify("shopA"));
+    assert.match(pressedPill(), /Sklep Alfa/);
+
+    await React.act(async () => libraryBtn.click());
+    await settle();
+    await settle();
+    assert.equal(new URLSearchParams(page.win.location.search).get("shop"), JSON.stringify("shopA"));
+    assert.match(pressedPill(), /Sklep Alfa/);
+  });
+
+  it("global panel: popstate to returns or return-details maps to products", async () => {
+    const globalKey = `bitsnap-panel-session:${encodeURIComponent("https://bitsnap.pl")}:*`;
+    setPanelConfig({ projectID: "", host: undefined });
+    page.win.localStorage.clear();
+    page.win.localStorage.setItem(globalKey, "global-token");
+
+    const container = await mountAt(`?state=${q("orders")}`);
+    assert.equal(container.querySelector("nav [aria-current=page]")?.textContent, "Zamówienia");
+
+    page.win.history.pushState({}, "", `/panel?state=${q("returns")}`);
+    await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
+    await settle();
+    assert.equal(container.querySelector("nav [aria-current=page]")?.textContent, "Biblioteka");
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'));
+
+    page.win.history.pushState({}, "", `/panel?state=${q("orders")}`);
+    await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
+    await settle();
+    assert.equal(container.querySelector("nav [aria-current=page]")?.textContent, "Zamówienia");
+
+    page.win.history.pushState({}, "", `/panel?state=${q("return-details")}&returnId=${q("ret_1")}`);
+    await React.act(async () => page.win.dispatchEvent(new page.win.PopStateEvent("popstate")));
+    await settle();
+    assert.equal(container.querySelector("nav [aria-current=page]")?.textContent, "Biblioteka");
+    assert.ok(container.querySelector('[data-testid="panel-empty"]'));
+  });
 });
 
 describe("PublicOrderPage", () => {
@@ -508,6 +772,25 @@ describe("PublicOrderPage", () => {
     assert.equal(detailRequests.at(-1)?.accessToken, "");
     assert.equal(container.querySelector("h1")?.textContent, "Zamówienie c_TEY3");
     assert.ok([...container.querySelectorAll("button")].some((b) => b.textContent === "Potwierdź e-mail"));
+  });
+
+  it("ignores orderProjectID whenever the panel has its own projectID", async () => {
+    const PublicOrderPage = (await import("./components/PublicOrderPage.tsx")).default;
+    const container = page.win.document.createElement("div");
+    page.win.document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () =>
+      root.render(
+        <PanelProvider analytics={false}>
+          <PublicOrderPage variant="panel" orderID="ord_9" orderProjectID="otherShop" />
+        </PanelProvider>,
+      ),
+    );
+    await settle();
+    await settle();
+    assert.equal(detailRequests[0]?.projectId, TEST_KEY);
+    assert.equal(historyRequests[0]?.projectId, TEST_KEY);
   });
 });
 

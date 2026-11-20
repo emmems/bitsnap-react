@@ -895,6 +895,15 @@ describe("global library shop pills and shared products query (C7, C7a)", () => 
   it("shows ShopPills on the global panel with 2+ shops, filters without refetching, and replaces history on click", async () => {
     products = twoShopProducts;
     const calls: Array<{ params: import("./types").PanelSearchParamsType; options?: { replace?: boolean } }> = [];
+    const unfiltered = await mountGrid({
+      projectID: "",
+      setParams: (params, options) => calls.push({ params, options }),
+    });
+    assert.equal(unfiltered.querySelector("[data-shop-pills-count]")?.textContent, "2 produkty");
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+    requests.length = 0;
+
     const container = await mountGrid({
       projectID: "",
       shop: "shopA",
@@ -902,6 +911,7 @@ describe("global library shop pills and shared products query (C7, C7a)", () => 
     });
     const group = container.querySelector('[role="group"][aria-label="Filtr sklepu"]');
     assert.ok(group, "shop pills shown on global panel");
+    assert.equal(container.querySelector("[data-shop-pills-count]")?.textContent, "1 produkt");
     assert.ok(container.textContent?.includes("Ebook Alfa"));
     assert.ok(!container.textContent?.includes("Kurs Beta"));
     assert.equal(requests.filter((u) => u.endsWith("/UserPanelGetProducts")).length, 1);
@@ -911,7 +921,60 @@ describe("global library shop pills and shared products query (C7, C7a)", () => 
     )!;
     await React.act(async () => betaPill.click());
     assert.equal(calls[0]?.params.shop, "shopB");
+    assert.equal(calls[0]?.params.state, "products");
     assert.equal(calls[0]?.options?.replace, true);
+  });
+
+  it("writes activeScreen instead of stale params.state when clicking a shop pill", async () => {
+    const { ProductsComponent } = await import("./components/PanelProductGrid.tsx");
+    const calls: Array<{ params: import("./types").PanelSearchParamsType; options?: { replace?: boolean } }> = [];
+    const container = await mountPanelView(
+      <ProductsComponent
+        projectID=""
+        accessToken="panel-token"
+        products={[
+          create(UserProductSchema, {
+            projectId: "shopA",
+            projectName: "Sklep Alfa",
+            accessId: "a1",
+            productName: "Ebook Alfa",
+            productType: UserProductType.FILE,
+          }),
+          create(UserProductSchema, {
+            projectId: "shopB",
+            projectName: "Sklep Beta",
+            accessId: "b1",
+            productName: "Kurs Beta",
+            productType: UserProductType.COURSE,
+          }),
+        ]}
+        activeScreen="products"
+        params={{ state: "returns" }}
+        setParams={(params, options) => calls.push({ params, options })}
+        openCourse={() => {}}
+      />,
+    );
+    const alfaPill = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find((b) =>
+      b.textContent?.includes("Sklep Alfa"),
+    )!;
+    await React.act(async () => alfaPill.click());
+    assert.deepEqual(calls, [{ params: { state: "products", shop: "shopA" }, options: { replace: true } }]);
+  });
+
+  it("formats productsCount plural forms in pl and en", async () => {
+    const { getProductTexts } = await import("./components/products/texts");
+    const pl = getProductTexts("pl");
+    assert.equal(pl.productsCount(0), "0 produktów");
+    assert.equal(pl.productsCount(1), "1 produkt");
+    assert.equal(pl.productsCount(2), "2 produkty");
+    assert.equal(pl.productsCount(5), "5 produktów");
+    assert.equal(pl.productsCount(12), "12 produktów");
+    assert.equal(pl.productsCount(22), "22 produkty");
+
+    const en = getProductTexts("en");
+    assert.equal(en.productsCount(0), "0 products");
+    assert.equal(en.productsCount(1), "1 product");
+    assert.equal(en.productsCount(2), "2 products");
   });
 
   it("never renders ShopPills on a shop panel", async () => {
@@ -1003,5 +1066,9 @@ describe("global library shop pills and shared products query (C7, C7a)", () => 
 
     await mountPanelView(<BothCallers projectID="shopA" />);
     assert.deepEqual(seenProjectIds, ["shopA"], "single fetch shared by both callers");
+
+    seenProjectIds.length = 0;
+    await mountPanelView(<BothCallers projectID="" />);
+    assert.deepEqual(seenProjectIds, [""], "single fetch shared by both callers on global panel");
   });
 });

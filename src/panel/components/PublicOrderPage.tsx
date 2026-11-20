@@ -80,7 +80,7 @@ function OrderPageContent({
   lead,
 }: Props & { lead?: ReactNode }) {
   const { projectID, host, loginURL } = usePanelConfig();
-  const effectiveProjectID = orderProjectID?.trim() || projectID || "";
+  const effectiveProjectID = projectID?.trim() || orderProjectID?.trim() || "";
   const instrument = useInstrument(projectID, analytics, "order");
   const locale = getLocale();
   const texts = getPanelTexts(locale);

@@ -57,7 +57,7 @@ export function ShopPills({
 }: ShopPillsProps) {
   if (shops.length < 2) return null;
 
-  const isAll = value == null;
+  const isAll = value == null || !shops.some((s) => s.projectId === value);
 
   return (
     <div className={cn("min-w-0", className)} data-shop-pills="">
@@ -65,7 +65,7 @@ export function ShopPills({
         <div
           role="group"
           aria-label={label}
-          className="flex items-center gap-2 overflow-x-auto snap-x snap-proximity py-1 pr-6 sm:flex-wrap sm:overflow-visible sm:pr-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="-ml-1 flex items-center gap-2 overflow-x-auto snap-x snap-proximity py-1 pr-6 pl-1 scroll-pl-1 sm:ml-0 sm:flex-wrap sm:overflow-visible sm:pr-0 sm:pl-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <button
             type="button"

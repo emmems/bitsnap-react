@@ -514,6 +514,10 @@ describe("global all-shops order list (C4)", () => {
 
   it("shows shop pills and per-row shop marks on 'Wszystkie', passes orderProject on open, and hides marks when filtered to one shop", async () => {
     const requested: Array<{ projectId: string; offset: number }> = [];
+    let releaseShopB: (() => void) | undefined;
+    const shopBGate = new Promise<void>((resolve) => {
+      releaseShopB = resolve;
+    });
     globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
       const req = fromBinary(
         GetOrdersRequestSchema,
@@ -527,6 +531,7 @@ describe("global all-shops order list (C4)", () => {
             create(GetOrdersResponseSchema, {
               orders: [
                 makeOrder("c_ALFA0001", "2025-11-05", "shopA"),
+                makeOrder("", "2025-11-02", "shopB"),
                 makeOrder("c_BETA0001", "2025-11-01", "shopB"),
               ],
               totalCount: 3,
@@ -536,12 +541,16 @@ describe("global all-shops order list (C4)", () => {
           { status: 200, headers: { "Content-Type": "application/proto" } },
         );
       }
+      await shopBGate;
       return new Response(
         toBinary(
           GetOrdersResponseSchema,
           create(GetOrdersResponseSchema, {
-            orders: [makeOrder("c_BETA0001", "2025-11-01", "shopB")],
-            totalCount: 1,
+            orders: [
+              makeOrder("", "2025-11-02", "shopB"),
+              makeOrder("c_BETA0001", "2025-11-01", "shopB"),
+            ],
+            totalCount: 2,
             shops: [],
           }),
         ) as BodyInit,
@@ -561,21 +570,51 @@ describe("global all-shops order list (C4)", () => {
     assert.equal(pills.length, 3);
     assert.equal(pills[0]!.getAttribute("aria-pressed"), "true");
 
-    // Per-row shop marks shown and included in row aria-label.
+    const liveCountNode = container.querySelector("[data-shop-pills-count]");
+    assert.ok(liveCountNode, "live-region count node is mounted");
+    assert.equal(liveCountNode!.textContent, "3 zamówienia");
+
+    // Per-row shop marks shown on both open and legacy rows, and global rows use lg:grid-cols- without md:grid-cols-.
     const rows = [...container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]")];
     assert.equal(rows.length, 2);
     assert.ok(rows[0]!.querySelector("[data-shop-mark]"));
     assert.match(rows[0]!.getAttribute("aria-label") ?? "", /Księgarnia Alfa/);
     assert.match(rows[1]!.getAttribute("aria-label") ?? "", /Studio Beta/);
+    for (const row of rows) {
+      assert.match(row.className, /\blg:grid-cols-/);
+      assert.doesNotMatch(row.className, /\bmd:grid-cols-/);
+    }
+
+    const legacyRow = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.ok(legacyRow, "global legacy row rendered");
+    assert.ok(legacyRow.querySelector("[data-shop-mark]"), "legacy row shows ShopMark on Wszystkie");
+    assert.match(legacyRow.textContent ?? "", /Studio Beta/);
+    assert.match(legacyRow.className, /\blg:grid-cols-/);
+    assert.doesNotMatch(legacyRow.className, /\bmd:grid-cols-/);
 
     // Clicking a row passes both orderId and order's projectId.
     await React.act(async () => rows[1]!.click());
     assert.deepEqual(opened, [["c_BETA0001", "shopB"]]);
 
-    // Selecting "Studio Beta" fires shopQuery with projectId="shopB" and hides per-row ShopMark.
+    // Selecting "Studio Beta" fires shopQuery with projectId="shopB"; live-region node stays mounted while pending.
     await React.act(async () => pills[2]!.click());
+    await settle(20);
+    assert.equal(
+      container.querySelector("[data-shop-pills-count]"),
+      liveCountNode,
+      "live-region node stays mounted while shopQuery is pending",
+    );
+    assert.equal(liveCountNode!.textContent, "");
+
+    releaseShopB!();
     await settle();
     await settle();
+    assert.equal(
+      container.querySelector("[data-shop-pills-count]"),
+      liveCountNode,
+      "live-region node stays mounted after shopQuery resolves",
+    );
+    assert.equal(liveCountNode!.textContent, "2 zamówienia");
     assert.deepEqual(
       requested.map((r) => r.projectId),
       ["", "shopB"],
@@ -583,7 +622,11 @@ describe("global all-shops order list (C4)", () => {
     const filteredRows = [...container.querySelectorAll<HTMLButtonElement>("[data-order-row=open]")];
     assert.equal(filteredRows.length, 1);
     assert.equal(filteredRows[0]!.querySelector("[data-shop-mark]"), null);
-    assert.match(container.textContent ?? "", /1 zamówienie/);
+    assert.doesNotMatch(filteredRows[0]!.getAttribute("aria-label") ?? "", /Studio Beta/);
+    const filteredLegacy = container.querySelector<HTMLElement>("[data-order-row=legacy]")!;
+    assert.ok(filteredLegacy);
+    assert.equal(filteredLegacy.querySelector("[data-shop-mark]"), null);
+    assert.match(container.textContent ?? "", /2 zamówienia/);
   });
 
   it("does not fire shopQuery for an unresolved or hand-typed shop param (C-10)", async () => {

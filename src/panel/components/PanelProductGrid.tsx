@@ -380,7 +380,7 @@ export const ProductsComponent = ({
     });
   };
   const setShopFilter = (shop: string | undefined) => {
-    setParams({ state: params.state, shop }, { replace: true });
+    setParams({ state: activeScreen, shop }, { replace: true });
   };
 
   useEffect(() => {

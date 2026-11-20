@@ -117,6 +117,31 @@ describe("ShopPills", () => {
     await React.act(async () => buttons[2]!.click());
     await React.act(async () => buttons[0]!.click());
     assert.deepEqual(picked, ["shopB", undefined]);
+    assert.ok(group!.classList.contains("-ml-1"));
+    assert.ok(group!.classList.contains("pl-1"));
+    assert.ok(group!.classList.contains("scroll-pl-1"));
+    assert.ok(group!.classList.contains("sm:ml-0"));
+    assert.ok(group!.classList.contains("sm:pl-0"));
+  });
+
+  it("marks 'Wszystkie' as pressed when value is empty or does not match any shop", async () => {
+    for (const value of ["", "unknown"]) {
+      const container = await mount(
+        <ShopPills
+          shops={SHOPS}
+          value={value}
+          onChange={() => {}}
+          label="Filtr sklepu"
+          allLabel="Wszystkie"
+        />,
+      );
+      const buttons = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+      assert.deepEqual(
+        buttons.map((b) => b.getAttribute("aria-pressed")),
+        ["true", "false", "false"],
+        `value=${JSON.stringify(value)}`,
+      );
+    }
   });
 
   it("scrolls a focused pill into view horizontally", async () => {

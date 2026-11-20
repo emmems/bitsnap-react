@@ -8,6 +8,7 @@ import { panelEmailKey, panelSessionKey } from "../panel/session-storage";
 import { init, originAllowed } from "./loader";
 import { mount, mountHostedPage } from "./panel";
 import { PROTOCOL, type ChatConfig, type PanelOptions } from "./protocol";
+import { buyerSession } from "./storage";
 
 const config: ChatConfig = {
   enabled: true, projectId: "18", chatUrl: "https://chat.bitsnap.pl", challengeOrigin: "https://bitsnap.pl",
@@ -532,4 +533,22 @@ test("the abuse report omits tracking parameters and the menu dismisses on focus
   assert.equal(menu.hidden, true);
   assert.equal(button.getAttribute("aria-expanded"), "false");
   panel.close();
+});
+
+test("buyerSession skips empty project keys instead of reading the global * session", (t) => {
+  setup(t);
+  localStorage.setItem(panelSessionKey("", config.challengeOrigin), "global_token");
+  localStorage.setItem(panelEmailKey("", config.challengeOrigin), "global@example.test");
+
+  assert.equal(buyerSession({ projectKey: "", config }), undefined);
+  assert.equal(buyerSession({ projectKey: "   ", config }), undefined);
+  assert.equal(buyerSession({ projectKey: "pk_", config }), undefined);
+  assert.equal(buyerSession({ projectKey: "demo", config }), undefined);
+
+  localStorage.setItem(panelSessionKey("demo", config.challengeOrigin), "shop_token");
+  localStorage.setItem(panelEmailKey("demo", config.challengeOrigin), "Buyer@Example.test ");
+  assert.deepEqual(buyerSession({ projectKey: "demo", config }), {
+    token: "shop_token",
+    email: "buyer@example.test",
+  });
 });

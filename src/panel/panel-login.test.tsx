@@ -383,4 +383,39 @@ describe("PanelLogin", () => {
       (globalThis as { window: unknown }).window = savedWindow;
     }
   });
+
+  it("does not read a shop session on the global (empty projectID) login page", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    const host = encodeURIComponent("https://bitsnap.pl");
+    page.win.localStorage.setItem(
+      `bitsnap-panel-session:${host}:${encodeURIComponent(TEST_KEY)}`,
+      "shop-token",
+    );
+
+    const navigated: string[] = [];
+    const fakeLocation = {
+      origin: "https://bitsnap.pl",
+      search: "",
+      get href() {
+        return "https://bitsnap.pl/panel/login";
+      },
+      set href(value: string) {
+        navigated.push(value);
+      },
+    };
+    const savedWindow = globalThis.window;
+    (globalThis as { window: unknown }).window = new Proxy(page.win, {
+      get(target, prop) {
+        if (prop === "location") return fakeLocation;
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      await mount();
+      assert.deepEqual(navigated, []);
+    } finally {
+      (globalThis as { window: unknown }).window = savedWindow;
+    }
+  });
 });
