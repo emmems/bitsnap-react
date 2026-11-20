@@ -89,7 +89,7 @@ export function CartCheckout() {
               className={cn("font-medium", totalValue.className)}
               style={totalValue.style}
             >
-              {formatCurrency(total, currency)}
+              {formatCurrency(total, currency, locale)}
             </p>
             {isSomeProductDeliverable && (
               <p

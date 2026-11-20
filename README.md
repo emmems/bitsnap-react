@@ -92,7 +92,16 @@ defaults, overridable through `texts`).
   [Tokens](#tokens)). Like every token they accept any CSS value, so
   `var(--your-variable)` works. `motionDuration: "0ms"` (or `"0s"`, `"0"`)
   turns the cart's own animations and transitions off; Apple Pay, Google Pay
-  and the other express buttons keep theirs.
+  and the other express buttons keep theirs. Other `motionDuration` values are
+  accepted but not used yet: the cart's own keyframes that read it arrive in
+  1.32.0.
+- **Light look from tokens.** The new muted and sale defaults are tuned for the
+  dark panel. A light look built from tokens without `theme: "light"` should
+  also set `mutedForeground` and `sale`, or the struck price, Omnibus line and
+  sale price drop below 4.5:1 on white.
+- **Video, audio and rich descriptions load their libraries on first use.**
+  `hls.js` and `dompurify` are no longer in the cart bundle; a video or audio
+  stream starts a moment later the first time it plays.
 
 ## 1.29.0
 
@@ -533,7 +542,7 @@ before. The checkout sets these properties:
 | `radius`                  | Radius of the rounded elements                          |
 | `sale`                    | Sale price of a discounted line (default `#f87171`; `#b91c1c` in the light theme) |
 | `panelWidth`              | Drawer width from 768 px (default 350 px, 420 px from 1280 px); phones stay full width |
-| `motionDuration`          | Base duration of the cart's animations (default `240ms`); `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted |
+| `motionDuration`          | Base duration of the cart's animations; `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted. Other values take effect from 1.32.0 (default `240ms`) |
 
 Every token accepts any CSS value and is written as-is, so
 `tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site.

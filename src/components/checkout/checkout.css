@@ -364,7 +364,7 @@
  * (`paymentButtons` and everything in it) keep theirs. `!important` so it
  * also beats an animation set inline. Specificity (0,2,0): the qualifiers
  * sit in `:where()`. */
-[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *)) {
+[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *, .bsc-skeleton)) {
     animation: none !important;
     transition: none !important;
 }

@@ -6,7 +6,6 @@ import {
   buildCartView,
   createCartViewStore,
   hasPayWhatYouWantLine,
-  interimPayWhatYouWantLineIDs,
   isPayWhatYouWantLine,
   payWhatYouWantKind,
   runPriceGate,
@@ -54,10 +53,16 @@ function snapshotOf(...items: CartLineDetails[]): CartSnapshot {
   return Object.fromEntries(items.map((item) => [item.id, { at: NOW - 1000, details: item }]));
 }
 
-function freshOf(items: CartLineDetails[], confirmed: string[] = items.map((item) => item.id), failed = false): CartViewFresh {
+function freshOf(
+  items: CartLineDetails[],
+  confirmed: string[] = items.map((item) => item.id),
+  failed = false,
+  gateFresh: string[] = items.map((item) => item.id),
+): CartViewFresh {
   return {
     details: new Map(items.map((item) => [item.id, item])),
     confirmed: new Set(confirmed),
+    gateFresh: new Set(gateFresh),
     failed,
   };
 }
@@ -241,30 +246,23 @@ describe("pay what you want rule (N5)", () => {
     assert.equal(view.lines[0]!.unitPrice, 1000);
   });
 
-  it("priceType absent + amount: interim, priced at amount, not gated", () => {
+  it("priceType absent + amount: catalog price and gated (the server ignores the amount)", () => {
     const d = details("a");
-    assert.equal(payWhatYouWantKind({ amount: 500 }, d), "amount");
+    assert.equal(payWhatYouWantKind({ amount: 500 }, d), "none");
     assert.equal(payWhatYouWantKind({}, d), "none");
-    assert.equal(payWhatYouWantKind({ amount: 500 }, undefined), "amount");
+    assert.equal(payWhatYouWantKind({ amount: 500 }, undefined), "none");
+    assert.equal(isPayWhatYouWantLine({ amount: 500 }, d), false);
+    const view = buildCartView([line("l1", "a", { amount: 500 })], snapshotOf(d), undefined, NOW);
+    assert.equal(view.lines[0]!.payWhatYouWant, "none");
+    assert.equal(view.lines[0]!.unitPrice, 1000);
+    assert.equal(view.sum, 1000);
   });
 
-  it("dropping the amount after a price-changed for its productId gates the line", () => {
-    const d = details("a");
-    const view = buildCartView([line("l1", "a", { amount: 500 }), line("l2", "b", { amount: 700 })], {}, freshOf([d, details("b")]), NOW);
-    assert.deepEqual(interimPayWhatYouWantLineIDs(view, "a"), ["l1"]);
-    assert.deepEqual(interimPayWhatYouWantLineIDs(view, "zzz"), []);
-    assert.deepEqual(interimPayWhatYouWantLineIDs(view, undefined), [], "no guess without a productId");
-    const without = buildCartView([line("l1", "a")], {}, freshOf([d]), NOW);
-    assert.equal(without.lines[0]!.payWhatYouWant, "none");
-    assert.equal(without.lines[0]!.unitPrice, 1000);
-  });
-
-  it("does not drop the amount of a line the server still honours", () => {
-    const pwyw = details("a", { priceType: "pay_what_you_want" });
-    const recurringLine = details("b", { recurring });
-    const view = buildCartView([line("l1", "a", { amount: 500 }), line("l2", "b", { amount: 500 })], {}, freshOf([pwyw, recurringLine]), NOW);
-    assert.deepEqual(interimPayWhatYouWantLineIDs(view, "a"), []);
-    assert.deepEqual(interimPayWhatYouWantLineIDs(view, "b"), []);
+  it("a line with an amount and no priceType goes through the gate", () => {
+    const d = details("a", { version: "v1" });
+    const view = viewOf([line("l1", "a", { amount: 500, priceVersion: "v0" })], [d]);
+    assert.equal(runPriceGate(EMPTY_PRICE_GATE_STATE, view, NOW).result, "marked");
+    assert.equal(runPriceGate(stateOf({ l1: seenLongAgo(1000) }), view, NOW).result, "pass");
   });
 });
 
@@ -319,11 +317,38 @@ function stateOf(shown: Record<string, ShownPrice> = {}, marks: Record<string, P
 const seenLongAgo = (price: number): ShownPrice => ({ price, currency: "PLN", since: NOW - PRICE_SEEN_MS - 1 });
 
 describe("price gate (D18)", () => {
-  it("L === F passes", () => {
+  it("L === F passes when the price has been on screen for >= 1 s", () => {
     const view = viewOf([line("l1", "a", { priceVersion: "v1" })], [details("a")]);
-    const gate = runPriceGate(EMPTY_PRICE_GATE_STATE, view, NOW);
+    const gate = runPriceGate(stateOf({ l1: seenLongAgo(1000) }), view, NOW);
     assert.equal(gate.result, "pass");
     assert.deepEqual(gate.adopt, []);
+  });
+
+  it("L === F on screen < 1 s, or not shown at all: marked, nothing adopted (R3)", () => {
+    const view = viewOf([line("l1", "a", { priceVersion: "v1" })], [details("a")]);
+    const recent = runPriceGate(stateOf({ l1: { price: 1000, currency: "PLN", since: NOW - (PRICE_SEEN_MS - 1) } }), view, NOW);
+    assert.equal(recent.result, "marked");
+    assert.deepEqual(recent.adopt, []);
+    assert.deepEqual(recent.state.marks.get("l1"), { priceVersion: "v1", shownPrice: 1000, markedAt: NOW });
+    assert.equal(runPriceGate(EMPTY_PRICE_GATE_STATE, view, NOW).result, "marked");
+  });
+
+  it("L === F but the screen shows another price: marked", () => {
+    const view = viewOf([line("l1", "a", { priceVersion: "v1" })], [details("a")]);
+    assert.equal(runPriceGate(stateOf({ l1: seenLongAgo(900) }), view, NOW).result, "marked");
+  });
+
+  it("needs a server answer fetched after the drawer opened (R4)", () => {
+    const d = details("a");
+    const placeholder = buildCartView([line("l1", "a")], {}, freshOf([d], ["a"], false, []), NOW);
+    assert.equal(placeholder.lines[0]!.gateFresh, false);
+    const gate = runPriceGate(stateOf({ l1: seenLongAgo(1000) }), placeholder, NOW);
+    assert.equal(gate.result, "needs-fresh");
+    assert.deepEqual(gate.adopt, []);
+    const partial = buildCartView([line("l1", "a"), line("l2", "b")], {}, freshOf([d, details("b")], ["a", "b"], false, ["a"]), NOW);
+    assert.equal(runPriceGate(stateOf({ l1: seenLongAgo(1000), l2: seenLongAgo(1000) }), partial, NOW).result, "needs-fresh");
+    const noSet = buildCartView([line("l1", "a")], {}, { details: new Map([["a", d]]), confirmed: new Set(["a"]), gateFresh: new Set() }, NOW);
+    assert.equal(runPriceGate(stateOf({ l1: seenLongAgo(1000) }), noSet, NOW).result, "needs-fresh");
   });
 
   it("needs a server answer first", () => {
@@ -345,7 +370,7 @@ describe("price gate (D18)", () => {
     const gate = runPriceGate(stateOf({ l1: { price: 1000, currency: "PLN", since: NOW - (PRICE_SEEN_MS - 1) } }), view, NOW);
     assert.equal(gate.result, "marked");
     assert.deepEqual(gate.adopt, []);
-    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v1", shownPrice: 1000 });
+    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v1", shownPrice: 1000, markedAt: NOW });
   });
 
   it("nothing shown yet counts as unseen", () => {
@@ -378,24 +403,74 @@ describe("price gate (D18)", () => {
     const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v2", price: 1200 })]);
     const gate = runPriceGate(stateOf({ l1: seenLongAgo(1000) }), view, NOW);
     assert.equal(gate.result, "marked");
-    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v2", shownPrice: 1200 });
+    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v2", shownPrice: 1200, markedAt: NOW });
     assert.deepEqual(gate.adopt, []);
   });
 
-  it("second click with the same fresh version adopts", () => {
+  it("second click with the same fresh version adopts once the price was on screen >= 1 s", () => {
     const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v2", price: 1200 })]);
-    const gate = runPriceGate(stateOf({}, { l1: { priceVersion: "v2", shownPrice: 1200 } }), view, NOW);
+    const mark: PriceMark = { priceVersion: "v2", shownPrice: 1200, markedAt: NOW - PRICE_SEEN_MS };
+    const gate = runPriceGate(stateOf({}, { l1: mark }), view, NOW);
     assert.equal(gate.result, "pass");
     assert.deepEqual(gate.adopt, [{ lineId: "l1", priceVersion: "v2" }]);
     assert.equal(gate.state.marks.has("l1"), false);
   });
 
-  it("second click after the fresh version changed marks again and does not adopt", () => {
-    const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v3", price: 1300 })]);
-    const gate = runPriceGate(stateOf({}, { l1: { priceVersion: "v2", shownPrice: 1200 } }), view, NOW);
+  it("a mark made by trackPrices at T is not adopted by a click at T + 50 ms (R1, N15)", () => {
+    const first = trackPrices(
+      EMPTY_PRICE_GATE_STATE,
+      buildCartView([line("l1", "a", { priceVersion: "v1" })], snapshotOf(details("a")), undefined, NOW),
+      NOW,
+    );
+    const freshItems = [details("a", { version: "v2", price: 1500 })];
+    const freshView = viewOf([line("l1", "a", { priceVersion: "v1" })], freshItems);
+    const tracked = trackPrices(first, freshView, NOW + 200);
+    assert.deepEqual(tracked.marks.get("l1"), { priceVersion: "v2", shownPrice: 1500, markedAt: NOW + 200 });
+    const early = runPriceGate(tracked, freshView, NOW + 250);
+    assert.equal(early.result, "marked");
+    assert.deepEqual(early.adopt, []);
+    assert.equal(early.state.marks.get("l1")!.markedAt, NOW + 200, "the clock is not restarted by a click");
+    const late = runPriceGate(early.state, freshView, NOW + 200 + PRICE_SEEN_MS);
+    assert.equal(late.result, "pass");
+    assert.deepEqual(late.adopt, [{ lineId: "l1", priceVersion: "v2" }]);
+  });
+
+  it("a mark of a price the screen does not show yet is not adopted", () => {
+    const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v2", price: 1200 })]);
+    const mark: PriceMark = { priceVersion: "v2", shownPrice: 1200, markedAt: NOW - 5000 };
+    const gate = runPriceGate(stateOf({ l1: seenLongAgo(1000) }, { l1: mark }), view, NOW);
     assert.equal(gate.result, "marked");
     assert.deepEqual(gate.adopt, []);
-    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v3", shownPrice: 1300 });
+  });
+
+  it("a mark whose price was on screen since long ago adopts even if the mark is newer", () => {
+    const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v2", price: 1200 })]);
+    const mark: PriceMark = { priceVersion: "v2", shownPrice: 1200, markedAt: NOW - 10 };
+    const gate = runPriceGate(stateOf({ l1: seenLongAgo(1200) }, { l1: mark }), view, NOW);
+    assert.equal(gate.result, "pass");
+    assert.deepEqual(gate.adopt, [{ lineId: "l1", priceVersion: "v2" }]);
+  });
+
+  it("second click after the fresh version changed marks again and does not adopt", () => {
+    const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v3", price: 1300 })]);
+    const mark: PriceMark = { priceVersion: "v2", shownPrice: 1200, markedAt: NOW - 5000 };
+    const gate = runPriceGate(stateOf({}, { l1: mark }), view, NOW);
+    assert.equal(gate.result, "marked");
+    assert.deepEqual(gate.adopt, []);
+    assert.deepEqual(gate.state.marks.get("l1"), { priceVersion: "v3", shownPrice: 1300, markedAt: NOW });
+  });
+
+  it("a blocked click keeps the marks of the lines that would have passed", () => {
+    const view = viewOf(
+      [line("l1", "a", { priceVersion: "v0" }), line("l2", "b", { priceVersion: "v0" })],
+      [details("a", { version: "v1" }), details("b", { version: "v1", price: 2000 })],
+    );
+    const okMark: PriceMark = { priceVersion: "v1", shownPrice: 1000, markedAt: NOW - 5000 };
+    const gate = runPriceGate(stateOf({ l1: seenLongAgo(1000) }, { l1: okMark }), view, NOW);
+    assert.equal(gate.result, "marked");
+    assert.deepEqual(gate.adopt, []);
+    assert.ok(gate.state.marks.has("l1"), "kept until the click that adopts");
+    assert.ok(gate.state.marks.has("l2"));
   });
 
   it("one marked line blocks the others from adopting this click", () => {
@@ -411,7 +486,7 @@ describe("price gate (D18)", () => {
   it("a pay-what-you-want line with a changed catalog price is never marked", () => {
     const d = details("a", { priceType: "pay_what_you_want", version: "v9", price: 5000 });
     const view = viewOf([line("l1", "a", { priceVersion: "v0", amount: 700 })], [d]);
-    const gate = runPriceGate(stateOf({}, { l1: { priceVersion: "v8", shownPrice: 1 } }), view, NOW);
+    const gate = runPriceGate(stateOf({}, { l1: { priceVersion: "v8", shownPrice: 1, markedAt: NOW } }), view, NOW);
     assert.equal(gate.result, "pass");
     assert.deepEqual(gate.adopt, []);
     assert.equal(gate.state.marks.has("l1"), false);
@@ -454,11 +529,23 @@ describe("trackPrices", () => {
     const first = trackPrices(EMPTY_PRICE_GATE_STATE, snapshotView, NOW);
     const freshView = viewOf([line("l1", "a", { priceVersion: "v1" })], [details("a", { version: "v2", price: 1500 })]);
     const second = trackPrices(first, freshView, NOW + 200);
-    assert.deepEqual(second.marks.get("l1"), { priceVersion: "v2", shownPrice: 1500 });
+    assert.deepEqual(second.marks.get("l1"), { priceVersion: "v2", shownPrice: 1500, markedAt: NOW + 200 });
     assert.deepEqual(second.shown.get("l1"), { price: 1500, currency: "PLN", since: NOW + 200 });
     const marked = buildCartView([line("l1", "a", { priceVersion: "v1" })], {}, freshOf([details("a", { version: "v2", price: 1500 })]), NOW + 200, second.marks);
     assert.equal(marked.lines[0]!.marked, true);
     assert.equal(walletsInert(marked), true);
+  });
+
+  it("a server-answer price change marks the line whatever its stored version is (R3)", () => {
+    const first = trackPrices(
+      EMPTY_PRICE_GATE_STATE,
+      buildCartView([line("l1", "a", { priceVersion: "v2" })], snapshotOf(details("a")), undefined, NOW),
+      NOW,
+    );
+    const view = viewOf([line("l1", "a", { priceVersion: "v2" })], [details("a", { version: "v2", price: 1500 })]);
+    const next = trackPrices(first, view, NOW + 300);
+    assert.deepEqual(next.marks.get("l1"), { priceVersion: "v2", shownPrice: 1500, markedAt: NOW + 300 });
+    assert.equal(trackPrices(next, view, NOW + 400), next, "a mark is not dropped for carrying the stored version");
   });
 
   it("a changed price from the snapshot alone does not mark (not a server answer)", () => {
@@ -468,11 +555,14 @@ describe("trackPrices", () => {
     assert.equal(next.shown.get("l1")!.price, 1700);
   });
 
-  it("drops marks and shown prices of removed lines and of adopted lines", () => {
-    const state = stateOf({ gone: seenLongAgo(1) }, { gone: { priceVersion: "v2", shownPrice: 1 }, l1: { priceVersion: "v2", shownPrice: 1500 } });
-    const view = viewOf([line("l1", "a", { priceVersion: "v2" })], [details("a", { version: "v2", price: 1500 })]);
+  it("drops marks and shown prices of removed lines", () => {
+    const state = stateOf(
+      { gone: seenLongAgo(1) },
+      { gone: { priceVersion: "v2", shownPrice: 1, markedAt: NOW }, l1: { priceVersion: "v2", shownPrice: 1500, markedAt: NOW } },
+    );
+    const view = viewOf([line("l1", "a", { priceVersion: "v0" })], [details("a", { version: "v2", price: 1500 })]);
     const next = trackPrices(state, view, NOW);
-    assert.equal(next.marks.size, 0);
+    assert.deepEqual([...next.marks.keys()], ["l1"]);
     assert.equal(next.shown.has("gone"), false);
   });
 });
@@ -483,7 +573,7 @@ describe("wallet state (N1, N2)", () => {
     assert.equal(walletsInert(fresh), false);
     const partial = buildCartView([line("l1", "a"), line("l2", "b")], snapshotOf(details("b")), freshOf([details("a")]), NOW);
     assert.equal(walletsInert(partial), true);
-    const marked = viewOf([line("l1", "a")], [details("a")], new Map([["l1", { priceVersion: "v2", shownPrice: 1 }]]));
+    const marked = viewOf([line("l1", "a")], [details("a")], new Map([["l1", { priceVersion: "v2", shownPrice: 1, markedAt: NOW }]]));
     assert.equal(walletsInert(marked), true);
     const snapshotOnly = buildCartView([line("l1", "a")], snapshotOf(details("a")), undefined, NOW);
     assert.equal(walletsInert(snapshotOnly), true);

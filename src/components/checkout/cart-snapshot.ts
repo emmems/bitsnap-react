@@ -20,6 +20,12 @@ export const CART_SNAPSHOT_MAX_BYTES = 48 * 1024;
 export const CART_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const MAX_NAME_LENGTH = 200;
+/** The server builds `priceVersion` from a JSON array of price parts (product.pricing.ts), so it can be long. */
+const MAX_PRICE_VERSION_LENGTH = 1000;
+/** A raw string longer than this is not parsed (a hostile or corrupt value). */
+const MAX_RAW_LENGTH = 2 * CART_SNAPSHOT_MAX_BYTES;
+/** Ids that would act on the prototype of a plain object keyed by product id. */
+const UNSAFE_PRODUCT_IDS = new Set(["__proto__", "constructor", "prototype"]);
 const MAX_URL_LENGTH = 600;
 const MAX_SHORT_LENGTH = 64;
 
@@ -89,6 +95,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != null && !Array.isArray(value);
 }
 
+/** `value` cut to `max` UTF-16 units without leaving half a surrogate pair. */
+function truncate(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+  const last = value.charCodeAt(max - 1);
+  return value.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -128,7 +143,7 @@ function parsePricing(raw: unknown): ProductPricing | undefined {
     !isFiniteNumber(raw.regularPrice) ||
     !isFiniteNumber(raw.effectivePrice) ||
     !isBoundedString(raw.currency, MAX_SHORT_LENGTH) ||
-    !isBoundedString(raw.priceVersion, MAX_NAME_LENGTH) ||
+    !isBoundedString(raw.priceVersion, MAX_PRICE_VERSION_LENGTH) ||
     !isRecord(raw.referencePrice) ||
     typeof raw.referencePrice.historyAvailable !== "boolean"
   ) {
@@ -197,7 +212,8 @@ function parseDetails(raw: unknown): CartLineDetails | undefined {
   if (
     !isRecord(raw) ||
     !isBoundedString(raw.id, MAX_NAME_LENGTH) ||
-    !isBoundedString(raw.name, MAX_NAME_LENGTH) ||
+    typeof raw.name !== "string" ||
+    raw.name.length === 0 ||
     !isFiniteNumber(raw.price) ||
     raw.price < 0 ||
     !isBoundedString(raw.currency, MAX_SHORT_LENGTH)
@@ -206,18 +222,19 @@ function parseDetails(raw: unknown): CartLineDetails | undefined {
   }
   const details: CartLineDetails = {
     id: raw.id,
-    name: raw.name,
+    name: truncate(raw.name, MAX_NAME_LENGTH),
     price: raw.price,
     currency: raw.currency,
     image_url: null,
   };
 
+  // A long name is cut, not a reason to lose the entry (and its price version).
   for (const key of ["baseName", "variantName"] as const) {
     if (raw[key] !== undefined) {
-      if (!isBoundedString(raw[key], MAX_NAME_LENGTH, { allowEmpty: true })) {
+      if (typeof raw[key] !== "string") {
         return undefined;
       }
-      details[key] = raw[key] as string;
+      details[key] = truncate(raw[key] as string, MAX_NAME_LENGTH);
     }
   }
 
@@ -329,7 +346,11 @@ export function parseSnapshotFile(raw: unknown): SnapshotFile | undefined {
   const entries: Record<string, CartSnapshotEntry> = {};
   for (const [key, value] of Object.entries(raw.entries)) {
     const separator = key.indexOf("|");
-    if (separator <= 0 || separator === key.length - 1) {
+    if (
+      separator <= 0 ||
+      separator === key.length - 1 ||
+      UNSAFE_PRODUCT_IDS.has(key.slice(separator + 1))
+    ) {
       continue;
     }
     const entry = parseEntry(value);
@@ -363,6 +384,12 @@ function defaultStorage(): SnapshotStorage | null {
 }
 
 function resolveEnv(env: CartSnapshotEnv): ResolvedEnv | undefined {
+  // On the server the module state (`memoryFile`, `parseCache`) is shared by
+  // every request: the snapshot is a browser-only cache, so reads and writes
+  // are no-ops there.
+  if (typeof window === "undefined") {
+    return undefined;
+  }
   if (env.projectID == null || env.projectID.length === 0) {
     return undefined;
   }
@@ -397,8 +424,16 @@ function notifySnapshotChanged(): void {
 }
 
 function handleSnapshotStorage(event: StorageEvent): void {
+  // `sessionStorage` has its own events; only `localStorage` holds the snapshot.
+  const area = event.storageArea;
+  if (area != null && area !== defaultStorage()) {
+    return;
+  }
   if (event.key === CART_SNAPSHOT_KEY || event.key === null) {
     parseCache = undefined;
+    // Another tab wrote (or cleared) the key: what it says wins over the
+    // in-memory fallback this tab kept while its own writes failed.
+    memoryFile = undefined;
     notifySnapshotChanged();
   }
 }
@@ -449,7 +484,7 @@ function readFile(env: ResolvedEnv): SnapshotFile | undefined {
     }
     if (parseCache == null || parseCache.raw !== raw) {
       let parsed: SnapshotFile | undefined;
-      if (raw != null) {
+      if (raw != null && raw.length <= MAX_RAW_LENGTH) {
         try {
           parsed = parseSnapshotFile(JSON.parse(raw));
         } catch {
@@ -496,7 +531,7 @@ export function readSnapshot(
   const result: Record<string, CartSnapshotEntry> = {};
   for (const [key, entry] of Object.entries(file.entries)) {
     const { locale: entryLocale, productID } = splitKey(key);
-    if (entryLocale !== wanted) {
+    if (entryLocale !== wanted || UNSAFE_PRODUCT_IDS.has(productID)) {
       continue;
     }
     const at = Math.min(entry.at, resolved.now);
@@ -604,18 +639,25 @@ export function writeSnapshot(
 
     for (const [key, entry] of Object.entries(file.entries)) {
       const { productID } = splitKey(key);
+      const at = Math.min(entry.at, resolved.now);
       if (
         !referenced.has(productID) ||
-        resolved.now - Math.min(entry.at, resolved.now) >
-          CART_SNAPSHOT_MAX_AGE_MS
+        resolved.now - at > CART_SNAPSHOT_MAX_AGE_MS
       ) {
         delete file.entries[key];
+      } else if (at !== entry.at) {
+        // A future-dated entry must not outlive fresh ones in the pruning order.
+        file.entries[key] = { ...entry, at };
       }
     }
 
     const wanted = normalizeLocale(locale) ?? getLocale();
     for (const answer of answers) {
-      if (!referenced.has(answer.productID) || answer.productID.length === 0) {
+      if (
+        !referenced.has(answer.productID) ||
+        answer.productID.length === 0 ||
+        UNSAFE_PRODUCT_IDS.has(answer.productID)
+      ) {
         continue;
       }
       // Through the same parser as a read, so what is written is read back.

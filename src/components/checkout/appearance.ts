@@ -64,7 +64,9 @@ export type CheckoutAppearanceTokens = {
   panelWidth?: string;
   /**
    * Base duration of the cart's enter and exit animations (default `240ms`).
-   * `"0ms"`, `"0s"` or `"0"` turns the cart's own animations off.
+   * `"0ms"`, `"0s"` or `"0"` turns the cart's own animations off. Other
+   * values are accepted but take effect only from 1.32.0, when the cart's own
+   * keyframes read the variable.
    */
   motionDuration?: string;
 };

@@ -31,20 +31,14 @@ export function payWhatYouWantKind(
   line: Pick<LocalCartLine, "amount">,
   details: Pick<CartLineDetails, "priceType" | "recurring"> | undefined,
 ): PayWhatYouWantKind {
-  // The server ignores the amount of a recurring variant.
-  if (details?.recurring != null) {
+  // The server honours an `amount` only for `priceType === "pay_what_you_want"`
+  // with no `recurring` (instapay `lib/pwyw-limits.ts`). Anything else, a missing
+  // `priceType` included (classic product, older backend), is the catalog price
+  // and goes through the price gate; the buyer's `amount` is not priced.
+  if (details?.priceType !== "pay_what_you_want" || details.recurring != null) {
     return "none";
   }
-  if (details?.priceType === "pay_what_you_want") {
-    return line.amount != null ? "amount" : "suggested";
-  }
-  if (details?.priceType !== undefined) {
-    // The product stopped being pay-what-you-want (fixed price, free, ...).
-    return "none";
-  }
-  // `priceType` absent (classic product, or a backend that does not send it):
-  // interim rule, an `amount` is honoured until the server says otherwise.
-  return line.amount != null ? "amount" : "none";
+  return line.amount != null ? "amount" : "suggested";
 }
 
 /** True when the line is priced at its `amount` and skips the price gate. */
@@ -53,32 +47,6 @@ export function isPayWhatYouWantLine(
   details: Pick<CartLineDetails, "priceType" | "recurring"> | undefined,
 ): boolean {
   return payWhatYouWantKind(line, details) === "amount";
-}
-
-/**
- * Lines whose `amount` the interim rule honours (`priceType` unknown) and a
- * `price-changed` answer named by `productId`: the server does not treat them
- * as pay-what-you-want, so the caller drops their `amount` and gates them
- * normally. Without a `productId` nothing is dropped (the buyer's amount is
- * not discarded on a guess); the gate still runs on every line.
- */
-export function interimPayWhatYouWantLineIDs(
-  view: Pick<CartView, "lines">,
-  productId: string | undefined,
-): string[] {
-  if (productId == null) {
-    return [];
-  }
-  return view.lines
-    .filter(
-      ({ line, details }) =>
-        line.productID === productId &&
-        line.amount != null &&
-        details != null &&
-        details.priceType === undefined &&
-        details.recurring == null,
-    )
-    .map(({ line }) => line.id);
 }
 
 // -------------------------------------------------------------------- view
@@ -92,12 +60,34 @@ export type CartViewFresh = {
   details: ReadonlyMap<string, CartLineDetails>;
   /** Product ids the server answered at least once in this page session. */
   confirmed: ReadonlySet<string>;
+  /**
+   * Product ids whose entry in `details` is a real server answer fetched
+   * **after the drawer opened** (D18, part 1 §3.5 step 2): not `placeholderData`,
+   * not an idle prefetch, not an answer that predates the open. Only these may
+   * feed the price gate; a line outside this set makes `runPriceGate` answer
+   * `needs-fresh`. Required on purpose: an omitted set must not read as "fresh".
+   *
+   * Slice 3 fills it from the query: a product id is in the set when the query
+   * is not showing placeholder data and the entry's `dataUpdatedAt` is at or
+   * after the moment the drawer opened (use the revalidation the click starts or
+   * awaits when the data predates the open). After a `price-changed` answer the
+   * set is only refilled by the `cache: "no-cache"` refetch.
+   */
+  gateFresh: ReadonlySet<string>;
   /** The revalidation failed (offline, 5xx). */
   failed?: boolean;
 };
 
-/** A price the buyer was told is new, to be accepted by a second click. */
-export type PriceMark = { priceVersion: string; shownPrice: number };
+/**
+ * A price the buyer was told is new, to be accepted by a later click.
+ * `markedAt` is when the mark was made; it is the lower bound of how long the
+ * marked price has been on screen when `ShownPrice` has no entry for the line.
+ */
+export type PriceMark = {
+  priceVersion: string;
+  shownPrice: number;
+  markedAt: number;
+};
 
 export type CartViewStatus =
   | "empty"
@@ -113,6 +103,8 @@ export type CartViewLine = {
   source: "fresh" | "snapshot" | "none";
   /** The server answered for this product in this page session. */
   confirmed: boolean;
+  /** The answer was fetched after the drawer opened (`CartViewFresh.gateFresh`). */
+  gateFresh: boolean;
   payWhatYouWant: PayWhatYouWantKind;
   /** False when the snapshot price is known to be stale (a scheduled change passed). */
   priceKnown: boolean;
@@ -164,6 +156,7 @@ export function buildCartView(
       details,
       source,
       confirmed: fresh?.confirmed.has(line.productID) ?? false,
+      gateFresh: fresh?.gateFresh.has(line.productID) ?? false,
       payWhatYouWant: kind,
       priceKnown,
       marked: marks?.has(line.id) ?? false,
@@ -280,9 +273,11 @@ function freshVersion(item: CartViewLine): string | undefined {
 /**
  * Remembers what each line is showing and marks a line at once when its
  * rendered unit price changes while the drawer is open and the new price is a
- * server answer (N15). A mark is dropped when its line is gone or already
- * carries the fresh version (adopted). Returns `state` itself when nothing
- * changed.
+ * server answer (N15), whatever the line's stored version is. The mark carries
+ * `markedAt: now`, so it cannot be adopted before the new price has been on
+ * screen for `PRICE_SEEN_MS`. A mark is dropped when its line is gone or is a
+ * pay-what-you-want line at its `amount`; the gate drops it on adoption.
+ * Returns `state` itself when nothing changed.
  *
  * The compared field is `pricing.effectivePrice ?? price` plus `currency`.
  * Pay-what-you-want lines at their `amount` are never shown-tracked or marked.
@@ -311,13 +306,8 @@ export function trackPrices(
     shown.set(item.line.id, { price, currency: details.currency, since: now });
     changed = true;
     const version = freshVersion(item);
-    if (
-      previous != null &&
-      item.source === "fresh" &&
-      version != null &&
-      version !== item.line.priceVersion
-    ) {
-      marks.set(item.line.id, { priceVersion: version, shownPrice: price });
+    if (previous != null && item.source === "fresh" && version != null) {
+      marks.set(item.line.id, { priceVersion: version, shownPrice: price, markedAt: now });
     }
   }
 
@@ -328,10 +318,7 @@ export function trackPrices(
     }
   }
   for (const item of view.lines) {
-    const mark = marks.get(item.line.id);
-    const version = freshVersion(item);
-    if (mark != null && (item.payWhatYouWant === "amount" || version === item.line.priceVersion)) {
-      marks.delete(item.line.id);
+    if (item.payWhatYouWant === "amount" && marks.delete(item.line.id)) {
       changed = true;
     }
   }
@@ -352,7 +339,8 @@ export type PriceGateResult = {
    * - `pass`: `/buy` may start (after writing `adopt`);
    * - `marked`: a line shows a price the buyer has not seen long enough or has
    *   not accepted; do not send `/buy`, wait for another click;
-   * - `needs-fresh`: a line has no server answer yet; revalidate first.
+   * - `needs-fresh`: a line has no server answer from after the drawer opened
+   *   (`confirmed`, `gateFresh`); revalidate first.
    */
   result: "pass" | "marked" | "needs-fresh";
   adopt: PriceAdoption[];
@@ -360,20 +348,24 @@ export type PriceGateResult = {
 };
 
 /**
- * "Next step" gate (D18), run on a view whose lines the server answered.
- * Per line that is not a pay-what-you-want line at its `amount`, compare the
- * stored `priceVersion` `L` with the server's `F`:
+ * "Next step" gate (D18), run on a view whose lines the server answered after
+ * the drawer opened. Per line that is not a pay-what-you-want line at its
+ * `amount` and whose answer carries a `priceVersion` `F` (the server skips the
+ * check without one), with the stored version `L`:
  *
- * - `L === F`: pass.
- * - `L !== F`, no mark, the fresh price equals the price the line has been
- *   showing for at least `PRICE_SEEN_MS`: adopt `F` silently.
- * - `L !== F`, no mark, otherwise (a different price, or one that appeared less
- *   than `PRICE_SEEN_MS` ago, or nothing shown yet): mark `{F, shownPrice}`
- *   and block.
- * - A marked line (second click): adopt only when the fresh version is still
- *   the marked one; a newer version marks again and blocks.
+ * - Every such line must have been showing the fresh price (same unit price and
+ *   currency) for at least `PRICE_SEEN_MS`, `L === F` included. Otherwise it is
+ *   marked `{F, shownPrice, markedAt: now}` and the gate blocks.
+ * - Seen long enough: `L === F` passes; `L !== F` adopts `F` silently.
+ * - A marked line adopts only when the mark is still the fresh version and the
+ *   price has been on screen for `PRICE_SEEN_MS`: counted from the line's
+ *   `shown.since` when it shows that price, else from `mark.markedAt`. A mark
+ *   made 50 ms ago (by `trackPrices` or by the previous click) is not adopted.
+ *   A newer version marks again and blocks.
  *
- * A version is only ever taken from a server answer, never from the snapshot.
+ * Marks and adoptions of lines that passed are only applied when nothing
+ * blocks. A version is only ever taken from a server answer, never from the
+ * snapshot.
  */
 export function runPriceGate(
   state: PriceGateState,
@@ -382,56 +374,81 @@ export function runPriceGate(
 ): PriceGateResult {
   if (
     view.lines.some(
-      (item) => !item.confirmed || item.details == null || item.source !== "fresh",
+      (item) =>
+        !item.confirmed ||
+        !item.gateFresh ||
+        item.details == null ||
+        item.source !== "fresh",
     )
   ) {
     return { result: "needs-fresh", adopt: [], state };
   }
 
   const marks = new Map(state.marks);
+  const clear: string[] = [];
   const adopt: PriceAdoption[] = [];
   let blocked = false;
 
+  const block = (lineId: string, version: string, price: number) => {
+    marks.set(lineId, { priceVersion: version, shownPrice: price, markedAt: now });
+    blocked = true;
+  };
+
   for (const item of view.lines) {
+    const lineId = item.line.id;
     if (item.payWhatYouWant === "amount") {
-      marks.delete(item.line.id);
+      marks.delete(lineId);
       continue;
     }
     const current = freshVersion(item);
-    const stored = item.line.priceVersion;
-    if (current == null || current === stored) {
-      marks.delete(item.line.id);
+    if (current == null) {
+      marks.delete(lineId);
       continue;
     }
     const details = item.details as CartLineDetails;
     const price = catalogUnitPrice(details);
-    const mark = marks.get(item.line.id);
+    const seen = state.shown.get(lineId);
+    const shownNow =
+      seen != null && seen.price === price && seen.currency === details.currency
+        ? seen
+        : undefined;
+    const mark = marks.get(lineId);
+
+    let onScreenSince: number | undefined;
     if (mark != null) {
-      if (mark.priceVersion === current) {
-        adopt.push({ lineId: item.line.id, priceVersion: current });
-        marks.delete(item.line.id);
-      } else {
-        marks.set(item.line.id, { priceVersion: current, shownPrice: price });
+      if (mark.priceVersion !== current || mark.shownPrice !== price) {
+        block(lineId, current, price);
+        continue;
+      }
+      // A line that shows another price (or none) than the marked one has not
+      // shown the marked price yet.
+      onScreenSince = shownNow?.since ?? (seen == null ? mark.markedAt : undefined);
+    } else {
+      onScreenSince = shownNow?.since;
+    }
+
+    if (onScreenSince == null || now - onScreenSince < PRICE_SEEN_MS) {
+      if (mark != null && onScreenSince != null) {
+        // Same mark, still too fresh: keep `markedAt`, do not restart the clock.
         blocked = true;
+      } else {
+        block(lineId, current, price);
       }
       continue;
     }
-    const seen = state.shown.get(item.line.id);
-    if (
-      seen != null &&
-      seen.price === price &&
-      seen.currency === details.currency &&
-      now - seen.since >= PRICE_SEEN_MS
-    ) {
-      adopt.push({ lineId: item.line.id, priceVersion: current });
-    } else {
-      marks.set(item.line.id, { priceVersion: current, shownPrice: price });
-      blocked = true;
+    if (current !== item.line.priceVersion) {
+      adopt.push({ lineId, priceVersion: current });
     }
+    clear.push(lineId);
   }
 
-  const next: PriceGateState = { shown: state.shown, marks };
-  return { result: blocked ? "marked" : "pass", adopt: blocked ? [] : adopt, state: next };
+  if (blocked) {
+    return { result: "marked", adopt: [], state: { shown: state.shown, marks } };
+  }
+  for (const lineId of clear) {
+    marks.delete(lineId);
+  }
+  return { result: "pass", adopt, state: { shown: state.shown, marks } };
 }
 
 // ------------------------------------------------------------------ wallets

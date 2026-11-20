@@ -405,7 +405,8 @@ describe("checkout.css 1.31.0 tokens", () => {
     assert.equal(motionOff.declarations.get("transition"), "none !important");
     assert.match(
       motionOff.selectors.join(","),
-      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*\)\)/,
+      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*, \.bsc-skeleton\)\)/,
     );
+    // The skeleton's delayed show (1.32.0) must never be stopped by motion off.
   });
 });

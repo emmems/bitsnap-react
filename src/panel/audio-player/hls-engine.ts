@@ -123,23 +123,30 @@ async function loadHlsConstructor(): Promise<HlsConstructor> {
  * `HlsCtor` is injectable so the error paths can be tested without a stream.
  * Without it, hls.js is imported on first use: `load()` records the URL and
  * the stream starts once the library arrived; `destroy()` before that cancels.
+ * If the import fails, `onError` fires and the next `load()` or `retry()`
+ * imports again (never two imports at once).
  */
 export function createHlsSource(args: {
   media: HTMLMediaElement;
   handlers?: HlsSourceHandlers;
   HlsCtor?: HlsConstructor;
+  /** Replaces the dynamic `import("hls.js")`; tests use it to fail the import. */
+  loadHls?: () => Promise<HlsConstructor>;
 }): HlsSource {
   let instance: HlsLike | undefined;
   let destroyed = false;
   let src: string | undefined;
   let retriedNetwork = false;
   let retriedMedia = false;
+  let importing = false;
+  let unsupported = false;
 
   function start(HlsImpl: HlsConstructor) {
     if (destroyed) {
       return;
     }
     if (args.HlsCtor == null && !HlsImpl.isSupported()) {
+      unsupported = true;
       if (src != null) {
         args.handlers?.onUnsupported?.(src);
       }
@@ -178,15 +185,35 @@ export function createHlsSource(args: {
     }
   }
 
+  /**
+   * Starts the import when there is no instance and none in flight. A failed
+   * import leaves no instance, so the next `load()` / `retry()` comes back here
+   * and tries again instead of doing nothing.
+   */
+  function ensureLibrary() {
+    if (instance != null || importing || destroyed || unsupported) {
+      return;
+    }
+    importing = true;
+    (args.loadHls ?? loadHlsConstructor)().then(
+      (HlsImpl) => {
+        importing = false;
+        start(HlsImpl);
+      },
+      () => {
+        importing = false;
+        if (!destroyed) {
+          // The chunk did not arrive (offline, blocked): the player offers a retry.
+          args.handlers?.onError?.({ kind: "network" });
+        }
+      },
+    );
+  }
+
   if (args.HlsCtor != null) {
     start(args.HlsCtor);
   } else {
-    loadHlsConstructor().then(start, () => {
-      if (!destroyed) {
-        // The chunk did not arrive (offline, blocked): the player offers a retry.
-        args.handlers?.onError?.({ kind: "network" });
-      }
-    });
+    ensureLibrary();
   }
 
   return {
@@ -194,7 +221,11 @@ export function createHlsSource(args: {
       src = nextSrc;
       retriedNetwork = false;
       retriedMedia = false;
-      instance?.loadSource(nextSrc);
+      if (instance != null) {
+        instance.loadSource(nextSrc);
+      } else {
+        ensureLibrary();
+      }
     },
     retry() {
       if (src == null) {
@@ -202,7 +233,11 @@ export function createHlsSource(args: {
       }
       retriedNetwork = false;
       retriedMedia = false;
-      instance?.loadSource(src);
+      if (instance != null) {
+        instance.loadSource(src);
+      } else {
+        ensureLibrary();
+      }
     },
     destroy() {
       destroyed = true;

@@ -88,13 +88,20 @@ function seed(storage: ReturnType<typeof memoryStorage>, file: unknown) {
   storage.values.set(CART_SNAPSHOT_KEY, typeof file === "string" ? file : JSON.stringify(file));
 }
 
+// The snapshot is browser-only: reads and writes are no-ops without a `window`.
+const globals = globalThis as unknown as { window?: unknown; localStorage?: unknown };
+let windowBeforeTest: unknown;
+
 beforeEach(() => {
+  windowBeforeTest = globals.window;
+  globals.window = {};
   resetCartSnapshotState();
   setLocale(undefined);
 });
 afterEach(() => {
   resetCartSnapshotState();
   setLocale(undefined);
+  globals.window = windowBeforeTest;
 });
 
 describe("snapshot round trip", () => {
@@ -221,7 +228,6 @@ describe("hand-written validation (D3)", () => {
       { id: 5 },
       { name: 5 },
       { name: "" },
-      { name: "x".repeat(201) },
       { price: "10" },
       { price: Number.POSITIVE_INFINITY },
       { price: Number.NaN },
@@ -487,10 +493,125 @@ describe("quota", () => {
   });
 });
 
+describe("server render", () => {
+  it("reads and writes nothing without a window and leaks nothing into the browser", () => {
+    const storage = memoryStorage();
+    seed(storage, rawFile({ "pl-PL|p1": rawEntry("p1") }));
+    writeSnapshot("pl-PL", [{ productID: "p1", details: details("p1") }], ["p1"], env(storage));
+    const stored = storage.values.get(CART_SNAPSHOT_KEY);
+    const versionBefore = snapshotVersionSnapshot();
+    globals.window = undefined;
+    try {
+      assert.deepEqual(readSnapshot("pl-PL", env(storage)), {});
+      writeSnapshot("pl-PL", [{ productID: "p2", details: details("p2") }], ["p1", "p2"], env(storage));
+      writeSnapshot("pl-PL", [{ productID: "p3", details: details("p3") }], ["p3"], env(null));
+      assert.deepEqual(readSnapshot("pl-PL", env(null)), {}, "no process-wide memory file");
+    } finally {
+      globals.window = {};
+    }
+    assert.equal(storage.values.get(CART_SNAPSHOT_KEY), stored, "storage untouched");
+    assert.equal(snapshotVersionSnapshot(), versionBefore, "no notification");
+    assert.deepEqual(readSnapshot("pl-PL", env(null)), {}, "nothing reached the memory fallback");
+  });
+});
+
+describe("hostile and oversized input", () => {
+  it("does not let a product id act on the prototype of the result", () => {
+    const storage = memoryStorage();
+    seed(
+      storage,
+      `{"v":1,"projectID":"proj","host":"${HOST}","entries":{"pl-PL|__proto__":${JSON.stringify(rawEntry("x"))},"pl-PL|constructor":${JSON.stringify(rawEntry("y"))},"pl-PL|prototype":${JSON.stringify(rawEntry("z"))},"pl-PL|ok":${JSON.stringify(rawEntry("ok"))}}}`,
+    );
+    const read = readSnapshot("pl-PL", env(storage));
+    assert.deepEqual(Object.keys(read), ["ok"]);
+    assert.equal(Object.getPrototypeOf(read), Object.prototype);
+    assert.equal((read as Record<string, unknown>).details, undefined);
+    assert.deepEqual(Object.keys(parseSnapshotFile(JSON.parse(storage.values.get(CART_SNAPSHOT_KEY)!))!.entries), ["pl-PL|ok"]);
+  });
+
+  it("does not write an answer for such an id", () => {
+    const storage = memoryStorage();
+    writeSnapshot(
+      "pl-PL",
+      ["__proto__", "constructor", "prototype", "ok"].map((id) => ({ productID: id, details: details(id) })),
+      ["__proto__", "constructor", "prototype", "ok"],
+      env(storage),
+    );
+    assert.deepEqual(Object.keys(JSON.parse(storage.values.get(CART_SNAPSHOT_KEY)!).entries), ["pl-PL|ok"]);
+  });
+
+  it("does not parse a raw string over twice the byte cap", () => {
+    const storage = memoryStorage();
+    const valid = JSON.stringify(rawFile({ "pl-PL|p1": rawEntry("p1") }));
+    seed(storage, valid);
+    assert.ok(readSnapshot("pl-PL", env(storage)).p1);
+    seed(storage, valid + " ".repeat(2 * CART_SNAPSHOT_MAX_BYTES));
+    let parses = 0;
+    const originalParse = JSON.parse;
+    JSON.parse = (text: string, reviver?: (key: string, value: unknown) => unknown) => {
+      parses += 1;
+      return originalParse(text, reviver);
+    };
+    try {
+      assert.deepEqual(readSnapshot("pl-PL", env(storage)), {});
+    } finally {
+      JSON.parse = originalParse;
+    }
+    assert.equal(parses, 0);
+  });
+
+  it("copies a future-dated entry with `at` capped at now when it writes", () => {
+    const storage = memoryStorage();
+    const future = NOW + 365 * 24 * 60 * 60 * 1000;
+    seed(storage, rawFile({ "pl-PL|p1": { at: future, details: details("p1") }, "pl-PL|p2": rawEntry("p2") }));
+    writeSnapshot("pl-PL", [{ productID: "p3", details: details("p3") }], ["p1", "p2", "p3"], env(storage));
+    const stored = JSON.parse(storage.values.get(CART_SNAPSHOT_KEY)!).entries;
+    assert.equal(stored["pl-PL|p1"].at, NOW);
+    assert.equal(stored["pl-PL|p2"].at, NOW - 1000);
+  });
+
+  it("accepts a long priceVersion (the server builds a JSON array) but not an absurd one", () => {
+    const storage = memoryStorage();
+    const long = "v".repeat(1000);
+    writeSnapshot(
+      "pl-PL",
+      [
+        { productID: "p1", details: details("p1", { pricing: pricing({ priceVersion: long }) }) },
+        { productID: "p2", details: details("p2", { pricing: pricing({ priceVersion: `${long}x` }) }) },
+      ],
+      ["p1", "p2"],
+      env(storage),
+    );
+    const read = readSnapshot("pl-PL", env(storage));
+    assert.equal(read.p1!.details.pricing?.priceVersion, long);
+    assert.ok(!read.p2);
+  });
+
+  it("cuts a long name instead of dropping the entry and its price version", () => {
+    const storage = memoryStorage();
+    writeSnapshot(
+      "pl-PL",
+      [{ productID: "p1", details: details("p1", { name: "n".repeat(500), baseName: "b".repeat(500), variantName: "v".repeat(500) }) }],
+      ["p1"],
+      env(storage),
+    );
+    const read = readSnapshot("pl-PL", env(storage)).p1!;
+    assert.equal(read.details.name, "n".repeat(200));
+    assert.equal(read.details.baseName, "b".repeat(200));
+    assert.equal(read.details.variantName, "v".repeat(200));
+    assert.equal(read.details.pricing?.priceVersion, "v1");
+  });
+
+  it("does not leave half a surrogate pair at the cut", () => {
+    const storage = memoryStorage();
+    writeSnapshot("pl-PL", [{ productID: "p1", details: details("p1", { name: `${"a".repeat(199)}😀tail` }) }], ["p1"], env(storage));
+    assert.equal(readSnapshot("pl-PL", env(storage)).p1!.details.name, "a".repeat(199));
+  });
+});
+
 describe("stable store", () => {
-  type Handler = (event: { key: string | null }) => void;
+  type Handler = (event: { key: string | null; storageArea?: unknown }) => void;
   let handlers: Handler[];
-  const globals = globalThis as unknown as { window?: unknown };
   let previousWindow: unknown;
 
   beforeEach(() => {
@@ -555,6 +676,34 @@ describe("stable store", () => {
     assert.equal(snapshotVersionSnapshot(), before + 2);
     stop();
     assert.equal(handlers.length, 0, "listener removed with the last subscriber");
+  });
+
+  it("ignores a storage event of another storage area", () => {
+    const local = memoryStorage();
+    globals.localStorage = local;
+    try {
+      const stop = subscribeToSnapshot(() => {});
+      const before = snapshotVersionSnapshot();
+      handlers[0]!({ key: CART_SNAPSHOT_KEY, storageArea: memoryStorage() });
+      assert.equal(snapshotVersionSnapshot(), before, "sessionStorage");
+      handlers[0]!({ key: CART_SNAPSHOT_KEY, storageArea: local });
+      assert.equal(snapshotVersionSnapshot(), before + 1, "localStorage");
+      stop();
+    } finally {
+      delete globals.localStorage;
+    }
+  });
+
+  it("a storage event drops the in-memory fallback so the other tab's file wins", () => {
+    const storage = memoryStorage({ failSetItem: true });
+    writeSnapshot("pl-PL", [{ productID: "p1", details: details("p1") }], ["p1", "p2"], env(storage));
+    assert.ok(readSnapshot("pl-PL", env(storage)).p1, "kept in memory");
+    const stop = subscribeToSnapshot(() => {});
+    storage.fail(false);
+    seed(storage, rawFile({ "pl-PL|p2": rawEntry("p2") }));
+    handlers[0]!({ key: CART_SNAPSHOT_KEY });
+    assert.deepEqual(Object.keys(readSnapshot("pl-PL", env(storage))), ["p2"]);
+    stop();
   });
 
   it("attaches one storage listener for several subscribers", () => {

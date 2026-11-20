@@ -410,6 +410,110 @@ describe("lazy hls.js", () => {
     await settle();
     assert.deepEqual(unsupported, []);
   });
+
+  /** A loader that rejects `failures` times, then resolves with a fake hls.js. */
+  function flakyLoader(failures: number) {
+    const instances: Array<{ loaded: string[] }> = [];
+    let imports = 0;
+    class Ctor {
+      static isSupported() {
+        return true;
+      }
+      static Events = { ERROR: "hlsError" };
+      static ErrorTypes = {
+        NETWORK_ERROR: "networkError",
+        MEDIA_ERROR: "mediaError",
+      };
+      loaded: string[] = [];
+      constructor() {
+        instances.push(this);
+      }
+      attachMedia() {}
+      loadSource(src: string) {
+        this.loaded.push(src);
+      }
+      startLoad() {}
+      recoverMediaError() {}
+      destroy() {}
+      on() {}
+    }
+    return {
+      instances,
+      imports: () => imports,
+      loadHls: async () => {
+        imports += 1;
+        await Promise.resolve();
+        if (imports <= failures) {
+          throw new Error("chunk failed");
+        }
+        return Ctor as unknown as HlsConstructor;
+      },
+    };
+  }
+
+  it("retry imports hls.js again after the chunk failed and then plays", async () => {
+    const flaky = flakyLoader(1);
+    const errors: AudioPlayerError[] = [];
+    const lazy = createHlsSource({
+      media: {} as HTMLMediaElement,
+      loadHls: flaky.loadHls,
+      handlers: { onError: (error) => errors.push(error) },
+    });
+    lazy.load("https://stream.test/one.m3u8");
+    await settle();
+    assert.deepEqual(errors, [{ kind: "network" }]);
+    assert.equal(flaky.instances.length, 0);
+
+    lazy.retry();
+    await settle();
+    assert.equal(flaky.imports(), 2);
+    assert.equal(flaky.instances.length, 1);
+    assert.deepEqual(flaky.instances[0]!.loaded, ["https://stream.test/one.m3u8"]);
+    assert.equal(errors.length, 1);
+  });
+
+  it("loading another chapter after a failed import works", async () => {
+    const flaky = flakyLoader(1);
+    const errors: AudioPlayerError[] = [];
+    const lazy = createHlsSource({
+      media: {} as HTMLMediaElement,
+      loadHls: flaky.loadHls,
+      handlers: { onError: (error) => errors.push(error) },
+    });
+    lazy.load("https://stream.test/one.m3u8");
+    await settle();
+    assert.equal(errors.length, 1);
+
+    lazy.load("https://stream.test/two.m3u8");
+    await settle();
+    assert.equal(lazy.src, "https://stream.test/two.m3u8");
+    assert.equal(flaky.instances.length, 1);
+    assert.deepEqual(flaky.instances[0]!.loaded, ["https://stream.test/two.m3u8"]);
+
+    // Once the library is in, later chapters go straight to the instance.
+    lazy.load("https://stream.test/three.m3u8");
+    assert.deepEqual(flaky.instances[0]!.loaded, [
+      "https://stream.test/two.m3u8",
+      "https://stream.test/three.m3u8",
+    ]);
+    assert.equal(flaky.imports(), 2);
+  });
+
+  it("does not import twice while one import is in flight", async () => {
+    const flaky = flakyLoader(0);
+    const lazy = createHlsSource({
+      media: {} as HTMLMediaElement,
+      loadHls: flaky.loadHls,
+    });
+    lazy.load("https://stream.test/one.m3u8");
+    lazy.retry();
+    lazy.load("https://stream.test/two.m3u8");
+    await settle();
+    assert.equal(flaky.imports(), 1);
+    assert.equal(flaky.instances.length, 1);
+    // The latest URL wins; the stream starts once, with it.
+    assert.deepEqual(flaky.instances[0]!.loaded, ["https://stream.test/two.m3u8"]);
+  });
 });
 
 describe("native HLS decision", () => {
