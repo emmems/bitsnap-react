@@ -46,8 +46,18 @@ What is measured:
 - items visible: click to the paint of **every** cart row, not the first. The expected rows are the lines of
   `localStorage.checkout` at the click (`add-then-open`: 1). A row counts when, inside the *new* drawer, it has
   `productName` and `productPrice` text and its box, name and price are non-zero and not `visibility: hidden` /
-  `display: none`. The run fails (with the rows it saw) when they are not all there at the timeout. The observer
-  also watches attributes and every frame, so a row that is only revealed by CSS counts when it is revealed.
+  `display: none`, and its **effective opacity is above 0**. The run fails (with the rows it saw) when they are not
+  all there at the timeout. The observer also watches attributes and every frame, so a row that is only revealed by
+  CSS counts when it is revealed.
+  - Time stamp: the frame that paints the rows, not the mutation that made them qualify. When the condition is first
+    met the script waits for the next `requestAnimationFrame`, checks again in it, then checks once more in a task
+    after it (`setTimeout(0)`, i.e. after the paint) and stamps that moment. If the condition no longer holds in
+    either check, it keeps waiting. `itemsMs` and `paintMs` are therefore the same value.
+  - Opacity threshold: the product of the computed `opacity` of the row, its name and its price, each multiplied by
+    all its ancestors up to the dialog (the drawer content root, included), must be **> 0**. Not 1: the drawer's
+    enter animation fades in from a low opacity and A1 measures when the items first become visible, not when the
+    animation ends. The cost is that a row at an opacity barely above 0 (say 0.01) counts as visible; the box,
+    text, `visibility` and `display` tests are what still rule out a row that is not there.
 - `add-then-open`: `addMs` is the add promise; `drawerMs` runs from the moment it resolved (just before
   `showCart`) to the first item.
 - `qty` / `remove`: from the click until the **first line**, the **total** (`totalValue` slot) and the

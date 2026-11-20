@@ -335,9 +335,11 @@ const relativeRequests = (all, clickEpoch) =>
 
 // Runs in the page. Clicks `clickSelector` and resolves when EVERY cart row is painted in the new drawer: each of the
 // `expectedRows` rows (a number, or "storage": the lines of `localStorage.checkout` at the click) has name and price
-// text and a non-zero box, and is not `visibility: hidden` / `display: none` (nor are its name and price). Skeletons
-// are watched up to that point (not only up to the first row), so one that shows while other rows are still missing
-// is recorded. `mountMs` is when the drawer first appeared in the DOM (ms from the click): the drawer's first commit,
+// text and a non-zero box, is not `visibility: hidden` / `display: none` (nor are its name and price), and has an
+// effective opacity above 0 (product over the element and its ancestors up to the dialog). `itemsMs` is the frame
+// that paints them (rAF, then a task after it; re-checked in both), not the mutation that made them qualify.
+// Skeletons are watched up to that point (not only up to the first row), so one that shows while other rows are still
+// missing is recorded. `mountMs` is when the drawer first appeared in the DOM (ms from the click): the drawer's first commit,
 // the A4 reference point. A dialog that already exists at the click (a drawer still leaving) is not the new one.
 const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, dialogSel, expectedRows, timeoutMs }) =>
   new Promise((resolve) => {
@@ -353,19 +355,30 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
     // Counted before the click: the click itself may change the cart (add-then-open passes a number).
     const expected = typeof expectedRows === "number" ? expectedRows : storageLines();
     const hasText = (el) => Boolean(el && el.textContent && el.textContent.trim());
-    const isVisible = (el) => {
+    // Product of the computed opacity of `el` and every ancestor up to the drawer's content root (the dialog, included).
+    // Any value above 0 counts: the enter animation fades in from a low opacity and A1 is the first visible frame, not
+    // the end of the animation.
+    const effectiveOpacity = (el, root) => {
+      let product = 1;
+      for (let n = el; n; n = n.parentElement) {
+        product *= Number.parseFloat(getComputedStyle(n).opacity);
+        if (n === root) break;
+      }
+      return product;
+    };
+    const isVisible = (el, root) => {
       const box = el.getBoundingClientRect();
       if (box.width <= 0 || box.height <= 0) return false;
       const style = getComputedStyle(el);
-      return style.display !== "none" && style.visibility !== "hidden";
+      return style.display !== "none" && style.visibility !== "hidden" && effectiveOpacity(el, root) > 0;
     };
     // Cheap text test first; the layout reads (box, style) only once enough rows have their text.
     const rowsState = () => {
       const rows = newDialogs()
-        .flatMap((d) => [...d.querySelectorAll(itemSel)])
-        .map((row) => ({ row, name: row.querySelector(nameSel), price: row.querySelector(priceSel) }))
+        .flatMap((d) => [...d.querySelectorAll(itemSel)].map((row) => ({ root: d, row, name: row.querySelector(nameSel), price: row.querySelector(priceSel) })))
         .filter((r) => hasText(r.name) && hasText(r.price));
-      const visible = rows.length < expected ? 0 : rows.filter((r) => isVisible(r.row) && isVisible(r.name) && isVisible(r.price)).length;
+      const visible =
+        rows.length < expected ? 0 : rows.filter((r) => isVisible(r.row, r.root) && isVisible(r.name, r.root) && isVisible(r.price, r.root)).length;
       return { withText: rows.length, visible };
     };
     const t0 = performance.now();
@@ -373,7 +386,7 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
     let skeleton = false;
     let mountMs = null;
     let done = false;
-    let painted = false;
+    let pending = false; // the rows qualify and the frame that paints them is on its way
     let frame = 0;
     const stampMount = () => {
       if (mountMs == null && newDialogs().length > 0) mountMs = performance.now() - t0;
@@ -386,16 +399,37 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
       clearTimeout(timer);
       resolve({ clickEpoch, skeleton, mountMs, expectedRows: expected, ...value });
     };
-    const check = () => {
-      if (done || painted) return;
+    const scan = () => {
       stampMount();
       if (!skeleton && newDialogs().some((d) => d.querySelector(skeletonSel))) skeleton = true;
-      if (expected > 0 && rowsState().visible >= expected) {
-        painted = true;
-        observer.disconnect();
-        const itemsMs = performance.now() - t0;
-        requestAnimationFrame(() => setTimeout(() => finish({ ok: true, itemsMs, paintMs: performance.now() - t0 }), 0));
-      }
+    };
+    const rowsReady = () => expected > 0 && rowsState().visible >= expected;
+    // The time is the frame that shows the rows, not the mutation that made them qualify: when the condition is first
+    // met, wait for the next frame (rAF, then a task after it is painted) and check again in it and after it. A
+    // condition that no longer holds there is not a paint: keep waiting.
+    const check = () => {
+      if (done || pending) return;
+      scan();
+      if (!rowsReady()) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        if (done) return;
+        scan();
+        if (!rowsReady()) {
+          pending = false;
+          return;
+        }
+        setTimeout(() => {
+          if (done) return;
+          scan();
+          if (!rowsReady()) {
+            pending = false;
+            return;
+          }
+          const ms = performance.now() - t0;
+          finish({ ok: true, itemsMs: ms, paintMs: ms });
+        }, 0);
+      });
     };
     // Attribute changes (hidden -> visible) and layout-only changes (a row growing from 0 height) are not text
     // mutations: watch attributes too and re-check every frame.
@@ -403,7 +437,7 @@ const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, 
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
     const poll = () => {
       check();
-      if (!done && !painted) frame = requestAnimationFrame(poll);
+      if (!done) frame = requestAnimationFrame(poll);
     };
     const timer = setTimeout(() => {
       const state = rowsState();
