@@ -22,7 +22,11 @@ import {
  * - `amount`: the buyer's own price is honoured: priced at `line.amount`,
  *   skips the price gate.
  * - `suggested`: a pay-what-you-want product without a chosen amount; the
- *   server charges the suggested price. Counts only for the wallet rule.
+ *   server charges the suggested price, `pricing.regularPrice ?? price`, never a
+ *   discounted one (instapay `product.resolver.helper.ts`
+ *   `applyPayWhatYouWantAmount`), and skips the `priceVersion` check for it. So
+ *   the view, the sum, shown-tracking and the gate use that price, and the gate
+ *   relies on the seen rule alone. Counts for the wallet rule too.
  * - `none`: an ordinary line at the catalog price, gated.
  */
 export type PayWhatYouWantKind = "none" | "amount" | "suggested";
@@ -108,7 +112,11 @@ export type CartViewLine = {
   payWhatYouWant: PayWhatYouWantKind;
   /** False when the snapshot price is known to be stale (a scheduled change passed). */
   priceKnown: boolean;
-  /** Unit price in minor units: the `amount` of a pay-what-you-want line, else `effectivePrice ?? price`. */
+  /**
+   * Unit price in minor units, the price the server charges: the `amount` of a
+   * pay-what-you-want line, `regularPrice ?? price` for a pay-what-you-want line
+   * without an amount (`suggested`), else `effectivePrice ?? price`.
+   */
   unitPrice?: number;
   /** The line carries a "price updated" mark that the buyer has not accepted yet. */
   marked: boolean;
@@ -132,6 +140,21 @@ const DEFAULT_CURRENCY = "PLN";
 /** The price the catalog shows for a unit: `pricing.effectivePrice ?? price`. */
 export function catalogUnitPrice(details: CartLineDetails): number {
   return details.pricing?.effectivePrice ?? details.price;
+}
+
+/**
+ * The unit price the server charges for a line without an own `amount`: the
+ * suggested price (`regularPrice ?? price`) of a pay-what-you-want line without
+ * an amount, else the catalog price. An enabled discount on a pay-what-you-want
+ * variant moves `effectivePrice` but not this price.
+ */
+export function chargedUnitPrice(
+  kind: PayWhatYouWantKind,
+  details: CartLineDetails,
+): number {
+  return kind === "suggested"
+    ? (details.pricing?.regularPrice ?? details.price)
+    : catalogUnitPrice(details);
 }
 
 export function buildCartView(
@@ -163,7 +186,7 @@ export function buildCartView(
     };
     if (priceKnown && details != null) {
       viewLine.unitPrice =
-        kind === "amount" ? (line.amount as number) : catalogUnitPrice(details);
+        kind === "amount" ? (line.amount as number) : chargedUnitPrice(kind, details);
     }
     return viewLine;
   });
@@ -253,6 +276,18 @@ export function createCartViewStore(
 /** What a line has been showing: its unit price, and since when. */
 export type ShownPrice = { price: number; currency: string; since: number };
 
+/**
+ * The gate's memory, per local line id. Lifecycle (owned by the drawer):
+ *
+ * - Reset to `EMPTY_PRICE_GATE_STATE` on every drawer open: what was on screen
+ *   in an earlier open says nothing about this one.
+ * - Fed only by `trackPrices`, called from a `useLayoutEffect` of the **open**
+ *   drawer with the view it just painted: never while the drawer is closed and
+ *   never from a render that did not commit (a render the user never saw must
+ *   not start the clock).
+ * - `runPriceGate` reads it and returns the next state (marks only); the caller
+ *   stores that result.
+ */
 export type PriceGateState = {
   shown: ReadonlyMap<string, ShownPrice>;
   marks: ReadonlyMap<string, PriceMark>;
@@ -266,21 +301,36 @@ export const EMPTY_PRICE_GATE_STATE: PriceGateState = {
 /** A price shown for less than this before the click counts as unseen (N15). */
 export const PRICE_SEEN_MS = 1000;
 
+/** The server's `priceVersion` for the line; an empty string counts as none. */
 function freshVersion(item: CartViewLine): string | undefined {
-  return item.details?.pricing?.priceVersion;
+  const version = item.details?.pricing?.priceVersion;
+  return version ? version : undefined;
 }
 
 /**
  * Remembers what each line is showing and marks a line at once when its
  * rendered unit price changes while the drawer is open and the new price is a
- * server answer (N15), whatever the line's stored version is. The mark carries
- * `markedAt: now`, so it cannot be adopted before the new price has been on
- * screen for `PRICE_SEEN_MS`. A mark is dropped when its line is gone or is a
- * pay-what-you-want line at its `amount`; the gate drops it on adoption.
- * Returns `state` itself when nothing changed.
+ * server answer (N15), whatever the line's stored version is, and also when the
+ * answer carries no `priceVersion` (classic products): the mark then has
+ * `priceVersion: ""`, because the server does not check such a line and the seen
+ * rule is the only protection. The mark carries `markedAt: now`, so it cannot be
+ * adopted before the new price has been on screen for `PRICE_SEEN_MS`. A mark is
+ * dropped when its line is gone or is a pay-what-you-want line at its `amount`;
+ * the gate drops it on adoption. Returns `state` itself when nothing changed.
  *
- * The compared field is `pricing.effectivePrice ?? price` plus `currency`.
- * Pay-what-you-want lines at their `amount` are never shown-tracked or marked.
+ * The compared field is the price the server charges (`chargedUnitPrice`:
+ * `pricing.effectivePrice ?? price`, for a pay-what-you-want line without an
+ * amount `pricing.regularPrice ?? price`) plus `currency`. Pay-what-you-want
+ * lines at their `amount` are never shown-tracked or marked.
+ *
+ * A line that shows no price (no details, an expired snapshot price, or a
+ * pay-what-you-want line at its `amount`) loses its `shown` entry, so a price
+ * that disappears and comes back is counted from its return and does not count
+ * as a change from the price before. `marks` are untouched by that.
+ *
+ * Call it from a `useLayoutEffect` of the open drawer, with the view that was
+ * painted (see `PriceGateState`): never while the drawer is closed, never in a
+ * render that is not committed.
  */
 export function trackPrices(
   state: PriceGateState,
@@ -296,18 +346,23 @@ export function trackPrices(
     ids.add(item.line.id);
     const { details } = item;
     if (details == null || item.payWhatYouWant === "amount" || !item.priceKnown) {
+      // Nothing priced on screen: the next price starts a new count.
+      if (shown.delete(item.line.id)) changed = true;
       continue;
     }
-    const price = catalogUnitPrice(details);
+    const price = chargedUnitPrice(item.payWhatYouWant, details);
     const previous = shown.get(item.line.id);
     if (previous != null && previous.price === price && previous.currency === details.currency) {
       continue;
     }
     shown.set(item.line.id, { price, currency: details.currency, since: now });
     changed = true;
-    const version = freshVersion(item);
-    if (previous != null && item.source === "fresh" && version != null) {
-      marks.set(item.line.id, { priceVersion: version, shownPrice: price, markedAt: now });
+    if (previous != null && item.source === "fresh") {
+      marks.set(item.line.id, {
+        priceVersion: freshVersion(item) ?? "",
+        shownPrice: price,
+        markedAt: now,
+      });
     }
   }
 
@@ -350,13 +405,17 @@ export type PriceGateResult = {
 /**
  * "Next step" gate (D18), run on a view whose lines the server answered after
  * the drawer opened. Per line that is not a pay-what-you-want line at its
- * `amount` and whose answer carries a `priceVersion` `F` (the server skips the
- * check without one), with the stored version `L`:
+ * `amount`, with the stored version `L` and the fresh version `F` (possibly
+ * none: classic products send no `pricing`, and the server skips its own check
+ * for a line without a `priceVersion` and for pay-what-you-want lines, so for
+ * those the seen rule is the only protection):
  *
  * - Every such line must have been showing the fresh price (same unit price and
- *   currency) for at least `PRICE_SEEN_MS`, `L === F` included. Otherwise it is
- *   marked `{F, shownPrice, markedAt: now}` and the gate blocks.
- * - Seen long enough: `L === F` passes; `L !== F` adopts `F` silently.
+ *   currency, `chargedUnitPrice`) for at least `PRICE_SEEN_MS`, `L === F` and a
+ *   missing `F` included. Otherwise it is marked `{F ?? "", shownPrice,
+ *   markedAt: now}` and the gate blocks.
+ * - Seen long enough: `L === F` passes; `L !== F` adopts `F` silently, only when
+ *   `F` exists (without `F` nothing is adopted and the stored `L` is left).
  * - A marked line adopts only when the mark is still the fresh version and the
  *   price has been on screen for `PRICE_SEEN_MS`: counted from the line's
  *   `shown.since` when it shows that price, else from `mark.markedAt`. A mark
@@ -400,13 +459,11 @@ export function runPriceGate(
       marks.delete(lineId);
       continue;
     }
-    const current = freshVersion(item);
-    if (current == null) {
-      marks.delete(lineId);
-      continue;
-    }
+    const fresh = freshVersion(item);
+    // A line without a version is marked with "" and never adopts one.
+    const current = fresh ?? "";
     const details = item.details as CartLineDetails;
-    const price = catalogUnitPrice(details);
+    const price = chargedUnitPrice(item.payWhatYouWant, details);
     const seen = state.shown.get(lineId);
     const shownNow =
       seen != null && seen.price === price && seen.currency === details.currency
@@ -436,7 +493,7 @@ export function runPriceGate(
       }
       continue;
     }
-    if (current !== item.line.priceVersion) {
+    if (fresh != null && fresh !== item.line.priceVersion) {
       adopt.push({ lineId, priceVersion: current });
     }
     clear.push(lineId);
@@ -475,10 +532,10 @@ export type WalletItem = {
 
 /** Always the whole local cart, in local order, with each line's metadata (N1). */
 export function walletItems(view: Pick<CartView, "lines">): WalletItem[] {
-  return view.lines.map(({ line, details }) => ({
+  return view.lines.map(({ line, details, payWhatYouWant }) => ({
     name: details?.name ?? "",
     id: line.productID,
-    price: details != null ? catalogUnitPrice(details) : 0,
+    price: details != null ? chargedUnitPrice(payWhatYouWant, details) : 0,
     currency: details?.currency,
     quantity: line.quantity,
     isDeliverable: details?.isDeliverable ?? false,

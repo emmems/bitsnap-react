@@ -10,11 +10,14 @@ import { useCheckoutText } from "./texts.context";
 export function CartLines() {
   const {
     status,
-    products,
+    lines,
+    refreshFailed,
     missingItemIds,
     notice,
     retry,
     setQuantity,
+    priceWas,
+    isRefreshing,
   } = useCartController();
 
   const productList = useCheckoutSlot("productList");
@@ -110,31 +113,73 @@ export function CartLines() {
         )}
         style={productList.style}
       >
-        {products != null && products.length > 0 && (
+        {status === "ready" && (
           <ul className={"mt-5"}>
-            {products.map((product) => (
-              <React.Fragment key={product.id}>
-                {product.details != null && (
-                  <li className={"mb-3"}>
-                    <SingleProduct
-                      isNotAvailable={missingItemIds.includes(
-                        product.productID,
-                      )}
-                      quantity={product.quantity}
-                      details={product.details}
-                      url={product.url}
-                      shouldUpdate={(newQuantity) =>
-                        setQuantity(product.id, newQuantity)
-                      }
-                    />
-                    <hr className="h-1" />
-                  </li>
+            {lines.map((item) => (
+              <li key={item.line.id} className={"mb-3"}>
+                {item.details != null ? (
+                  <SingleProduct
+                    isNotAvailable={missingItemIds.includes(
+                      item.line.productID,
+                    )}
+                    quantity={item.line.quantity}
+                    details={item.details}
+                    unitPrice={item.unitPrice}
+                    pricing={
+                      // A pay-what-you-want line is charged its own or the
+                      // suggested price, never a sale price.
+                      item.payWhatYouWant === "none"
+                        ? item.details.pricing
+                        : undefined
+                    }
+                    priceWas={priceWas(item.line.id)}
+                    marked={item.marked}
+                    refreshing={isRefreshing(item.line.productID)}
+                    url={item.line.url}
+                    shouldUpdate={(newQuantity) =>
+                      setQuantity(item.line.id, newQuantity)
+                    }
+                  />
+                ) : (
+                  // A line the server has not described yet (another tab added it).
+                  <Skeleton
+                    data-bitsnap-checkout-slot="skeleton"
+                    className={cn("mx-3 h-20", skeleton.className)}
+                    style={skeleton.style}
+                  />
                 )}
-              </React.Fragment>
+                <hr className="h-1" />
+              </li>
             ))}
           </ul>
         )}
       </div>
+
+      {refreshFailed && (
+        <div className={"flex flex-row items-center justify-between gap-3 mx-3"}>
+          <p
+            role="alert"
+            data-bitsnap-checkout-slot="error"
+            className={cn("text-sm", error.className)}
+            style={error.style}
+          >
+            {loadFailedText}
+          </p>
+          <button
+            type="button"
+            data-bitsnap-checkout-slot="checkoutButton"
+            data-bitsnap-checkout-retry=""
+            onClick={retry}
+            className={cn(
+              "px-3 py-2 rounded-md transition font-bold",
+              checkoutButton.className,
+            )}
+            style={checkoutButton.style}
+          >
+            {retryText}
+          </button>
+        </div>
+      )}
     </>
   );
 }

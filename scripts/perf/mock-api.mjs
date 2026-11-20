@@ -13,12 +13,14 @@ import { pathToFileURL } from "node:url";
 
 export const PRODUCT_IDS = ["perf-1", "perf-2", "perf-3"];
 
-const svg = (color) =>
-  `data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="${color}"/></svg>`,
-  )}`;
+const IMAGE_COLORS = ["#6366f1", "#0ea5e9", "#10b981"];
 
-function product(id, index) {
+// Served by the mock itself over http: the cart snapshot keeps only http(s) image URLs, so a `data:` URL would
+// make every product fail the snapshot check and hide the snapshot rows of the gate.
+const svg = (color) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="${color}"/></svg>`;
+
+function product(id, index, origin) {
   const price = 4990 + index * 1000;
   return {
     id,
@@ -27,9 +29,16 @@ function product(id, index) {
     price,
     currency: "PLN",
     metadata: {},
-    image_url: svg(["#6366f1", "#0ea5e9", "#10b981"][index % 3]),
+    image_url: `${origin}/perf-image/${index % IMAGE_COLORS.length}.svg`,
     isDeliverable: false,
-    pricing: { effectivePrice: price, regularPrice: price, priceVersion: `v-${id}` },
+    // The full shape the API sends; the snapshot drops a product whose pricing misses a field.
+    pricing: {
+      effectivePrice: price,
+      regularPrice: price,
+      currency: "PLN",
+      priceVersion: `v-${id}`,
+      referencePrice: { historyAvailable: false },
+    },
   };
 }
 
@@ -91,6 +100,13 @@ export async function startMockApi(options = {}) {
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://mock");
+    const image = /^\/perf-image\/(\d+)\.svg$/.exec(url.pathname);
+    if (image) {
+      // Not an API call: answered at once, cacheable and kept out of `requests`.
+      res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600" });
+      res.end(svg(IMAGE_COLORS[Number(image[1]) % IMAGE_COLORS.length]));
+      return;
+    }
     requests.push({ method: req.method ?? "GET", path: url.pathname, at: Date.now() });
     const origin = req.headers.origin;
     const cors = {
@@ -113,7 +129,8 @@ export async function startMockApi(options = {}) {
     req.resume();
     if (url.pathname.endsWith("/public-commerce/products")) {
       const ids = (url.searchParams.get("ids") ?? "").split(",").filter(Boolean);
-      const result = ids.map((id) => product(id, Math.max(0, PRODUCT_IDS.indexOf(id))));
+      const self = `http://${req.headers.host ?? "localhost"}`;
+      const result = ids.map((id) => product(id, Math.max(0, PRODUCT_IDS.indexOf(id)), self));
       send(200, { success: true, result }, {
         "Cache-Control": `max-age=${cacheSeconds}, s-maxage=${cacheSeconds}, stale-while-revalidate=60, stale-if-error=60`,
       });

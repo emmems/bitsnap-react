@@ -1,18 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import type { SingleProduct } from "./product.details.model";
+import type { CartLineDetails } from "./cart-snapshot";
+import { formatCurrency } from "./lib/round.number";
+import { getLocale } from "./locale";
+import type { ProductPricing } from "./product.details.model";
 import { Button } from "@/src/ui/button";
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { ButtonGroup } from "@/src/ui/button-group";
 import { cn } from "@/src/lib/utils";
 import { useCheckoutSlot } from "./appearance.context";
 import { ProductPrice } from "./ProductPrice";
-import { useCheckoutText } from "./texts.context";
+import { useCheckoutText, useCheckoutTextsConfig } from "./texts.context";
 import { clampQuantity, quantityFromInput } from "./quantity";
 
 const SingleProduct = ({
   isNotAvailable,
   quantity,
   details,
+  unitPrice,
+  pricing,
+  priceWas,
+  marked = false,
+  refreshing = false,
   url,
   shouldUpdate,
 }: {
@@ -21,7 +29,18 @@ const SingleProduct = ({
   metadata?: { [key: string]: string | undefined };
   /** Product page; the image and the name link to it. */
   url?: string;
-  details: SingleProduct;
+  /** From the server or from the local snapshot: both satisfy it. */
+  details: CartLineDetails;
+  /** Unit price in minor units; `undefined` while it is not known (no price is shown). */
+  unitPrice?: number;
+  /** Sale and Omnibus data; absent for a pay-what-you-want line priced at its amount. */
+  pricing?: ProductPricing;
+  /** The unit price shown before it changed while the drawer was open. */
+  priceWas?: number;
+  /** The price is new to the buyer and not accepted yet (price gate). */
+  marked?: boolean;
+  /** An older snapshot price is on screen while the server is asked. */
+  refreshing?: boolean;
   /** Rejects when the cart could not be changed. */
   shouldUpdate: (newQuantity?: number) => Promise<unknown> | void;
 }) => {
@@ -31,6 +50,8 @@ const SingleProduct = ({
   const productPrice = useCheckoutSlot("productPrice");
   const removeButton = useCheckoutSlot("removeButton");
   const removeText = useCheckoutText("remove");
+  const priceUpdatedText = useCheckoutText("priceUpdated");
+  const textsLocale = useCheckoutTextsConfig().locale;
 
   const imageUrl = details.image_url ?? details.images?.[0];
   const [brokenImageUrl, setBrokenImageUrl] = useState<string | undefined>();
@@ -89,16 +110,37 @@ const SingleProduct = ({
         )}
         <p
           data-bitsnap-checkout-slot="productPrice"
+          data-bitsnap-checkout-state={
+            marked ? "price-updated" : refreshing ? "refreshing" : undefined
+          }
           className={cn("text-sm", productPrice.className)}
           style={productPrice.style}
           suppressHydrationWarning
         >
-          <ProductPrice
-            price={details.price}
-            currency={details.currency}
-            pricing={details.pricing}
-            quantity={quantity}
-          />
+          {unitPrice != null && (
+            <ProductPrice
+              price={unitPrice}
+              currency={details.currency}
+              pricing={pricing}
+              quantity={quantity}
+            />
+          )}
+          {marked && priceWas != null && unitPrice != null && priceWas !== unitPrice && (
+            <span
+              data-bitsnap-checkout-price="updated"
+              className="mt-1 block text-xs font-semibold"
+            >
+              {priceUpdatedText
+                .replace(
+                  "{was}",
+                  formatCurrency(priceWas, details.currency, textsLocale ?? getLocale()),
+                )
+                .replace(
+                  "{now}",
+                  formatCurrency(unitPrice, details.currency, textsLocale ?? getLocale()),
+                )}
+            </span>
+          )}
         </p>
         <div className={"flex justify-between"}>
           <QuantityComponent

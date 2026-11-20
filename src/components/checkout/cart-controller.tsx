@@ -5,9 +5,17 @@ import { buyErrorText } from "./buy-error";
 import {
   getCartLines,
   getProjectID,
+  readLocalCartLines,
   useCartProvider,
-  type CartMethods,
 } from "./CartProvider";
+import {
+  catalogUnitPrice,
+  hasPayWhatYouWantLine,
+  walletItems,
+  walletsInert,
+  type CartViewLine,
+  type WalletItem,
+} from "./cart-view";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { getLocale } from "./locale";
@@ -20,6 +28,7 @@ import {
 import { rememberPendingOrder } from "./pending-order";
 import { useCheckoutStore } from "./state";
 import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
+import { useCartView } from "./useCartView";
 
 /**
  * The state and the logic of the cart, with no markup (PLAN.md D1).
@@ -28,34 +37,58 @@ import { useCheckoutText, useCheckoutTextResolver } from "./texts.context";
  * context; the parts of the cart (`CartLines`, `CartCheckout`, ...) read it with
  * `useCartController()`. Presentation (slots, texts shown on screen, classes)
  * stays in the parts.
+ *
+ * The lines come from `useCartView()`: painted at once from the local snapshot,
+ * revalidated in the background, and gated on the server's `priceVersion`
+ * before `/buy` (part 1 §3.3-3.6, D2, D12, D18).
  */
-
-export type CartLine = Extract<
-  Awaited<ReturnType<CartMethods["getProducts"]>>,
-  readonly unknown[]
->[number];
 
 export type CartCountry = { name: string; code: string };
 
 export type CartController = {
   locale: string;
 
-  /** Where the lines are in their life; the parts pick their state from it. */
+  /**
+   * - `loading`: there are lines but nothing to show for any of them yet;
+   * - `error`: that, and the server could not be asked;
+   * - `empty`: no lines;
+   * - `ready`: at least one line can be shown.
+   */
   status: "loading" | "error" | "empty" | "ready";
-  isLoading: boolean;
-  hasLoadFailed: boolean;
-  /** `undefined` until the first load, and on a failed load. */
-  products: CartLine[] | undefined;
-  /** Sum of the lines in minor units, `0` when no line has details yet. */
+  /** The lines in local order; a line without `details` waits for the server. */
+  lines: CartViewLine[];
+  /** Lines are shown from the device but the server could not be asked (inline row with retry). */
+  refreshFailed: boolean;
+  /** Sum of the lines in minor units. */
   total: number;
+  /** False while some line has no known price (the total is not shown). */
+  totalComplete: boolean;
   currency: string;
   isSomeProductDeliverable: boolean;
   /** Ids of the products `/buy` answered "not found" for. */
   missingItemIds: string[];
-  /** Reloads the lines (today: refetch of the `/products` query). */
+  /** Asks the server again. */
   retry(): void;
   /** Rejects when the cart could not be changed. `0` or less removes the line. */
   setQuantity(id: string, quantity?: number): Promise<void>;
+  /** The unit price a line showed before its price changed while the drawer was open. */
+  priceWas(lineId: string): number | undefined;
+  /** The line shows an older snapshot price while the server is asked. */
+  isRefreshing(productID: string): boolean;
+  /** Some price changed: the buyer checks the total and clicks again. */
+  showReviewPrices: boolean;
+
+  /** Express buttons (D12, N1, N2). */
+  wallets: {
+    /** Mounted once the server confirmed the cart; kept until it is empty or the drawer closes. */
+    mounted: boolean;
+    /** No click or key starts a wallet while a line is unconfirmed or price-marked. */
+    inert: boolean;
+    /** Apple Pay and Google Pay are hidden while a line is pay-what-you-want. */
+    oneClick: boolean;
+    /** Always the whole local cart. */
+    items: WalletItem[];
+  };
 
   countries: CartCountry[] | undefined;
   /** The country the cart is for, `undefined` until the stored one is read or when there is none. */
@@ -80,7 +113,7 @@ export type CartController = {
   checkout(): Promise<void>;
   /** The order is being created (the payment options are locked meanwhile). */
   isStartingCheckout: boolean;
-  /** `isStartingCheckout`, or waiting for the payment options (the button shows a spinner). */
+  /** `isStartingCheckout`, or waiting for prices or the payment options (the button shows a spinner). */
   isCheckingOut: boolean;
   canCheckout: boolean;
 
@@ -115,42 +148,47 @@ export function CartControllerProvider({
   );
 }
 
+/** How long the `/payment-methods` key lags behind quick quantity changes (P12). */
+const PAYMENT_METHODS_DEBOUNCE_MS = 300;
+/** `cart_opened` waits this long for the server before it reports what it has. */
+const CART_OPENED_FALLBACK_MS = 2000;
+
 /**
- * The one place the lines come from. The next wave replaces the `/products`
- * query with the local snapshot and the revalidation (part 1's `useCartView`)
- * here; nothing else reads `provider.getProducts`.
+ * `value`, following it with a delay. The first defined value is not delayed;
+ * `flush()` catches up at once.
  */
-function useCartLines(locale: string) {
-  const provider = useCartProvider();
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["cart", locale],
-    queryFn: provider.getProducts,
-  });
-  const products = isErr(data) ? undefined : data;
-  const hasLoadFailed = !isLoading && (isError || isErr(data));
-  const reload = React.useCallback(
-    () => refetch().then(() => undefined),
-    [refetch],
-  );
-  return { products, isLoading, hasLoadFailed, reload };
+function useDebounced(value: string | undefined, ms: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  const latest = React.useRef(value);
+  latest.current = value;
+  React.useEffect(() => {
+    if (value === debounced) {
+      return;
+    }
+    if (value === undefined || debounced === undefined) {
+      setDebounced(value);
+      return;
+    }
+    const timer = setTimeout(() => setDebounced(latest.current), ms);
+    return () => clearTimeout(timer);
+  }, [value]);
+  const flush = React.useCallback(() => setDebounced(latest.current), []);
+  return [debounced, flush] as const;
 }
 
 function useCartControllerState(localeProp?: string): CartController {
   const provider = useCartProvider();
   const instrument = useInstrumentContext();
   const locale = localeProp ?? getLocale();
+  const cart = useCartView(locale);
+  const { view } = cart;
 
   const unavailableProductsText = useCheckoutText("unavailableProducts");
+  const updateFailedText = useCheckoutText("updateFailed");
   const resolveCheckoutText = useCheckoutTextResolver();
   const countrySelectorId = React.useId();
   const countryHintId = React.useId();
 
-  const { mutateAsync: removeProduct } = useMutation({
-    mutationFn: provider.removeProductFromCart,
-  });
-  const { mutateAsync: updateQuantity } = useMutation({
-    mutationFn: provider.updateQuantity,
-  });
   const { mutateAsync: setCountryAsync } = useMutation({
     mutationFn: provider.setCountry,
   });
@@ -167,6 +205,9 @@ function useCartControllerState(localeProp?: string): CartController {
   );
   const shownError = errMsg.length > 0 ? errMsg : (notice ?? "");
   const [missingItemIds, setMissingItemIds] = React.useState<string[]>([]);
+  const [showReviewPrices, setShowReviewPrices] = React.useState(false);
+  const [gateFailed, setGateFailed] = React.useState(false);
+  const [isCheckingPrices, setIsCheckingPrices] = React.useState(false);
 
   const {
     mutateAsync: continueToCheckoutAsync,
@@ -183,7 +224,6 @@ function useCartControllerState(localeProp?: string): CartController {
     queryKey: ["cart-one-click-payment"],
     queryFn: provider.checkIfApplePayIsAvailable,
   });
-  const { products, isLoading, hasLoadFailed, reload } = useCartLines(locale);
   const { data: countryData, refetch: refetchCountry } = useQuery({
     queryKey: ["cart-country"],
     queryFn: provider.getCountry,
@@ -199,33 +239,35 @@ function useCartControllerState(localeProp?: string): CartController {
   // (cash on delivery is for Poland only); any failure means "no choice".
   // Without a country "Next step" is disabled, so there is nothing to ask yet.
   // Until a new country or cart is answered, the last choice stays on screen
-  // without cash on delivery, which the new answer may not offer.
+  // without cash on delivery, which the new answer may not offer. The key
+  // follows the local lines (the request body is built from them), debounced
+  // so quick quantity changes send one request (P12).
   const queryClient = useQueryClient();
-  const cartSignature =
-    products == null || products.length === 0 || selectedCountry == null
+  const [cartSignature, flushCartSignature] = useDebounced(
+    cart.localSignature.length === 0 || selectedCountry == null
       ? undefined
-      : products
-          .map((el) => `${el.productID}:${el.quantity}`)
-          .sort()
-          .join(",");
-  const paymentMethodsQuery = {
-    queryKey: [
-      "cart-payment-methods",
-      getProjectID(),
-      locale,
-      selectedCountry,
-      cartSignature,
-    ],
-    queryFn: async (): Promise<Choice | null> =>
-      provider.getPaymentMethodChoice().catch(() => null),
-    staleTime: 60_000,
-    retry: false,
-  } as const;
+      : cart.localSignature,
+    PAYMENT_METHODS_DEBOUNCE_MS,
+  );
+  const paymentMethodsQuery = (signature: string | undefined) =>
+    ({
+      queryKey: [
+        "cart-payment-methods",
+        getProjectID(),
+        locale,
+        selectedCountry,
+        signature,
+      ],
+      queryFn: async (): Promise<Choice | null> =>
+        provider.getPaymentMethodChoice().catch(() => null),
+      staleTime: 60_000,
+      retry: false,
+    }) as const;
   const {
     data: paymentMethodChoiceData,
     isPlaceholderData: isPaymentMethodChoicePlaceholder,
   } = useQuery({
-    ...paymentMethodsQuery,
+    ...paymentMethodsQuery(cartSignature),
     enabled: cartSignature != null,
     placeholderData: (previous: Choice | null | undefined) =>
       previous === undefined ? undefined : withoutCod(previous),
@@ -240,18 +282,8 @@ function useCartControllerState(localeProp?: string): CartController {
 
   const countries = isErr(availableCountries) ? [] : availableCountries;
 
-  const sumOfProducts =
-    products?.reduce((prev, curr) => {
-      if (curr.details == null) {
-        return prev;
-      }
-      return prev + (curr.details.pricing?.effectivePrice ?? curr.details.price) * curr.quantity;
-    }, 0) ?? 0;
-  const currency = products?.[0]?.details?.currency ?? "PLN";
-
-  const isSomeProductDeliverable =
-    products?.some((product) => product.details?.isDeliverable === true) ??
-    false;
+  const lines = view.lines;
+  const itemCount = lines.reduce((sum, item) => sum + item.line.quantity, 0);
 
   // The hint waits for the answer: the country is read asynchronously.
   const isCountryMissing = countryData !== undefined && selectedCountry == null;
@@ -275,71 +307,93 @@ function useCartControllerState(localeProp?: string): CartController {
       .catch(() => {});
   }, [countries, countryData, selectedCountry]);
 
-  // One `cart_opened` per opening of the drawer, once the cart is loaded.
+  // One `cart_opened` per opening of the drawer: when the server confirmed the
+  // cart, or after 2 s with what is known then (offline).
   const opened = React.useRef(false);
-  React.useEffect(() => {
-    if (opened.current || isLoading) {
+  const latestView = React.useRef(view);
+  latestView.current = view;
+  const reportOpened = React.useCallback(() => {
+    if (opened.current) {
       return;
     }
     opened.current = true;
+    const current = latestView.current;
     instrument.track("cart_opened", {
-      item_count: products?.reduce((sum, el) => sum + el.quantity, 0) ?? 0,
-      value_minor: sumOfProducts,
-      currency,
+      item_count: current.lines.reduce((sum, item) => sum + item.line.quantity, 0),
+      value_minor: current.sum,
+      currency: current.currency,
     });
-  }, [isLoading, instrument, products, sumOfProducts, currency]);
-
-  const reportedQuantity = React.useRef(new Map<string, number>());
+  }, [instrument]);
   React.useEffect(() => {
-    reportedQuantity.current.clear();
-  }, [products]);
+    if (view.status === "fresh" || view.status === "empty") {
+      reportOpened();
+    }
+  }, [view.status, reportOpened]);
+  React.useEffect(() => {
+    const timer = setTimeout(reportOpened, CART_OPENED_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [reportOpened]);
 
   /** `add_to_cart` / `remove_from_cart` for a quantity change in the drawer. */
-  function trackQuantityChange(id: string, newQuantity: number) {
-    const line = products?.find((el) => el.id === id);
-    if (line?.details == null) {
+  function trackQuantityChange(
+    item: CartViewLine,
+    previousQuantity: number,
+    newQuantity: number,
+  ) {
+    const details = item.details;
+    const delta = newQuantity - previousQuantity;
+    if (details == null || delta === 0) {
       return;
     }
-    // Quick clicks arrive before the cart is reloaded: count from the last reported quantity.
-    const delta = newQuantity - (reportedQuantity.current.get(id) ?? line.quantity);
-    reportedQuantity.current.set(id, newQuantity);
-    if (delta === 0) {
-      return;
-    }
-    const price = line.details.pricing?.effectivePrice ?? line.details.price;
-    const productID = line.catalogProductID ?? line.productID;
+    const price = item.unitPrice ?? catalogUnitPrice(details);
+    const productID =
+      cart.catalogProductID(item.line.productID) ?? item.line.productID;
     instrument.track(
       delta > 0 ? "add_to_cart" : "remove_from_cart",
       {
         qty: Math.abs(delta),
         value_minor: Math.round(price * Math.abs(delta)),
-        currency: line.details.currency,
+        currency: details.currency,
       },
       {
         product_id: productID,
-        variant_id: productID !== line.productID ? line.productID : null,
+        variant_id: productID !== item.line.productID ? item.line.productID : null,
       },
     );
   }
 
   const startedCheckout = React.useRef(false);
 
-  /** Rejects when the cart could not be changed; the cart is reloaded either way. */
+  /**
+   * A local, synchronous write (D2): the line, the total and the count follow
+   * in the same render, nothing is refetched. Rejects (and shows
+   * `updateFailed`) when the storage refused the write; the stored cart, and
+   * so the view, stays as it was.
+   */
   async function shouldUpdate(id: string, newQuantity?: number) {
     if (newQuantity == null) {
       return;
     }
-    trackQuantityChange(id, Math.max(0, newQuantity));
+    const item = lines.find((entry) => entry.line.id === id);
+    const previousQuantity =
+      readLocalCartLines().find((line) => line.id === id)?.quantity ??
+      item?.line.quantity ??
+      0;
     try {
       const result =
         newQuantity <= 0
-          ? await removeProduct({ id: id })
-          : await updateQuantity({ id: id, quantity: newQuantity });
+          ? await provider.removeProductFromCart({ id })
+          : await provider.updateQuantity({ id, quantity: newQuantity });
       if (isErr(result)) {
         throw new Error(`cannot change the cart: ${result.error}`);
       }
-    } finally {
-      await reload().catch(() => undefined);
+    } catch (e) {
+      setErrMsg(updateFailedText);
+      throw e;
+    }
+    setErrMsg((message) => (message === updateFailedText ? "" : message));
+    if (item != null) {
+      trackQuantityChange(item, previousQuantity, Math.max(0, newQuantity));
     }
   }
 
@@ -347,25 +401,53 @@ function useCartControllerState(localeProp?: string): CartController {
     try {
       setErrMsg("");
       setMissingItemIds([]);
+      setGateFailed(false);
       useCheckoutStore.getState().setNotice(undefined);
+
+      // The buyer must have seen every price they pay (D18): "Next step" never
+      // sends `/buy` on snapshot data or on a price shown too briefly.
+      setIsCheckingPrices(true);
+      let gate: "pass" | "marked" | "failed";
+      try {
+        gate = await cart.checkPrices();
+      } finally {
+        setIsCheckingPrices(false);
+      }
+      if (gate === "failed") {
+        setGateFailed(true);
+        return;
+      }
+      if (gate === "marked") {
+        setShowReviewPrices(true);
+        return;
+      }
+      setShowReviewPrices(false);
 
       // A click before the choice arrived waits for it (at most the request
       // timeout); a choice the buyer has not seen yet is shown, not used. The
       // last choice shown in the meantime is used if the new one still offers
-      // the selected method.
+      // the selected method. A key that still lags behind a quantity change
+      // is caught up first (N7).
+      const localSignature =
+        cart.localSignature.length === 0 || selectedCountry == null
+          ? undefined
+          : cart.localSignature;
       let choice = paymentMethodChoice;
       let paymentMethod =
         choice != null
           ? effectivePaymentMethod(choice, selectedPaymentMethod)
           : undefined;
       if (
-        cartSignature != null &&
-        (paymentMethodChoiceData === undefined || isPaymentMethodChoicePlaceholder)
+        localSignature != null &&
+        (paymentMethodChoiceData === undefined ||
+          isPaymentMethodChoicePlaceholder ||
+          cartSignature !== localSignature)
       ) {
+        flushCartSignature();
         setIsWaitingForChoice(true);
         try {
           choice = await queryClient
-            .fetchQuery(paymentMethodsQuery)
+            .fetchQuery(paymentMethodsQuery(localSignature))
             .catch(() => null);
         } finally {
           setIsWaitingForChoice(false);
@@ -383,25 +465,25 @@ function useCartControllerState(localeProp?: string): CartController {
         }
       }
 
-      if (products != null) {
-        if (!startedCheckout.current && products.length > 0) {
+      if (lines.length > 0) {
+        if (!startedCheckout.current) {
           startedCheckout.current = true;
           instrument.track("checkout_started", {
-            item_count: products.reduce((sum, el) => sum + el.quantity, 0),
+            item_count: itemCount,
             checkout_type: "cart",
-            value_minor: sumOfProducts,
-            currency,
+            value_minor: view.sum,
+            currency: view.currency,
           });
         }
         try {
           sendAnalyticEvent({
             event: "initiateCheckout",
-            items: products?.map((el) => ({
-              id: el.productID,
-              name: el.details?.name ?? "",
-              price: el.details?.price ?? 0,
-              quantity: el.quantity,
-              currency: el.details?.currency ?? "PLN",
+            items: lines.map((item) => ({
+              id: item.line.productID,
+              name: item.details?.name ?? "",
+              price: item.details?.price ?? 0,
+              quantity: item.line.quantity,
+              currency: item.details?.currency ?? "PLN",
             })),
           });
         } catch (e) {}
@@ -416,7 +498,14 @@ function useCartControllerState(localeProp?: string): CartController {
       if (isErr(response)) {
         // The seller may have changed the payment methods in the meantime.
         void queryClient.invalidateQueries({ queryKey: ["cart-payment-methods"] });
-        if (response.error == "item-ids-not-found") {
+        if (response.error == "price-changed") {
+          // The server won the race: ask again past the HTTP cache, mark what
+          // changed and let the next click go through the gate (D18, N3).
+          setShowReviewPrices(true);
+          if ((await cart.recheckPrices()) === "failed") {
+            setGateFailed(true);
+          }
+        } else if (response.error == "item-ids-not-found") {
           setErrMsg(unavailableProductsText);
           if ("data" in response && Array.isArray(response.data)) {
             setMissingItemIds(response.data as string[]);
@@ -450,29 +539,53 @@ function useCartControllerState(localeProp?: string): CartController {
     }
   }
 
-  const isCheckingOut = isContinueToCheckoutLoading || isWaitingForChoice;
-  const status: CartController["status"] = isLoading
-    ? "loading"
-    : hasLoadFailed
-      ? "error"
-      : products == null || products.length == 0
-        ? "empty"
+  // Express buttons mount the first time the server confirmed the cart and
+  // stay mounted (an open wallet sheet is never unmounted) until it is empty.
+  const walletsMounted = React.useRef(false);
+  if (lines.length === 0) {
+    walletsMounted.current = false;
+  } else if (view.status === "fresh") {
+    walletsMounted.current = true;
+  }
+
+  const hasDetails = lines.some((item) => item.details != null);
+  const status: CartController["status"] =
+    lines.length === 0
+      ? "empty"
+      : !hasDetails
+        ? view.failed
+          ? "error"
+          : "loading"
         : "ready";
+
+  const isCheckingOut =
+    isContinueToCheckoutLoading || isWaitingForChoice || isCheckingPrices;
 
   return {
     locale,
     status,
-    isLoading,
-    hasLoadFailed,
-    products,
-    total: sumOfProducts,
-    currency,
-    isSomeProductDeliverable,
+    lines,
+    refreshFailed:
+      status === "ready" && (view.status === "unavailable-refresh" || gateFailed),
+    total: view.sum,
+    totalComplete: view.sumComplete,
+    currency: view.currency,
+    isSomeProductDeliverable: view.isSomeProductDeliverable,
     missingItemIds,
     retry: () => {
-      reload().then().catch();
+      setGateFailed(false);
+      cart.retry();
     },
     setQuantity: shouldUpdate,
+    priceWas: cart.priceWas,
+    isRefreshing: cart.isRefreshing,
+    showReviewPrices: showReviewPrices && lines.length > 0,
+    wallets: {
+      mounted: walletsMounted.current,
+      inert: walletsInert(view),
+      oneClick: !hasPayWhatYouWantLine(view),
+      items: walletItems(view),
+    },
     countries,
     country: selectedCountry,
     isCountryMissing,
@@ -499,7 +612,7 @@ function useCartControllerState(localeProp?: string): CartController {
     checkout: continueToCheckout,
     isStartingCheckout: isContinueToCheckoutLoading,
     isCheckingOut,
-    canCheckout: !(isLoading || isCheckingOut || selectedCountry == null),
+    canCheckout: !(status !== "ready" || isCheckingOut || selectedCountry == null),
     error: shownError,
     notice,
   };

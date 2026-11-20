@@ -5,6 +5,13 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
 
 const page = setupReactPage();
 
+// "Next step" goes on only after every price was on screen for a second (the
+// price gate, D18): the tests move this clock instead of waiting.
+const realNow = Date.now;
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+const lookAtCart = () => void (clockOffset += 1500);
+
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let focusManager: typeof import("@tanstack/react-query").focusManager;
@@ -123,6 +130,7 @@ async function changeCountry(code: string) {
 }
 
 async function clickCheckout() {
+  lookAtCart();
   const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
   await React.act(async () => button.click());
   await settle();
@@ -207,6 +215,7 @@ describe("payment method choice in the cart", () => {
     assert.equal(fieldset(), null);
 
     const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    lookAtCart();
     await React.act(async () => button.click());
     await React.act(async () => answer(choiceOf(["online", "manual"], ["blik"])()));
     await settle();

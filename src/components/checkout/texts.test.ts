@@ -23,6 +23,10 @@ const english = {
   currencyUnsupported:
     "The shop doesn't accept payments in this currency. Contact the seller.",
   priceChanged: "The product price has changed. Refresh the page to see the current price.",
+  priceUpdated: "The price changed: was {was}, now {now}.",
+  reviewPrices: "Check the prices and the total, then continue.",
+  walletsUpdating: "Updating the cart…",
+  updateFailed: "Could not update this item. Your cart is unchanged.",
   close: "Close cart",
   remove: "Remove",
   quantity: "Quantity",
@@ -97,6 +101,10 @@ const polish = {
   currencyUnsupported:
     "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
   priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
+  priceUpdated: "Cena się zmieniła: była {was}, jest {now}.",
+  reviewPrices: "Sprawdź ceny i sumę, a potem przejdź dalej.",
+  walletsUpdating: "Aktualizujemy koszyk…",
+  updateFailed: "Nie udało się zmienić tej pozycji. Koszyk pozostał bez zmian.",
   close: "Zamknij koszyk",
   remove: "Usuń",
   quantity: "Ilość",

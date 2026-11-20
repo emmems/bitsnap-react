@@ -36,8 +36,19 @@ export type CheckoutTexts = {
   mixedRecurring: string;
   /** Error shown when the cart currency cannot be paid in. */
   currencyUnsupported: string;
-  /** Error shown when a price changed after the product was added. */
+  /**
+   * Error shown when a price changed after the product was added. Since 1.31.0
+   * the cart shows the new price and `reviewPrices` instead.
+   */
   priceChanged: string;
+  /** Marker on a line whose price changed while the cart was open; `{was}` and `{now}` are unit prices. */
+  priceUpdated: string;
+  /** Shown by the checkout button when a price changed: the next click continues. */
+  reviewPrices: string;
+  /** Note under the express payment buttons while they wait for the cart to be confirmed. */
+  walletsUpdating: string;
+  /** Error shown when a quantity change or removal could not be saved. */
+  updateFailed: string;
   /** Accessible name of the close button of the drawer. */
   close: string;
   /** Remove button of a cart line (also read together with the product name). */
@@ -143,6 +154,10 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "The shop doesn't accept payments in this currency. Contact the seller.",
     priceChanged: "The product price has changed. Refresh the page to see the current price.",
+    priceUpdated: "The price changed: was {was}, now {now}.",
+    reviewPrices: "Check the prices and the total, then continue.",
+    walletsUpdating: "Updating the cart…",
+    updateFailed: "Could not update this item. Your cart is unchanged.",
     close: "Close cart",
     remove: "Remove",
     quantity: "Quantity",
@@ -216,6 +231,10 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
     priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
+    priceUpdated: "Cena się zmieniła: była {was}, jest {now}.",
+    reviewPrices: "Sprawdź ceny i sumę, a potem przejdź dalej.",
+    walletsUpdating: "Aktualizujemy koszyk…",
+    updateFailed: "Nie udało się zmienić tej pozycji. Koszyk pozostał bez zmian.",
     close: "Zamknij koszyk",
     remove: "Usuń",
     quantity: "Ilość",

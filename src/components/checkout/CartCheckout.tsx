@@ -24,8 +24,11 @@ import { useCheckoutText } from "./texts.context";
 export function CartCheckout() {
   const {
     locale,
-    products,
+    status,
     total,
+    totalComplete,
+    wallets,
+    showReviewPrices,
     currency,
     isSomeProductDeliverable,
     countries,
@@ -63,8 +66,12 @@ export function CartCheckout() {
   const nextStepText = useCheckoutText("nextStep");
   const countryRequiredText = useCheckoutText("countryRequired");
   const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
+  const walletsUpdatingText = useCheckoutText("walletsUpdating");
+  const reviewPricesText = useCheckoutText("reviewPrices");
 
-  if (!(total > 0 && currency != null)) {
+  // A line still waiting for its price keeps the block (and a mounted wallet
+  // sheet) on screen; only the amount waits.
+  if (status !== "ready" || !(total > 0 || !totalComplete)) {
     return null;
   }
 
@@ -89,7 +96,7 @@ export function CartCheckout() {
               className={cn("font-medium", totalValue.className)}
               style={totalValue.style}
             >
-              {formatCurrency(total, currency, locale)}
+              {totalComplete ? formatCurrency(total, currency, locale) : "…"}
             </p>
             {isSomeProductDeliverable && (
               <p
@@ -137,63 +144,69 @@ export function CartCheckout() {
       )}
 
       <div className={"mb-3 flex flex-col"}>
-        {isApplePayAvailable && products != null && products.length > 0 && (
+        {wallets.mounted && (
+          // Inert while a line is unconfirmed or price-marked (D12, N1): no
+          // click or key starts a wallet; an open wallet sheet is untouched.
           <div
-            data-bitsnap-checkout-slot="paymentButtons"
-            className={cn("w-full px-2", paymentButtons.className)}
-            style={paymentButtons.style}
+            data-bitsnap-checkout-wallets=""
+            aria-disabled={wallets.inert ? "true" : undefined}
+            inert={wallets.inert}
+            className={"flex flex-col"}
+            style={
+              wallets.inert ? { pointerEvents: "none", opacity: 0.5 } : undefined
+            }
           >
-            <ApplePayButton
-              colorType="white"
-              style={{ width: "100%" }}
-              items={products?.map((el) => ({
-                name: el.details?.name ?? "",
-                id: el.productID,
-                price: el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0,
-                currency: el.details?.currency,
-                quantity: el.quantity,
-                isDeliverable: el.details?.isDeliverable ?? false,
-                metadata: el.metadata,
-              }))}
-            />
+            {isApplePayAvailable && wallets.oneClick && (
+              <div
+                data-bitsnap-checkout-slot="paymentButtons"
+                className={cn("w-full px-2", paymentButtons.className)}
+                style={paymentButtons.style}
+              >
+                <ApplePayButton
+                  colorType="white"
+                  style={{ width: "100%" }}
+                  items={wallets.items}
+                />
+              </div>
+            )}
+            {wallets.oneClick && (
+              <div
+                data-bitsnap-checkout-slot="paymentButtons"
+                className={cn("w-full px-2", paymentButtons.className)}
+                style={paymentButtons.style}
+              >
+                <GooglePayButton
+                  buttonSizeMode="fill"
+                  buttonColor="white"
+                  style={{ width: "100%" }}
+                  items={wallets.items}
+                />
+              </div>
+            )}
+            <div
+              data-bitsnap-checkout-slot="paymentButtons"
+              className={cn("w-full px-2", paymentButtons.className)}
+              style={paymentButtons.style}
+            >
+              <InPostPayButtonInner
+                projectID={getProjectID() ?? ""}
+                locale={locale}
+              />
+              <RevolutPayButtonInner
+                projectID={getProjectID() ?? ""}
+                locale={locale}
+              />
+            </div>
           </div>
         )}
-        {products != null && products.length > 0 && (
-          <div
-            data-bitsnap-checkout-slot="paymentButtons"
-            className={cn("w-full px-2", paymentButtons.className)}
-            style={paymentButtons.style}
+        {wallets.mounted && wallets.inert && (
+          <p
+            role="status"
+            data-bitsnap-checkout-notice="wallets-updating"
+            className={"text-sm text-center opacity-70"}
           >
-            <GooglePayButton
-              buttonSizeMode="fill"
-              buttonColor="white"
-              style={{ width: "100%" }}
-              items={products?.map((el) => ({
-                name: el.details?.name ?? "",
-                id: el.productID,
-                price: el.details?.pricing?.effectivePrice ?? el.details?.price ?? 0,
-                quantity: el.quantity,
-                isDeliverable: el.details?.isDeliverable ?? false,
-                metadata: el.metadata,
-              }))}
-            />
-          </div>
-        )}
-        {products != null && products.length > 0 && (
-          <div
-            data-bitsnap-checkout-slot="paymentButtons"
-            className={cn("w-full px-2", paymentButtons.className)}
-            style={paymentButtons.style}
-          >
-            <InPostPayButtonInner
-              projectID={getProjectID() ?? ""}
-              locale={locale}
-            />
-            <RevolutPayButtonInner
-              projectID={getProjectID() ?? ""}
-              locale={locale}
-            />
-          </div>
+            {walletsUpdatingText}
+          </p>
         )}
         {paymentChoice != null && (
           <div ref={paymentMethodsRef} className="contents">
@@ -204,6 +217,15 @@ export function CartCheckout() {
               disabled={isStartingCheckout}
             />
           </div>
+        )}
+        {showReviewPrices && (
+          <p
+            role="status"
+            data-bitsnap-checkout-notice="review-prices"
+            className={"mx-2 text-sm text-center font-semibold"}
+          >
+            {reviewPricesText}
+          </p>
         )}
         <button
           data-bitsnap-checkout-slot="checkoutButton"

@@ -5,6 +5,13 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
 
 const page = setupReactPage();
 
+// "Next step" goes on only after every price was on screen for a second (the
+// price gate, D18): the tests move this clock instead of waiting.
+const realNow = Date.now;
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+const lookAtCart = () => void (clockOffset += 1500);
+
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
@@ -253,6 +260,7 @@ describe("cart after the redirect to the payment", () => {
     await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
     await openCart();
     const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    lookAtCart();
     await React.act(async () => button.click());
     await settle();
   }
