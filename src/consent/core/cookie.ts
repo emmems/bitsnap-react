@@ -1,3 +1,4 @@
+import { isSharedCookieHost, normalizeHost } from "./hosts";
 import type { ConsentChoices, ConsentService, ConsentState } from "./types";
 
 export const COOKIE_NAME = "bitsnap_consent";
@@ -122,13 +123,35 @@ export function clearConsent(doc: Document, name: string): void {
   }
 }
 
-/** `a.b.example.com` -> the host and every parent with at least two labels. */
-export function domainCandidates(hostname: string): string[] {
-  if (!hostname || /^[\d.]+$/.test(hostname) || hostname.includes(":")) return [];
-  const labels = hostname.split(".");
+/**
+ * `a.b.example.com` -> the host and every parent with at least two labels (no trailing dot).
+ * Nothing for an IP, `localhost` or a malformed name.
+ */
+function parentDomains(hostname: string): string[] {
+  const host = normalizeHost(hostname);
+  if (!host || /^[\d.]+$/.test(host) || host.includes(":")) return [];
+  const labels = host.split(".");
+  if (labels.some((label) => label === "")) return [];
   const result: string[] = [];
   for (let i = 0; i <= labels.length - 2; i++) result.push(labels.slice(i).join("."));
   return result;
+}
+
+/**
+ * Where to WRITE a cookie: the host and every parent with at least two labels.
+ * Never a shared root (`bitsnap.site`, `sklep.bitsnap.pl`) or a host below one, so a cookie there stays host-only.
+ */
+export function domainCandidates(hostname: string): string[] {
+  return parentDomains(hostname).filter((domain) => !isSharedCookieHost(domain));
+}
+
+/**
+ * Where to EXPIRE a cookie: the full parent chain, shared roots included.
+ * Expiring with an empty value sets nothing on the root, so it is safe there, and it clears a
+ * cookie some other script put on `Domain=bitsnap.site` (a seller's GA4 with `cookie_domain: 'auto'`).
+ */
+export function domainsToExpire(hostname: string): string[] {
+  return parentDomains(hostname);
 }
 
 /**
@@ -155,7 +178,10 @@ export function deleteServiceCookies(
         names.add(pattern);
       }
     }
-    const domains = domainCandidates(doc.location?.hostname ?? "");
+    // Withdrawal must remove the cookie wherever it sits, so this uses the full chain. On
+    // `*.bitsnap.site` that includes `Domain=bitsnap.site`: expiring `_ga` there also clears the
+    // shared copy other sellers' GA4 uses (a product/legal call: consent withdrawal wins).
+    const domains = domainsToExpire(doc.location?.hostname ?? "");
     for (const name of names) {
       const base = `${encodeURIComponent(name)}=; Max-Age=0; Path=/`;
       doc.cookie = base;

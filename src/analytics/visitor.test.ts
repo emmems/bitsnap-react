@@ -238,6 +238,79 @@ describe("bs_vid cookie scope", () => {
     assert.equal(page.dom.cookieJar.getCookiesSync("https://bar.github.io/").length, 0);
   });
 
+  // Host -> Domain the cookie is written with (null: host-only).
+  const perHost: Array<[string, string | null]> = [
+    ["https://bitsnap.pl/shop/x", "bitsnap.pl"],
+    ["https://nazwa.sklep.bitsnap.pl/", "bitsnap.pl"],
+    ["https://nazwa.bitsnap.site/", null],
+    ["https://a.nazwa.bitsnap.site/", null],
+    ["https://shop.example.com/", "example.com"],
+    ["http://localhost:3000/", null],
+  ];
+  for (const [url, domain] of perHost) {
+    it(`is written ${domain ? `on Domain=${domain}` : "host-only"} on ${new URL(url).hostname}`, async () => {
+      const page = setupPage(url);
+      // A project-scope banner counts on every host, bitsnap's own included.
+      fakeConsent(page, true, Promise.resolve(), { scope: "project", projectKey: KEY });
+      make();
+      await settle();
+      const [cookie] = cookies(page);
+      assert.ok(cookie, "cookie set");
+      if (domain === null) {
+        assert.equal(cookie.hostOnly, true);
+      } else {
+        assert.equal(cookie.hostOnly, false);
+        assert.equal(cookie.domain, domain);
+      }
+      assert.equal(jarSize(page), 1);
+    });
+  }
+
+  it("on bitsnap.site no other seller's host sees it, and withdrawal deletes it", async () => {
+    const page = setupPage("https://nazwa.bitsnap.site/");
+    const consent = fakeConsent(page, true, Promise.resolve(), { scope: "project", projectKey: KEY });
+    make();
+    await settle();
+    assert.equal(cookies(page).length, 1);
+    assert.equal(page.dom.cookieJar.getCookiesSync("https://inna.bitsnap.site/").length, 0);
+    assert.equal(page.dom.cookieJar.getCookiesSync("https://bitsnap.site/").length, 0);
+    consent.set(false);
+    assert.equal(cookies(page).length, 0);
+  });
+
+  it("on bitsnap.site a write sets no Domain, a delete expires on the whole chain", async () => {
+    const page = setupPage("https://nazwa.bitsnap.site/");
+    const consent = fakeConsent(page, true, Promise.resolve(), { scope: "project", projectKey: KEY });
+    make();
+    await settle();
+    const writes: string[] = [];
+    const real = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(page.win.document), "cookie")!;
+    Object.defineProperty(page.win.document, "cookie", {
+      configurable: true,
+      get: () => real.get!.call(page.win.document),
+      set: (value: string) => {
+        writes.push(value);
+        real.set!.call(page.win.document, value);
+      },
+    });
+    consent.set(false);
+    assert.ok(writes.length > 0, "cookie cleared");
+    assert.ok(writes.every((w) => /Max-Age=0/.test(w) && w.startsWith(`${COOKIE}=;`)), `only expiries: ${JSON.stringify(writes)}`);
+    const domains = writes.map((w) => w.match(/Domain=([^;]+)/)?.[1] ?? null);
+    assert.deepEqual(domains, [null, "nazwa.bitsnap.site", "bitsnap.site"], "host-only, the host, the shared root");
+  });
+
+  it("on bitsnap.site a copy another seller put on Domain=bitsnap.site is deleted on withdrawal", async () => {
+    const page = setupPage("https://nazwa.bitsnap.site/");
+    const consent = fakeConsent(page, true, Promise.resolve(), { scope: "project", projectKey: KEY });
+    make();
+    await settle();
+    // Not written by this library: the shared root, as a seller's own script could.
+    page.win.document.cookie = `${COOKIE}=${"A".repeat(22)}; Path=/; Domain=bitsnap.site`;
+    consent.set(false);
+    assert.equal(cookies(page).length, 0);
+  });
+
   for (const url of ["http://127.0.0.1:3000/", "http://[::1]:3000/", "http://localhost:3000/"]) {
     it(`is host-only on ${url}`, async () => {
       const page = setupPage(url);
@@ -494,7 +567,13 @@ describe("whose consent counts", () => {
     assert.match(events[0]?.client_id ?? "", ID_RE);
   });
 
-  for (const url of ["https://bitsnap.pl/shop/x", "https://store.bitsnap.pl/"]) {
+  for (const url of [
+    "https://bitsnap.pl/shop/x",
+    "https://store.bitsnap.pl/",
+    "https://nazwa.sklep.bitsnap.pl/",
+    "https://bitsnap.site/",
+    "https://nazwa.bitsnap.site/",
+  ]) {
     it(`does not count a site-scope banner on ${url}`, async () => {
       const page = setupPage(url);
       const consent = fakeConsent(page, true, Promise.resolve(), { scope: "global", projectKey: null });
