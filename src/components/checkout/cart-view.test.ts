@@ -486,9 +486,12 @@ describe("price gate (D18)", () => {
   it("a pay-what-you-want line with a changed catalog price is never marked", () => {
     const d = details("a", { priceType: "pay_what_you_want", version: "v9", price: 5000 });
     const view = viewOf([line("l1", "a", { priceVersion: "v0", amount: 700 })], [d]);
-    // Only its amount counts (S13): an amount marked over 1 s ago is adopted.
+    // Only its amount counts (S13): an amount shown and marked over 1 s ago passes.
     const gate = runPriceGate(
-      stateOf({}, { l1: { priceVersion: "", shownPrice: 700, markedAt: NOW - PRICE_SEEN_MS - 1 } }),
+      stateOf(
+        { l1: seenLongAgo(700) },
+        { l1: { priceVersion: "", shownPrice: 700, markedAt: NOW - PRICE_SEEN_MS - 1 } },
+      ),
       view,
       NOW,
     );
@@ -513,6 +516,14 @@ describe("price gate (D18)", () => {
     const seen = runPriceGate(stateOf({ l1: seenLongAgo(900) }), view, NOW);
     assert.equal(seen.result, "pass");
     assert.deepEqual(seen.adopt, []);
+    // A first click marks the amount before it was ever shown; a second click
+    // over 1 s later still finds nothing shown, so it is marked again.
+    const firstClick = runPriceGate(EMPTY_PRICE_GATE_STATE, view, NOW);
+    assert.equal(
+      runPriceGate(firstClick.state, view, NOW + PRICE_SEEN_MS + 100).result,
+      "marked",
+      "a mark alone does not stand for a shown amount",
+    );
   });
 
   it("a server answer without pricing is gated by the seen rule alone (N1)", () => {

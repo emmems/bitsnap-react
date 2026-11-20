@@ -498,7 +498,10 @@ export function runPriceGate(
       }
       // A line that shows another price (or none) than the marked one has not
       // shown the marked price yet.
-      onScreenSince = shownNow?.since ?? (seen == null ? mark.markedAt : undefined);
+      // An amount counts only once the drawer has shown it (S13): its mark may
+      // come from a click before that amount was ever on screen.
+      onScreenSince =
+        shownNow?.since ?? (seen == null && !amount ? mark.markedAt : undefined);
     } else {
       onScreenSince = shownNow?.since;
     }
