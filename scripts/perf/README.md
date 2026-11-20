@@ -43,7 +43,11 @@ page has loaded (a throttled load would only add minutes).
 
 What is measured:
 
-- items visible: click to the first `[data-bitsnap-checkout-slot="product"]` with text.
+- items visible: click to the paint of **every** cart row, not the first. The expected rows are the lines of
+  `localStorage.checkout` at the click (`add-then-open`: 1). A row counts when, inside the *new* drawer, it has
+  `productName` and `productPrice` text and its box, name and price are non-zero and not `visibility: hidden` /
+  `display: none`. The run fails (with the rows it saw) when they are not all there at the timeout. The observer
+  also watches attributes and every frame, so a row that is only revealed by CSS counts when it is revealed.
 - `add-then-open`: `addMs` is the add promise; `drawerMs` runs from the moment it resolved (just before
   `showCart`) to the first item.
 - `qty` / `remove`: from the click until the **first line**, the **total** (`totalValue` slot) and the
@@ -51,7 +55,12 @@ What is measured:
   write of `checkout` after the click. A7 wants each of the three to change at or after that write
   (1 ms clock slack) and within 50 ms of it. For `remove` the line counts as gone when the list has one
   line less that auto-animate is not still fading out.
-- Skeleton: an element matching `[data-slot="skeleton"]` (today's `ui/skeleton`),
+- Request window: every request is recorded from the start of a run's setup (page load; for `reopen` the moment
+  the first drawer is gone; for `snapshot-*` the end of the reload) until `SETTLE_MS` (1500 ms) after the drawer is
+  interactive. A4 counts every `POST /payment-methods` in that window; a request that starts late is still counted.
+  `qty` / `remove` also collect for `SETTLE_MS` after the edit, so a late `GET /products` is seen.
+- Skeleton: looked for from the click to the paint of the last row (see items visible), so one that shows after
+  the first row but before the last is recorded. An element matching `[data-slot="skeleton"]` (today's `ui/skeleton`),
   `[data-bitsnap-checkout-slot="skeleton"]` or `.bsc-skeleton` (the 1.32.0 redesign) inside
   `[role="dialog"]`. `cold-immediate` has no snapshot and no answer yet, so every SDK must show one
   there; when none of its runs saw one the script prints a WARNING and `--check` fails the "skeleton marker"
@@ -80,11 +89,16 @@ node scripts/perf/cart-open.mjs --sdk dist --runs 20 --warmup 5 --check \
 - The render floor is the baseline's `reopen` p95 (or `--render-floor <ms>` if you give one); `--check`
   refuses to run with neither, because a floor taken from the run's own `reopen` makes A1 compare it with itself.
 - A baseline written by another script version (`scriptVersion` in the JSON) is refused: the numbers do not compare.
+  Version 3 (this one) changed what "items visible" means (all rows painted, with name and price, instead of the
+  first row's text; it can only be later) and how A4 counts POSTs, so a version 2 baseline (`harness-main-v2.json`)
+  must be measured again as `harness-main-v3.json`; the two definitions would otherwise be compared without a warning.
 - A3: the drawer time (from the add promise) passes when it is <= max(50 % of the baseline drawer p95, the A1 limit).
 - A4 is a p95 over the runs, measured from the drawer's first commit (`mountMs`: the dialog appears in the DOM),
-  not from the click. On `reopen`, no `POST /payment-methods` is a pass (cached answer); a p95 later than 50 ms
-  after the mount, or a POST that starts after a `/products` that took network time, is a fail. A POST that
-  started before the click is counted and fails separately ("started before the click"). Cold scenarios must send one.
+  not from the click. A p95 later than 50 ms after the mount, a POST that starts after a `/products` that took
+  network time (and was still running at the click), or more than one POST in the request window, is a fail. A POST
+  that started before the click fails separately ("started before the click"; no 50 ms cut). Cold scenarios must
+  send one. On `reopen`, no POST is a pass only as a cached answer: the first open of the same run must have sent a
+  POST that was answered, otherwise "no POST" proves nothing and the row fails.
 - A7 `qty-burst`: exactly one `POST /payment-methods` for three clicks in 200 ms, in every run.
 
 Commit the numbers to `perf-baseline.md`. Run it when the machine is quiet (`fleet-load-gate status` = ok)

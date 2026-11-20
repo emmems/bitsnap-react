@@ -39,7 +39,12 @@ const repoRoot = path.resolve(here, "../..");
 // Written into --json; --check refuses a baseline from another version (the harness or a metric changed).
 // 2: ESM harness with code splitting (dist chunks load over the throttled network), cold scenarios throttled
 //    before the page loads, drawerMs measured from the add promise, qty/remove watch line + total + count.
-const SCRIPT_VERSION = 2;
+// 3: "items visible" is the paint of every cart row (name + price text, visible, inside the new drawer), not the
+//    first row's text, and a skeleton is looked for up to that point; A4 counts every POST /payment-methods from the
+//    start of the setup to SETTLE_MS after the drawer is interactive, instead of the first one after the click.
+const SCRIPT_VERSION = 3;
+// How long after the drawer is interactive the requests of a run are still collected (a late request is a request).
+const SETTLE_MS = 1500;
 
 const ALL_SCENARIOS = [
   "cold-no-snapshot",
@@ -64,6 +69,7 @@ const FAST_3G = {
 };
 
 const ITEM = '[data-bitsnap-checkout-slot="product"]';
+const NAME = '[data-bitsnap-checkout-slot="productName"]';
 const PRICE = '[data-bitsnap-checkout-slot="productPrice"]';
 const QTY_BUTTON = '[data-bitsnap-checkout-slot="quantityButton"]';
 const REMOVE_BUTTON = '[data-bitsnap-checkout-slot="removeButton"]';
@@ -327,47 +333,88 @@ const relativeRequests = (all, clickEpoch) =>
     }))
     .sort((a, b) => a.startMs - b.startMs);
 
-// Runs in the page. Clicks `clickSelector` and resolves when the first cart item has text. `mountMs` is when the
-// drawer first appeared in the DOM (ms from the click): the drawer's first commit, the A4 reference point.
-// A dialog that already exists at the click (a drawer still leaving) is not the new one.
-const MEASURE_OPEN = ({ clickSelector, itemSel, skeletonSel, dialogSel, timeoutMs }) =>
+// Runs in the page. Clicks `clickSelector` and resolves when EVERY cart row is painted in the new drawer: each of the
+// `expectedRows` rows (a number, or "storage": the lines of `localStorage.checkout` at the click) has name and price
+// text and a non-zero box, and is not `visibility: hidden` / `display: none` (nor are its name and price). Skeletons
+// are watched up to that point (not only up to the first row), so one that shows while other rows are still missing
+// is recorded. `mountMs` is when the drawer first appeared in the DOM (ms from the click): the drawer's first commit,
+// the A4 reference point. A dialog that already exists at the click (a drawer still leaving) is not the new one.
+const MEASURE_OPEN = ({ clickSelector, itemSel, nameSel, priceSel, skeletonSel, dialogSel, expectedRows, timeoutMs }) =>
   new Promise((resolve) => {
-    const seen = () => {
-      const el = document.querySelector(itemSel);
-      return Boolean(el && el.textContent && el.textContent.trim());
-    };
     const dialogBefore = document.querySelector(dialogSel);
+    const newDialogs = () => [...document.querySelectorAll(dialogSel)].filter((d) => d !== dialogBefore);
+    const storageLines = () => {
+      try {
+        return JSON.parse(localStorage.getItem("checkout") ?? "{}").products?.length ?? 0;
+      } catch {
+        return 0;
+      }
+    };
+    // Counted before the click: the click itself may change the cart (add-then-open passes a number).
+    const expected = typeof expectedRows === "number" ? expectedRows : storageLines();
+    const hasText = (el) => Boolean(el && el.textContent && el.textContent.trim());
+    const isVisible = (el) => {
+      const box = el.getBoundingClientRect();
+      if (box.width <= 0 || box.height <= 0) return false;
+      const style = getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    };
+    // Cheap text test first; the layout reads (box, style) only once enough rows have their text.
+    const rowsState = () => {
+      const rows = newDialogs()
+        .flatMap((d) => [...d.querySelectorAll(itemSel)])
+        .map((row) => ({ row, name: row.querySelector(nameSel), price: row.querySelector(priceSel) }))
+        .filter((r) => hasText(r.name) && hasText(r.price));
+      const visible = rows.length < expected ? 0 : rows.filter((r) => isVisible(r.row) && isVisible(r.name) && isVisible(r.price)).length;
+      return { withText: rows.length, visible };
+    };
     const t0 = performance.now();
     const clickEpoch = performance.timeOrigin + t0;
     let skeleton = false;
     let mountMs = null;
     let done = false;
+    let painted = false;
+    let frame = 0;
     const stampMount = () => {
-      if (mountMs == null) {
-        const d = document.querySelector(dialogSel);
-        if (d && d !== dialogBefore) mountMs = performance.now() - t0;
-      }
+      if (mountMs == null && newDialogs().length > 0) mountMs = performance.now() - t0;
     };
     const finish = (value) => {
       if (done) return;
       done = true;
       observer.disconnect();
+      cancelAnimationFrame(frame);
       clearTimeout(timer);
-      resolve({ clickEpoch, skeleton, mountMs, ...value });
+      resolve({ clickEpoch, skeleton, mountMs, expectedRows: expected, ...value });
     };
-    const observer = new MutationObserver(() => {
+    const check = () => {
+      if (done || painted) return;
       stampMount();
-      if (!skeleton && document.querySelector(skeletonSel)) skeleton = true;
-      if (seen()) {
+      if (!skeleton && newDialogs().some((d) => d.querySelector(skeletonSel))) skeleton = true;
+      if (expected > 0 && rowsState().visible >= expected) {
+        painted = true;
+        observer.disconnect();
         const itemsMs = performance.now() - t0;
         requestAnimationFrame(() => setTimeout(() => finish({ ok: true, itemsMs, paintMs: performance.now() - t0 }), 0));
-        observer.disconnect();
       }
-    });
-    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-    const timer = setTimeout(() => finish({ ok: false, itemsMs: null, paintMs: null }), timeoutMs);
+    };
+    // Attribute changes (hidden -> visible) and layout-only changes (a row growing from 0 height) are not text
+    // mutations: watch attributes too and re-check every frame.
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+    const poll = () => {
+      check();
+      if (!done && !painted) frame = requestAnimationFrame(poll);
+    };
+    const timer = setTimeout(() => {
+      const state = rowsState();
+      finish({ ok: false, itemsMs: null, paintMs: null, reason: `${state.visible}/${expected} rows painted, ${state.withText} with name and price text` });
+    }, timeoutMs);
     document.querySelector(clickSelector).click();
     stampMount(); // React flushes a discrete event synchronously: the drawer may already be there
+    check();
+    // No row to wait for is not "painted at once": the run fails instead of passing on an empty list.
+    if (expected <= 0) finish({ ok: false, itemsMs: null, paintMs: null, reason: "no cart lines to wait for" });
+    frame = requestAnimationFrame(poll);
   });
 
 // Runs in the page. `action` "plus": clicks "+" of the first line `times` times; "remove": clicks Remove of the
@@ -471,13 +518,18 @@ async function startRun(browser, ctx, scenarioOpts) {
   // Cold scenarios: throttle before the page loads. The SDK may prefetch on idle right after it mounts; a
   // throttle that starts 300 ms after `load` would let that prefetch run on the fast link and flatter A2.
   // The page itself (bundle + chunks) is then loaded over Fast 3G too, which a real shopper also does.
+  // From here every request counts toward the open path (A4) unless a scenario moves the start (see `windowStartEpoch`).
+  const windowStartEpoch = Date.now();
   if (scenarioOpts.throttleBeforeLoad) await throttle();
   await page.goto(pageUrl, { waitUntil: "load", timeout: scenarioOpts.throttleBeforeLoad ? 120000 : 30000 });
   await page.waitForSelector(o.cartSelector, { state: "attached", timeout: scenarioOpts.throttleBeforeLoad ? 120000 : 30000 });
   if (o.target === "harness") await page.waitForFunction("window.__perfReady === true", undefined, { timeout: 60000 });
   await dismissBanner(page, o);
   if (!scenarioOpts.throttleBeforeLoad) await page.waitForTimeout(300);
-  return { context, page, cdp, getRequests, throttle };
+  // `windowStartEpoch`: where the open's setup starts. Requests from there to SETTLE_MS after the drawer is
+  // interactive are the open path's; a scenario whose setup opens the cart itself (reopen, snapshot-*) moves it
+  // to the end of that earlier open, so its legitimate requests are not counted against this one.
+  return { context, page, cdp, getRequests, throttle, windowStartEpoch };
 }
 
 /** A cookie banner on a live shop: click its "reject" button (`--dismiss <button text>`) so it cannot cover the page. */
@@ -491,7 +543,11 @@ async function dismissBanner(page, o) {
   } catch {}
 }
 
-const openArgs = (o, timeoutMs) => ({ clickSelector: o.cartSelector, itemSel: ITEM, skeletonSel: SKELETON, dialogSel: DIALOG, timeoutMs: timeoutMs ?? o.timeout });
+const openArgs = (o, timeoutMs) => ({
+  clickSelector: o.cartSelector, itemSel: ITEM, nameSel: NAME, priceSel: PRICE, skeletonSel: SKELETON, dialogSel: DIALOG,
+  expectedRows: "storage", // every line of the cart at the click; add-then-open overrides it with 1
+  timeoutMs: timeoutMs ?? o.timeout,
+});
 
 const editArgs = (o, action, times, spacingMs) => ({
   action, times, spacingMs, timeoutMs: 6000,
@@ -537,8 +593,15 @@ const SCENARIO_RUNNERS = {
     if (!first.ok) return openResult(first, run);
     await run.page.keyboard.press("Escape");
     await waitItemsGone(run.page);
+    // The reopen's setup starts when the first drawer is gone: a POST from here on (also during the idle 500 ms
+    // before the click) belongs to the reopen. The first open's own POST is the cached answer's source.
+    run.windowStartEpoch = Date.now();
     await run.page.waitForTimeout(500);
-    return openResult(await run.page.evaluate(MEASURE_OPEN, openArgs(ctx.o)), run, { firstOpenMs: first.itemsMs });
+    const result = await openResult(await run.page.evaluate(MEASURE_OPEN, openArgs(ctx.o)), run, { firstOpenMs: first.itemsMs });
+    // "No POST on the reopen" is a cache hit only if the first open sent one that was not refused.
+    const source = run.getRequests().find((x) => x.method === "POST" && x.path.includes("/payment-methods") && x.startEpoch >= first.clickEpoch - 5 && x.startEpoch < run.windowStartEpoch);
+    result.cacheSource = source != null && !source.failed && (source.status ?? 200) < 400;
+    return result;
   },
   async "add-then-open"(ctx, run) {
     await run.throttle();
@@ -549,7 +612,7 @@ const SCENARIO_RUNNERS = {
     await run.page.locator(ctx.addSelector).first().evaluate((el) => el.setAttribute("data-perf-add", "1"));
     const result = await run.page.evaluate(
       MEASURE_OPEN,
-      { ...openArgs(ctx.o), clickSelector: '[data-perf-add="1"]' },
+      { ...openArgs(ctx.o), clickSelector: '[data-perf-add="1"]', expectedRows: 1 }, // the cart starts empty: one row after the add
     );
     const add = await run.page.evaluate("window.__perfAdd ?? null");
     const extra = {};
@@ -595,7 +658,9 @@ async function editResult(ctx, run, { action }) {
   // The same click >= 60 s after the last /products answer (max-age=60 expired), or with the HTTP cache off.
   if (ctx.o.qtyCacheMiss) await run.cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
   const r = await run.page.evaluate(MEASURE_EDIT, editArgs(ctx.o, action, 1, 0));
-  const requests = relativeRequests(run.getRequests(), r.clickEpoch).filter((x) => x.startMs > -50);
+  // The edit resolves in a few ms; a refetch (GET /products) it triggers starts later. Collect for SETTLE_MS more.
+  await run.page.waitForTimeout(SETTLE_MS);
+  const requests =relativeRequests(run.getRequests(), r.clickEpoch).filter((x) => x.startMs > -50);
   const products = requests.filter((x) => x.kind === "request" && x.path.includes("/products"));
   const changed = Object.values(r.changes).filter((v) => v != null);
   // A7 is "in the same commit as the local write": every watched value must change at or after the write
@@ -630,24 +695,37 @@ async function addThenReload(ctx, run) {
   await run.page.reload({ waitUntil: "load" });
   await run.page.waitForSelector(ctx.o.cartSelector, { state: "attached", timeout: 30000 });
   await run.page.waitForTimeout(300);
+  run.windowStartEpoch = Date.now(); // the add's own open (and its POST) is over
 }
 
-function openResult(r, run, extra = {}) {
+async function openResult(r, run, extra = {}) {
+  // Keep collecting after the drawer is interactive: a POST that starts late is still the open path's POST.
+  if (r.ok) await run.page.waitForTimeout(SETTLE_MS);
   const requests = relativeRequests(run.getRequests(), r.clickEpoch);
-  const productsGet = requests.find((x) => x.method === "GET" && x.path.includes("/public-commerce/products") && x.startMs > -50);
-  const pm = requests.find((x) => x.method === "POST" && x.path.includes("/payment-methods") && x.startMs > -50);
+  // The A4 window: from the start of the setup (`run.windowStartEpoch`) to now (SETTLE_MS after the drawer paint).
+  // No `startMs > -50` cut: a POST before the click is a finding (`paymentMethodsBeforeClick`), not noise.
+  const inWindow = requests.filter((x) => x.startMs >= Math.floor(run.windowStartEpoch - r.clickEpoch));
+  const posts = inWindow.filter((x) => x.method === "POST" && x.path.includes("/payment-methods"));
+  const pm = posts[0];
+  // The /products the open could wait for: in the window and still running (or not started) at the click. One that
+  // finished before the click (an idle prefetch) cannot be waited for; one that started before it and is still
+  // running can (cold-immediate).
+  const productsGet = inWindow.find((x) => x.method === "GET" && x.path.includes("/public-commerce/products") && (x.endMs == null || x.endMs > -5));
   return {
     ok: r.ok,
     value: r.itemsMs,
     paintMs: r.paintMs,
     skeleton: r.skeleton,
     mountMs: r.mountMs ?? null,
+    ...(r.reason ? { reason: r.reason } : {}),
     // A4: "never before the click". 5 ms of slack for the CDP clock against the page clock.
-    paymentMethodsBeforeClick: pm != null && pm.startMs < -5,
+    paymentMethodsBeforeClick: posts.some((x) => x.startMs < -5),
     productsStartMs: productsGet?.startMs ?? null,
     productsEndMs: productsGet?.endMs ?? null,
     productsCached: productsGet?.fromCache ?? null,
     paymentMethodsStartMs: pm?.startMs ?? null,
+    paymentMethodPostCount: posts.length,
+    paymentMethodPostStarts: posts.map((x) => x.startMs),
     requests,
     ...extra,
   };
@@ -682,7 +760,7 @@ async function measureScenario(ctx, name) {
       run = await startRun(browser, ctx, scenarioOpts);
       const result = await SCENARIO_RUNNERS[name](ctx, run);
       if (i >= o.warmup) runs.push(result);
-      if (!o.quiet) process.stderr.write(`  ${name} ${i < o.warmup ? "warm-up" : `run ${i - o.warmup + 1}/${o.runs}`}: ${result.ok ? fmt(result.value) : "FAILED"}\n`);
+      if (!o.quiet) process.stderr.write(`  ${name} ${i < o.warmup ? "warm-up" : `run ${i - o.warmup + 1}/${o.runs}`}: ${result.ok ? fmt(result.value) : `FAILED${result.reason ? ` (${result.reason})` : ""}`}\n`);
     } catch (e) {
       if (i >= o.warmup) runs.push({ ok: false, reason: String(e?.message ?? e).split("\n")[0], requests: [] });
       if (!o.quiet) process.stderr.write(`  ${name} run error: ${String(e?.message ?? e).split("\n")[0]}\n`);
@@ -826,7 +904,8 @@ function criteria(o, results, floorMs) {
   }
 
   // A4: the POST /payment-methods starts with the open and does not wait for /products.
-  // On `reopen` no POST at all is fine: React Query serves the cached answer (today's SDK and Slice 5 send none).
+  // On `reopen` no POST is fine only as a cached answer: the first open of the same run must have sent one that was
+  // answered (`cacheSource`). Every POST from the start of the setup to SETTLE_MS after the paint is counted.
   for (const n of ["cold-no-snapshot", "cold-immediate", "reopen"]) {
     const r = by[n];
     if (!r) {
@@ -841,15 +920,21 @@ function criteria(o, results, floorMs) {
     let none = 0;
     let failed = 0;
     let noMount = 0;
+    let extra = 0;
+    let noCache = 0;
     for (const x of r.runs) {
       if (!x.ok) {
         failed++;
         continue;
       }
-      if (x.paymentMethodsStartMs == null) {
+      if (!(x.paymentMethodPostCount >= 1)) {
         if (mustPost) none++;
+        // No POST on a reopen is a cached answer only when the first open sent a POST that was answered.
+        else if (!x.cacheSource) noCache++;
         continue;
       }
+      // Every POST in the window counts: the open sends one. A second one (a re-send, a late one) is a fail.
+      if (x.paymentMethodPostCount > 1) extra++;
       // A POST that started before the click is not an open-path request: a failure of its own.
       if (x.paymentMethodsBeforeClick) before++;
       if (finite(x.mountMs)) delays.push(Math.max(0, x.paymentMethodsStartMs - x.mountMs));
@@ -860,10 +945,10 @@ function criteria(o, results, floorMs) {
     const delayP95 = percentile([...delays].sort((a, b) => a - b), 95);
     // `reopen` with no POST in any run has no delay to judge: nothing to fail.
     const delayOk = delays.length === 0 ? noMount === 0 : within(delayP95, 50);
-    add("A4", n, delayOk && before === 0 && noMount === 0 && waited === 0 && none === 0 && failed === 0,
+    add("A4", n, delayOk && before === 0 && noMount === 0 && waited === 0 && none === 0 && failed === 0 && extra === 0 && noCache === 0,
       `POST /payment-methods p95 ${delays.length ? fmt(delayP95) : "-"} <= 50 ms after the drawer mounts${delayOk ? "" : " (missed)"}; ` +
-        `${before} started before the click, ${waited} waited for /products, ` +
-        `${mustPost ? `${none} without a POST (required here)` : "no POST accepted (cached answer)"}, ` +
+        `${before} started before the click, ${waited} waited for /products, ${extra} sent more than one POST in the window, ` +
+        `${mustPost ? `${none} without a POST (required here)` : `${noCache} without a POST and without an answered first-open POST to serve it (no POST is accepted only as a cached answer)`}, ` +
         `${noMount} without a drawer mount time, ${failed} run(s) did not open`);
   }
 
