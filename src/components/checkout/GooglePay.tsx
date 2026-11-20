@@ -1,4 +1,4 @@
-import GooglePayButton from "@google-pay/button-react";
+import React from "react";
 import CartProvider, { useCartProvider } from "./CartProvider";
 import { isErr } from "./lib/err";
 import { currentProjectID } from "./project-id";
@@ -34,6 +34,24 @@ export type Props = {
    */
   analytics?: AnalyticsOption;
 };
+
+// Google's button library loads with the first button that has a
+// configuration to show (it already appears only after that request): a
+// CommonJS package cannot be tree-shaken, so a static import would put it in
+// every bundle of the library's entry (slice 5). Made on first use: a
+// top-level call cannot be tree-shaken either.
+let googlePayButton:
+  | React.LazyExoticComponent<typeof import("@google-pay/button-react").default>
+  | undefined;
+function googlePayButtonComponent() {
+  // A library that cannot load shows no button, like an unavailable wallet.
+  googlePayButton ??= React.lazy(() =>
+    import("@google-pay/button-react").catch(() => ({
+      default: (() => null) as unknown as typeof import("@google-pay/button-react").default,
+    })),
+  );
+  return googlePayButton;
+}
 
 function GooglePayButtonComponent({
   items,
@@ -85,8 +103,9 @@ function GooglePayButtonComponent({
     return null;
   }
 
+  const GooglePayButton = googlePayButtonComponent();
   return (
-    <>
+    <React.Suspense fallback={null}>
       <GooglePayButton
         buttonSizeMode={buttonSizeMode}
         buttonColor={buttonColor}
@@ -161,7 +180,7 @@ function GooglePayButtonComponent({
         }}
       />
       {isPending ? <Spinner /> : null}
-    </>
+    </React.Suspense>
   );
 }
 

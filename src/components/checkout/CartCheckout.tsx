@@ -1,18 +1,32 @@
 import React from "react";
 import { cn } from "@/src/lib/utils";
 import { Spinner } from "@/src/ui/spinner";
-import { InPostPayButtonInner } from "../express/InPostPayButton";
-import { RevolutPayButtonInner } from "../express/RevolutPayButton";
 import { useCheckoutSlot } from "./appearance.context";
-import ApplePayButton from "./ApplePay";
 import { useCartController } from "./cart-controller";
 import { catalogUnitPrice } from "./cart-view";
-import { getProjectID } from "./CartProvider";
 import CountrySelector from "./CountrySelector";
-import GooglePayButton from "./GooglePay";
 import { formatCurrency } from "./lib/round.number";
 import { PaymentMethodChoice } from "./PaymentMethodChoice";
 import { useCheckoutText } from "./texts.context";
+
+type ExpressAreaModule = {
+  default: (
+    props: React.ComponentProps<typeof import("./CartExpressArea").default>,
+  ) => React.ReactNode;
+};
+let expressArea: Promise<ExpressAreaModule> | undefined;
+/**
+ * The express buttons' chunk, asked for once per page. A chunk that cannot
+ * load leaves the express buttons out for the page; the cart and its "Next
+ * step" button keep working.
+ */
+function loadExpressArea(): Promise<ExpressAreaModule> {
+  expressArea ??= import("./CartExpressArea").catch(() => ({
+    default: () => null,
+  }));
+  return expressArea;
+}
+const CartExpressArea = React.lazy(loadExpressArea);
 
 /**
  * Everything under the lines: the total, the country, the express buttons, the
@@ -53,13 +67,21 @@ export function CartCheckout() {
 
   const [isCountryOpen, setIsCountryOpen] = React.useState(false);
 
+  // The express chunk loads while `/products` is asked, not after it: the
+  // buttons mount once the server confirmed the cart (slice 5).
+  const hasLines = lines.length > 0;
+  React.useEffect(() => {
+    if (hasLines) {
+      void loadExpressArea();
+    }
+  }, [hasLines]);
+
   const summary = useCheckoutSlot("summary");
   const totalLabel = useCheckoutSlot("totalLabel");
   const totalValue = useCheckoutSlot("totalValue");
   const deliveryText = useCheckoutSlot("deliveryText");
   const summaryNote = useCheckoutSlot("summaryNote");
   const countryLabel = useCheckoutSlot("countryLabel");
-  const paymentButtons = useCheckoutSlot("paymentButtons");
   const checkoutButton = useCheckoutSlot("checkoutButton");
   const error = useCheckoutSlot("error");
 
@@ -167,47 +189,14 @@ export function CartCheckout() {
               wallets.inert ? { pointerEvents: "none", opacity: 0.5 } : undefined
             }
           >
-            {isApplePayAvailable && wallets.oneClick && (
-              <div
-                data-bitsnap-checkout-slot="paymentButtons"
-                className={cn("w-full px-2", paymentButtons.className)}
-                style={paymentButtons.style}
-              >
-                <ApplePayButton
-                  colorType="white"
-                  style={{ width: "100%" }}
-                  items={wallets.items}
-                />
-              </div>
-            )}
-            {wallets.oneClick && (
-              <div
-                data-bitsnap-checkout-slot="paymentButtons"
-                className={cn("w-full px-2", paymentButtons.className)}
-                style={paymentButtons.style}
-              >
-                <GooglePayButton
-                  buttonSizeMode="fill"
-                  buttonColor="white"
-                  style={{ width: "100%" }}
-                  items={wallets.items}
-                />
-              </div>
-            )}
-            <div
-              data-bitsnap-checkout-slot="paymentButtons"
-              className={cn("w-full px-2", paymentButtons.className)}
-              style={paymentButtons.style}
-            >
-              <InPostPayButtonInner
-                projectID={getProjectID() ?? ""}
+            <React.Suspense fallback={null}>
+              <CartExpressArea
                 locale={locale}
+                isApplePayAvailable={isApplePayAvailable}
+                oneClick={wallets.oneClick}
+                items={wallets.items}
               />
-              <RevolutPayButtonInner
-                projectID={getProjectID() ?? ""}
-                locale={locale}
-              />
-            </div>
+            </React.Suspense>
           </div>
         )}
         {wallets.mounted && wallets.inert && unavailable.length === 0 && (

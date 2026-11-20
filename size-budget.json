@@ -8,7 +8,7 @@
         "node_modules/hls.js/",
         "node_modules/dompurify/"
       ],
-      "jsGzipKB": 243.8
+      "jsGzipKB": 242.9
     },
     "cart-main-ns": {
       "forbidStatic": [
@@ -49,5 +49,5 @@
     "dist/index.css": 21.1
   },
   "maxDependencies": 28,
-  "tarballBytes": 1780000
+  "tarballBytes": 1806000
 }

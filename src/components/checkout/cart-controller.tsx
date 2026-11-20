@@ -8,6 +8,7 @@ import {
   readLocalCartLines,
   readLocalCartSignature,
   useCartProvider,
+  warmWalletAvailability,
   type LocalCartLine,
 } from "./CartProvider";
 import { cartCountriesQuery, cartPaymentMethodsQuery } from "./cart-queries";
@@ -244,9 +245,23 @@ function useCartControllerState(
   const { data: availableCountries } = useQuery(
     cartCountriesQuery(provider.getAvailableCountries),
   );
+  // Apple Pay and Google Pay are asked about at the open, next to `/products`,
+  // not once their buttons mount after it; one shared, cached answer serves
+  // the buttons too (slice 5). Not for a cart whose one-click buttons are
+  // hidden (a pay-what-you-want line, N2) or that is empty.
+  const oneClick = !hasPayWhatYouWantLine(view);
+  const projectID = getProjectID();
+  const askWallets =
+    open !== false && view.lines.length > 0 && oneClick && projectID != null;
+  React.useEffect(() => {
+    if (askWallets && projectID != null) {
+      warmWalletAvailability(projectID);
+    }
+  }, [askWallets, projectID]);
   const { data: isApplePayAvailable } = useQuery({
-    queryKey: ["cart-one-click-payment"],
+    queryKey: ["cart-one-click-payment", projectID],
     queryFn: provider.checkIfApplePayIsAvailable,
+    enabled: askWallets,
   });
   const { data: countryData, refetch: refetchCountry } = useQuery({
     queryKey: ["cart-country"],
@@ -641,7 +656,7 @@ function useCartControllerState(
     wallets: {
       mounted: walletsMounted.current,
       inert: walletsInert(view) || unavailable.length > 0,
-      oneClick: !hasPayWhatYouWantLine(view),
+      oneClick,
       items: walletItems(view),
     },
     countries,

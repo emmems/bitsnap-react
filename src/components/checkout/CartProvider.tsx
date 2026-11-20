@@ -54,6 +54,7 @@ import {
   type PendingOrderOutcome,
 } from "./pending-order";
 import type { PaymentMethod, PaymentMethodChoice } from "./payment-method";
+import { createWalletAvailability } from "./wallet-availability";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -582,6 +583,9 @@ const googlePayConfigSchema = zod.object({
   merchantName: zod.string(),
   gateway: zod.string(),
   gatewayId: zod.string(),
+  // A bad stamp only expires a negative answer; it never breaks the cart.
+  checkedAt: zod.number().optional().catch(undefined),
+  checkedFor: zod.string().optional().catch(undefined),
 });
 const checkoutProduct = zod.object({
   id: zod.string(),
@@ -1004,13 +1008,7 @@ export const getCheckoutMethods: (
       }
 
       try {
-        const result = await PublicApiClient.get(
-          HOST,
-        ).isOneClickPaymentAvailable({
-          projectId: projectID,
-        });
-
-        return result.applePay;
+        return await walletAvailability.applePay(projectID);
       } catch (e) {
         console.error("Error checking if Apple Pay is available", e);
         return false;
@@ -1679,32 +1677,38 @@ export const getCheckoutMethods: (
   };
 };
 
-async function resolveGooglePayConfiguration(projectID: string) {
-  const checkout = getCheckout();
-  if (checkout.googlePayConfig?.isAvailable != true) {
-    const result = await PublicApiClient.get(HOST).isOneClickPaymentAvailable({
-      projectId: projectID,
-    });
-    if (result.googlePay == true && result.googlePayConfig != null) {
-      checkout.googlePayConfig = {
-        isAvailable: true,
-        gateway: result.googlePayConfig.gateway,
-        gatewayId: result.googlePayConfig.gatewayMerchantId,
-        merchantName: result.googlePayConfig.merchantName,
-        merchantId: result.googlePayConfig.merchantId,
-      };
-    } else {
-      checkout.googlePayConfig = {
-        isAvailable: false,
-        gateway: "",
-        gatewayId: "",
-        merchantName: "",
-        merchantId: "",
-      };
-    }
+/**
+ * The one `isOneClickPaymentAvailable` answer of the page (slice 5): shared by
+ * the drawer and the Apple Pay and Google Pay buttons, reused for 10 minutes;
+ * Google Pay's answer is kept in the stored cart.
+ */
+export const walletAvailability = createWalletAvailability({
+  ask: (host, projectID) =>
+    PublicApiClient.get(host).isOneClickPaymentAvailable({ projectId: projectID }),
+  host: () => HOST,
+  readStored: () => getCheckout().googlePayConfig,
+  writeStored: (config) => {
+    // Read again at write time: the lines may have changed during the
+    // request. Not a cart change, so no listener is told (an express button
+    // would ask its availability again for nothing).
+    const checkout = getCheckout();
+    localStorage.setItem(
+      checkoutKey,
+      JSON.stringify({ ...checkout, googlePayConfig: config }),
+    );
+  },
+});
+
+/** Starts the wallet check for the drawer at the open, next to `/products` (slice 5). */
+export function warmWalletAvailability(projectID: string): void {
+  if (typeof window == "undefined") {
+    return;
   }
-  saveCheckout(checkout);
-  return checkout.googlePayConfig;
+  walletAvailability.googlePay(projectID).catch(() => {});
+}
+
+function resolveGooglePayConfiguration(projectID: string) {
+  return walletAvailability.googlePay(projectID);
 }
 
 function resolveProductDetailsFromSingleProduct(

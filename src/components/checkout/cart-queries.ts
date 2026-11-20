@@ -55,8 +55,11 @@ export function cartProductsQuery(
 
 type Countries = { name: string; code: string }[];
 
+/** How long a non-empty country list counts as fresh (plan part 1, slice 5). */
+export const CART_COUNTRIES_STALE_MS = 5 * 60_000;
+
 /**
- * The countries the shop ships to. Fresh for a minute once it has any (the
+ * The countries the shop ships to. Fresh for 5 minutes once it has any (the
  * answer is `[]` after a failed request, which must be asked again at once).
  */
 export function cartCountriesQuery(
@@ -67,7 +70,9 @@ export function cartCountriesQuery(
     queryFn: fetchCountries,
     // An `Err` has no `length`: a failed answer counts as stale at once.
     staleTime: (query: { state: { data?: Err | Countries } }) =>
-      (query.state.data as Countries | undefined)?.length ? 60_000 : 0,
+      (query.state.data as Countries | undefined)?.length
+        ? CART_COUNTRIES_STALE_MS
+        : 0,
   } as const;
 }
 

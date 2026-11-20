@@ -487,3 +487,135 @@ describe("after add", () => {
     assert.equal(countryCalls(), countBefore);
   });
 });
+
+// ------------------------------------------------------ wallet availability
+
+describe("wallet availability (slice 5)", () => {
+  type Stored = import("./wallet-availability.ts").StoredGooglePayConfig;
+  let walletModule: typeof import("./wallet-availability.ts");
+  before(async () => {
+    walletModule = await import("./wallet-availability.ts");
+  });
+
+  /** A shared "device storage", a clock and a counted server. */
+  function setup(answer: { applePay: boolean; googlePay: boolean } = { applePay: false, googlePay: false }) {
+    const state = { stored: undefined as Stored | undefined, at: 1_000_000, asks: 0, writes: 0 };
+    let release: (() => void) | undefined;
+    const create = () =>
+      walletModule.createWalletAvailability({
+        ask: async () => {
+          state.asks += 1;
+          if (release === undefined) {
+            await new Promise<void>((resolve) => (release = resolve));
+          }
+          return {
+            ...answer,
+            ...(answer.googlePay
+              ? { googlePayConfig: { gateway: "g", gatewayMerchantId: "gm", merchantName: "Shop", merchantId: "m" } }
+              : {}),
+          };
+        },
+        host: () => "https://bitsnap.pl",
+        readStored: () => (state.stored == null ? undefined : { ...state.stored }),
+        writeStored: (config) => {
+          state.writes += 1;
+          state.stored = { ...config };
+        },
+        now: () => state.at,
+      });
+    return { state, create, release: () => release?.(), answerAtOnce: () => (release = () => {}) };
+  }
+
+  it("three overlapping callers share one request", async () => {
+    const { state, create, release } = setup({ applePay: true, googlePay: false });
+    const wallets = create();
+    const calls = [wallets.applePay("p1"), wallets.googlePay("p1"), wallets.applePay("p1")];
+    await new Promise((r) => setTimeout(r, 0));
+    release();
+    const [apple, google, apple2] = await Promise.all(calls);
+    assert.equal(state.asks, 1);
+    assert.equal(apple, true);
+    assert.equal(apple2, true);
+    assert.equal(google.isAvailable, false);
+  });
+
+  it("a negative Google Pay answer is reused for 10 minutes by a new instance (storage), then asked again", async () => {
+    const { state, create, answerAtOnce } = setup();
+    answerAtOnce();
+    assert.equal((await create().googlePay("p1")).isAvailable, false);
+    assert.equal(state.asks, 1);
+    assert.equal(state.stored?.checkedAt, 1_000_000);
+    assert.equal(state.stored?.checkedFor, "https://bitsnap.pl|p1");
+
+    state.at += walletModule.WALLET_AVAILABILITY_TTL_MS - 1;
+    assert.equal((await create().googlePay("p1")).isAvailable, false);
+    assert.equal(state.asks, 1, "trusted within the TTL");
+
+    state.at += 2;
+    await create().googlePay("p1");
+    assert.equal(state.asks, 2, "expired");
+  });
+
+  it("a negative answer without checkedAt, from the future, or for another shop is expired", async () => {
+    const { state, create, answerAtOnce } = setup();
+    answerAtOnce();
+    const negative = { isAvailable: false, merchantId: "", merchantName: "", gateway: "", gatewayId: "" };
+    state.stored = { ...negative };
+    await create().googlePay("p1");
+    assert.equal(state.asks, 1, "no stamp: an older SDK dropped it");
+
+    state.stored = { ...negative, checkedAt: state.at + 60_000, checkedFor: "https://bitsnap.pl|p1" };
+    await create().googlePay("p1");
+    assert.equal(state.asks, 2, "a stamp in the future");
+
+    state.stored = { ...negative, checkedAt: state.at, checkedFor: "https://bitsnap.pl|p2" };
+    await create().googlePay("p1");
+    assert.equal(state.asks, 3, "another shop");
+  });
+
+  it("a positive Google Pay answer is kept as before: no request while it is stored", async () => {
+    const { state, create, answerAtOnce } = setup({ applePay: false, googlePay: true });
+    answerAtOnce();
+    const config = await create().googlePay("p1");
+    assert.deepEqual(
+      { ...config },
+      { isAvailable: true, gateway: "g", gatewayId: "gm", merchantName: "Shop", merchantId: "m" },
+    );
+    state.at += 24 * 60 * 60_000;
+    await create().googlePay("p1");
+    assert.equal(state.asks, 1);
+  });
+
+  it("the answer in memory is reused for 10 minutes, and nothing is written when nothing changed", async () => {
+    const { state, create, answerAtOnce } = setup();
+    answerAtOnce();
+    const wallets = create();
+    await wallets.applePay("p1");
+    await wallets.googlePay("p1");
+    await wallets.googlePay("p1");
+    assert.equal(state.asks, 1);
+    assert.equal(state.writes, 1, "one write for the new answer");
+    state.at += walletModule.WALLET_AVAILABILITY_TTL_MS;
+    await wallets.applePay("p1");
+    assert.equal(state.asks, 2);
+  });
+
+  it("a failed request is not kept: the next caller asks again", async () => {
+    let fail = true;
+    let asks = 0;
+    const wallets = walletModule.createWalletAvailability({
+      ask: async () => {
+        asks += 1;
+        if (fail) throw new Error("offline");
+        return { applePay: true, googlePay: false };
+      },
+      host: () => "https://bitsnap.pl",
+      readStored: () => undefined,
+      writeStored: () => {},
+    });
+    await assert.rejects(wallets.applePay("p1"));
+    fail = false;
+    assert.equal(await wallets.applePay("p1"), true);
+    assert.equal(asks, 2);
+  });
+});

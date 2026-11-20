@@ -54,6 +54,7 @@ let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
 let Bitsnap: typeof import("./methods.ts").Bitsnap;
 let useCheckoutStore: typeof import("./state.ts").useCheckoutStore;
 let snapshotModule: typeof import("./cart-snapshot.ts");
+let walletAvailability: typeof import("./CartProvider.tsx").walletAvailability;
 let HOST: string;
 
 before(async () => {
@@ -65,6 +66,7 @@ before(async () => {
   ({ Bitsnap } = await import("./methods.ts"));
   ({ useCheckoutStore } = await import("./state.ts"));
   snapshotModule = await import("./cart-snapshot.ts");
+  ({ walletAvailability } = await import("./CartProvider.tsx"));
   ({ HOST } = await import("./constants.ts"));
 });
 
@@ -155,6 +157,7 @@ beforeEach(() => {
   page.win.localStorage.clear();
   page.win.localStorage.setItem("checkout", JSON.stringify({ products: [] }));
   snapshotModule.resetCartSnapshotState();
+  walletAvailability.reset();
   useCheckoutStore.setState({ isCartVisible: false, numberOfProductsInCart: 0, notice: undefined });
   catalog = new Map([
     ["pa", product("pa", "Mug", 2500, "va1")],
@@ -1305,6 +1308,182 @@ describe("instant drawer: gate review fixes (N2, N5, m1, m2, S15)", () => {
     );
     assert.deepEqual(storedLines().map((l) => l.productID), ["pa"]);
     assert.equal(doc().querySelector("[data-bitsnap-checkout-unavailable]"), null);
+  });
+});
+
+// ----------------------------------------------------------- request graph
+
+describe("request graph and wallet availability (slice 5)", () => {
+  const storedGooglePay = () =>
+    JSON.parse(page.win.localStorage.getItem("checkout")!).googlePayConfig as
+      | { isAvailable: boolean; checkedAt?: number; checkedFor?: string }
+      | undefined;
+  /** A new page: the query cache and the in-memory wallet answer are gone, storage stays. */
+  async function newPage(root: { unmount: () => void }) {
+    await React.act(async () => root.unmount());
+    walletAvailability.reset();
+    return mount();
+  }
+
+  it("with a snapshot: /payment-methods and the wallet check start at the open, while /products is still out (A4)", async () => {
+    const root = await mount();
+    await add("pa");
+    await newPage(root);
+    productsMode = "pending";
+    const before = requests.length;
+    await open();
+    await settle();
+    const sent = requests.slice(before).map((r) => r.url);
+    assert.ok(sent.some((url) => url.includes("/public-commerce/products")), "revalidates");
+    assert.equal(methodRequests().length, 1, "payment methods do not wait for /products");
+    assert.equal(oneClickRequests().length, 1, "the wallet check does not wait for /products");
+    assert.equal(wallets(), null, "the buttons still wait for the confirmed cart");
+
+    await releaseProducts();
+    assert.ok(wallets(), "mounted once confirmed");
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1, "the Google Pay button reuses the answer");
+    assert.equal(methodRequests().length, 1);
+  });
+
+  it("cold, without a snapshot: /payment-methods and the wallet check do not wait for /products", async () => {
+    page.win.localStorage.setItem(
+      "checkout",
+      JSON.stringify({ country: "PL", products: [{ id: "l1", productID: "pa", quantity: 2, priceVersion: "va1" }] }),
+    );
+    await mount();
+    productsMode = "pending";
+    await open();
+    await settle();
+    assert.ok(skeletons() > 0, "nothing to paint yet");
+    assert.equal(methodRequests().length, 1);
+    assert.equal((methodRequests()[0].body as { items: { quantity: number }[] }).items[0].quantity, 2, "built from the local lines");
+    assert.equal(oneClickRequests().length, 1);
+    await releaseProducts();
+    assert.deepEqual(names(), ["Mug"]);
+    assert.equal(methodRequests().length, 1, "the answer of /products does not ask again");
+  });
+
+  it("a reopen asks no wallet question again; after a page load a stored 'no Google Pay' is trusted for 10 min", async () => {
+    let root = await mount();
+    await add("pa");
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1);
+    assert.equal(storedGooglePay()?.isAvailable, false);
+    assert.equal(typeof storedGooglePay()?.checkedAt, "number");
+
+    await close();
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1, "reopen: from memory");
+
+    await close();
+    root = await newPage(root);
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1, "new page: from storage");
+
+    await close();
+    lookAtCart(10 * 60_000 + 1000);
+    root = await newPage(root);
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 2, "asked again after 10 min");
+  });
+
+  it("a stored 'no Google Pay' without checkedAt (an older SDK rewrote the cart) is asked again", async () => {
+    await mount();
+    await add("pa");
+    const checkout = JSON.parse(page.win.localStorage.getItem("checkout")!);
+    page.win.localStorage.setItem(
+      "checkout",
+      JSON.stringify({
+        ...checkout,
+        googlePayConfig: { isAvailable: false, merchantId: "", merchantName: "", gateway: "", gatewayId: "" },
+      }),
+    );
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1);
+    assert.equal(typeof storedGooglePay()?.checkedAt, "number", "stamped now");
+  });
+
+  it("a broken checkedAt does not break the cart; it only expires the answer", async () => {
+    await mount();
+    await add("pa");
+    const checkout = JSON.parse(page.win.localStorage.getItem("checkout")!);
+    page.win.localStorage.setItem(
+      "checkout",
+      JSON.stringify({
+        ...checkout,
+        googlePayConfig: { isAvailable: false, merchantId: "", merchantName: "", gateway: "", gatewayId: "", checkedAt: "soon" },
+      }),
+    );
+    await open();
+    await settle(60);
+    assert.deepEqual(names(), ["Mug"]);
+    assert.equal(oneClickRequests().length, 1);
+  });
+
+  it("on Safari Apple Pay and Google Pay share one request per open window", async () => {
+    enableApplePay(true);
+    oneClick = { applePay: true };
+    await mount();
+    await add("pa");
+    await open();
+    await settle(60);
+    assert.ok(wallets()!.querySelector("button, apple-pay-button, [role=button]"), "the Apple Pay button renders");
+    assert.equal(oneClickRequests().length, 1);
+    await close();
+    await open();
+    await settle(60);
+    assert.equal(oneClickRequests().length, 1);
+  });
+
+  it("the stored cart is not rewritten by the wallet check: lines changed meanwhile stay", async () => {
+    await mount();
+    await add("pa");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string, init?: RequestInit) => {
+      if (String(input).endsWith("/IsOneClickPaymentAvailable")) await gate;
+      return realFetch(input, init);
+    }) as typeof fetch;
+    await open();
+    await settle();
+    const plus = doc().querySelectorAll<HTMLButtonElement>('[data-bitsnap-checkout-slot="quantityButton"]')[1];
+    await React.act(async () => plus.click());
+    await React.act(async () => release());
+    await settle(60);
+    assert.equal(storedLines()[0].quantity, 2, "the quantity written during the request is kept");
+    assert.equal(storedGooglePay()?.isAvailable, false);
+  });
+
+  it("the express area is lazy, and its buttons stay inert while a line is unconfirmed after the chunk loaded (N1, m3)", async () => {
+    enableApplePay(true);
+    oneClick = { applePay: true };
+    await mount();
+    await add("pa");
+    await open();
+    await settle(60);
+    const area = wallets()!;
+    const button = area.querySelector<HTMLElement>("button, apple-pay-button, [role=button]")!;
+    assert.ok(button, "loaded and rendered");
+    assert.equal(area.hasAttribute("inert"), false);
+
+    productsMode = "pending";
+    await otherTabWrites([...storedLines(), { id: "x2", productID: "pb", quantity: 1 }]);
+    await settle();
+    assert.equal(wallets(), area, "kept mounted");
+    assert.ok(button.isConnected, "the loaded button stays");
+    assert.equal(button.closest("[inert]"), area, "the button sits in the inert container");
+    assert.equal(area.getAttribute("aria-disabled"), "true");
+    assert.equal(area.style.pointerEvents, "none");
+    assert.ok(doc().querySelector('[data-bitsnap-checkout-notice="wallets-updating"]'));
+    await releaseProducts();
+    assert.equal(area.hasAttribute("inert"), false);
   });
 });
 
