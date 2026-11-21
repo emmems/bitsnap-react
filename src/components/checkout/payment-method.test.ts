@@ -162,6 +162,13 @@ describe("parsePaymentMethodChoice: logos", () => {
     assert.deepEqual(parseOn({ online: [api, bitsnap] }, paymentLogoOrigins()), { online: [bitsnap] });
     assert.deepEqual(parse({ online: [api, bitsnap] })?.logos, { online: [bitsnap] });
     assert.deepEqual(paymentLogoOrigins("/relative"), ["https://bitsnap.pl"]);
+    // An opaque origin ("null") adds nothing and does not throw.
+    assert.deepEqual(paymentLogoOrigins("foo:bar/payment-methods"), ["https://bitsnap.pl"]);
+  });
+
+  it("stores the checked, normalised URL, not the raw string", () => {
+    const parsed = parse({ online: [logo("up", { src: "HTTPS://BITSNAP.PL:443/logos/up.svg" })] });
+    assert.equal(parsed?.logos?.online?.[0]?.src, "https://bitsnap.pl/logos/up.svg");
   });
 
   it("accepts http only from an http localhost API's own origin", () => {

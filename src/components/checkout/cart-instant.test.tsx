@@ -50,6 +50,7 @@ let createRoot: typeof import("react-dom/client").createRoot;
 let renderToString: typeof import("react-dom/server").renderToString;
 let focusManager: typeof import("@tanstack/react-query").focusManager;
 let notifyManager: typeof import("@tanstack/react-query").notifyManager;
+let defaultScheduler: typeof import("@tanstack/react-query").defaultScheduler;
 let onlineManager: typeof import("@tanstack/react-query").onlineManager;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
 let Bitsnap: typeof import("./methods.ts").Bitsnap;
@@ -63,7 +64,7 @@ before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
   renderToString = (await import("react-dom/server")).renderToString;
-  ({ focusManager, onlineManager, notifyManager } = await import("@tanstack/react-query"));
+  ({ focusManager, onlineManager, notifyManager, defaultScheduler } = await import("@tanstack/react-query"));
   BitsnapCheckout = (await import("./BitsnapCart.tsx")).default;
   ({ Bitsnap } = await import("./methods.ts"));
   ({ useCheckoutStore } = await import("./state.ts"));
@@ -1014,7 +1015,7 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
 
     // ~600 ms later a refetch brings another price for the same line: it stays
     // marked, only its settle time moves. React Query's own notifications are
-    // held back, so the render that shows the new price (the snapshot write) is
+    // dropped (the scheduler is a no-op), so the render that shows the new price (the snapshot write) is
     // the last one and only the drawer itself can re-arm the timer.
     await settle(600);
     productsMode = "ok";
@@ -1043,7 +1044,7 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
         "the notice names the re-marked price",
       );
     } finally {
-      notifyManager.setScheduler((callback) => setTimeout(callback, 0));
+      notifyManager.setScheduler(defaultScheduler);
     }
   });
 

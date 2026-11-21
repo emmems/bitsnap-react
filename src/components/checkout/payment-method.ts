@@ -79,15 +79,19 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
  * load a tracking pixel.
  */
 export function paymentLogoOrigins(endpoint?: string): string[] {
-  const origins = [DEFAULT_HOST];
+  const origins = [new URL(DEFAULT_HOST).origin];
   if (endpoint) {
     try {
-      origins.unshift(new URL(endpoint).origin);
+      const origin = new URL(endpoint).origin;
+      // An opaque origin ("null", e.g. a custom scheme) adds nothing.
+      if (origin !== "null") {
+        origins.unshift(origin);
+      }
     } catch {
       // A relative or bad endpoint adds nothing.
     }
   }
-  return [...new Set(origins.map((origin) => new URL(origin).origin))];
+  return [...new Set(origins)];
 }
 
 /**
@@ -95,21 +99,22 @@ export function paymentLogoOrigins(endpoint?: string): string[] {
  * `http:` only when that allowed origin is itself http on localhost (a local
  * backend in development).
  */
-function isLogoUrl(value: unknown, origins: readonly string[]): value is string {
+function logoUrl(value: unknown, origins: readonly string[]): string | undefined {
   if (typeof value !== "string" || value.length > 2048) {
-    return false;
+    return undefined;
   }
   try {
     const url = new URL(value);
     if (url.username || url.password || !origins.includes(url.origin)) {
-      return false;
+      return undefined;
     }
-    return (
+    const allowed =
       url.protocol === "https:" ||
-      (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname))
-    );
+      (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname));
+    // The checked, normalised URL is what the <img> loads.
+    return allowed ? url.href : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -124,10 +129,13 @@ function parseLogo(value: unknown, origins: readonly string[]): PaymentLogo | nu
   if (typeof id !== "string" || !id || typeof alt !== "string") {
     return null;
   }
-  if (!isLogoUrl(src, origins) || !isSize(width) || !isSize(height)) {
+  const href = logoUrl(src, origins);
+  if (href == null || !isSize(width) || !isSize(height)) {
     return null;
   }
-  return chip === true ? { id, src, alt, width, height, chip } : { id, src, alt, width, height };
+  return chip === true
+    ? { id, src: href, alt, width, height, chip }
+    : { id, src: href, alt, width, height };
 }
 
 /**
