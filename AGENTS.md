@@ -280,6 +280,14 @@ Rules:
   values pass through as written (`var(--site-x)` works); only a value with a
   `;` is dropped (`omitUndefined`). Tests: the "follows the site's look"
   blocks in `cart-css.test.ts` and `appearance.test.ts`.
+- The cart root's theme is `data-bitsnap-checkout-theme="dark|light"`, never
+  a bare `dark`/`light` class (a host `.dark { ... }` rule or class-based
+  `dark:` variant would match it). The root has no `bitsnap-react` class
+  (`index.css` sets `--background` & co. on `.bitsnap-react`) and the cart
+  writes no shadcn variable (`CHECKOUT_SHADCN_VARIABLES` is empty): either
+  would break a token `var(--background)` that follows a shadcn host. Returns and
+  products still map onto shadcn variables; `resolveBoundaryStyle` skips a
+  mapping whose value reads that same variable.
 - `data-bitsnap-cart-open` on `<html>` while a cart is open is a contract with
   the consent module (`src/consent/core/ui.ts` mirrors it and hides its
   banner); the literal is repeated on both sides because consent must not

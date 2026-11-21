@@ -437,14 +437,15 @@ describe("payment logos in the method cards", () => {
     paymentMethodsResponse = withLogos({ online: [logo("blik"), logo("visa", true)] });
     await openCart();
     const root = doc().querySelector('[data-bitsnap-checkout="root"]')!;
-    assert.ok(root.classList.contains("dark"), "the default theme is dark");
+    assert.equal(root.getAttribute("data-bitsnap-checkout-theme"), "dark", "the default theme is dark");
+    assert.equal(root.classList.contains("dark"), false, "no bare theme class a host `.dark` rule could match");
     assert.equal(card("online").querySelector('[data-payment-logo="visa"]')!.className, "bsc-method-logo bsc-method-logo-chip");
     assert.equal(card("online").querySelector('[data-payment-logo="blik"]')!.className, "bsc-method-logo");
     await React.act(async () => roots.splice(0).forEach((r) => r.unmount()));
     doc().body.innerHTML = "";
 
     await openCart({ appearance: { theme: "light" } });
-    assert.ok(doc().querySelector('[data-bitsnap-checkout="root"]')!.classList.contains("light"));
+    assert.equal(doc().querySelector('[data-bitsnap-checkout="root"]')!.getAttribute("data-bitsnap-checkout-theme"), "light");
     assert.ok(card("online").querySelector('[data-payment-logo="visa"]')!.classList.contains("bsc-method-logo-chip"));
   });
 

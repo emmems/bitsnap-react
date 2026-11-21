@@ -28,7 +28,7 @@ export type TokenVariables<Token extends string> = Readonly<
 /**
  * Remaps a token onto a shadcn theme variable (`--background`, `--ring`, ...)
  * so shared UI primitives follow the module's tokens. Only written when the
- * token is in effect.
+ * token is in effect and does not read that same variable.
  */
 export type ShadcnVariableMapping<Token extends string> = readonly {
   token: Token;
@@ -110,12 +110,24 @@ export function resolveBoundaryStyle<Token extends string>(
 
   for (const { token, variable } of shadcnVariables) {
     const value = tokens[token];
-    if (value != null) {
+    if (value != null && !readsVariable(value, variable)) {
       style[variable] = value;
     }
   }
 
   return style as CSSProperties;
+}
+
+/**
+ * `true` when `value` reads `variable` (`var(--background)`,
+ * `var( --background, #fff)`, inside `color-mix()`...). Writing it to that
+ * same variable would be a cycle, which makes the variable invalid: a token
+ * `background: "var(--background)"` that follows the host's shadcn theme
+ * must leave the host's `--background` alone.
+ */
+function readsVariable(value: string, variable: string): boolean {
+  // Mapped names are plain `--[a-z-]+`: nothing to escape.
+  return new RegExp(`var\\(\\s*${variable}\\s*[,)]`).test(value);
 }
 
 /**

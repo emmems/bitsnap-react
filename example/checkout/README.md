@@ -34,6 +34,7 @@ pnpm dev
 | `/?scenario=custom`                 | Square corners, brand button, darker control outline (19a tokens) |
 | `?theme=host`                       | Host page with its own CSS variables; the cart follows them |
 | `?theme=host&dark=1`                | The same page in its dark mode (`dark` class on `<html>`; the button toggles it) |
+| `?theme=shadcn` (`&dark=1`)         | A shadcn/ui site; tokens are `var(--background)`, `var(--primary)`, ... |
 
 The radio buttons switch the appearance while the cart is open, which is part of
 the supported behaviour.

@@ -19,10 +19,12 @@ import { installCheckoutMocks, seedCart } from "./mocks";
 //   ?open=1 -> opens the cart after the first render (screenshots)
 //   ?theme=host -> a host page with its own variables; the cart follows them
 //   ?theme=host&dark=1 -> the same page in its dark mode (class on <html>)
+//   ?theme=shadcn(&dark=1) -> a shadcn/ui site; tokens are var(--background), ...
 const params = new URLSearchParams(window.location.search);
-const hostTheme = params.get("theme") === "host";
+const theme = params.get("theme");
+const hostTheme = theme === "host" || theme === "shadcn";
 if (hostTheme) {
-  document.documentElement.classList.add("host-site");
+  document.documentElement.classList.add(theme === "shadcn" ? "shadcn-site" : "host-site");
   document.documentElement.classList.toggle("dark", params.get("dark") === "1");
 }
 
@@ -46,7 +48,7 @@ if (params.get("cart") === "empty") {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App
-      initialScenario={hostTheme ? "host" : ((params.get("scenario") as never) ?? "default")}
+      initialScenario={hostTheme ? (theme as "host" | "shadcn") : ((params.get("scenario") as never) ?? "default")}
       initialPresentation={params.get("presentation") === "dialog" ? "dialog" : "drawer"}
       locale={params.get("locale") ?? undefined}
       openOnLoad={params.get("open") === "1"}

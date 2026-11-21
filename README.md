@@ -104,6 +104,18 @@ defaults, overridable through `texts`).
   `var(--your-variable)`, so the cart follows your design-system variables and
   your own dark-mode switch. See [Follow your site's theme](#follow-your-sites-theme).
   Without these tokens nothing changes.
+- **The cart's theme is an attribute, not a class.** The cart root carries
+  `data-bitsnap-checkout-theme="dark"` (or `"light"`) instead of a bare `dark`
+  or `light` class, so a site rule like shadcn's `.dark { --background: ... }`
+  or a class-based Tailwind `dark:` variant no longer reaches into the cart.
+  A stylesheet that keys on `.dark [data-bitsnap-checkout...]` or
+  `[data-bitsnap-checkout="root"].dark` must switch to
+  `[data-bitsnap-checkout-theme="dark"]`. The cart root also loses its
+  `bitsnap-react` class (the cart's stylesheet never used it; the cart
+  button keeps it) and the cart stops writing shadcn variables (`--background`,
+  `--ring`, ...) on it: nothing in the cart reads them, and a token like
+  `background: "var(--background)"` now follows your shadcn theme in light and
+  dark mode instead of the library's or the dark default.
 - **New token `panelMaxHeight`** caps the dialog's height (default
   `min(100dvh - 48px, 704px)`); `panelWidth` is the dialog's width in the
   dialog (default 480 px).
@@ -593,13 +605,15 @@ switches with it, with no JavaScript.
   --site-bg: #ffffff; --site-surface: #f6f6f4; --site-fg: #1f2328; --site-muted: #5f6670;
   --site-border: #e3e3e0; --site-input: #8b8b85; --site-hover: #ececea;
   --site-brand: #0f766e; --site-brand-fg: #ffffff; --site-brand-hover: #115e59;
-  --site-skeleton: #dcdcd8; --site-radius: 6px; --site-scheme: light;
+  --site-skeleton: #dcdcd8; --site-sale: #b42318; --site-error: #b42318;
+  --site-radius: 6px; --site-scheme: light;
 }
 html.dark {
   --site-bg: #14171a; --site-surface: #1d2125; --site-fg: #e8eaed; --site-muted: #9aa3ad;
   --site-border: #2c3238; --site-input: #6b7580; --site-hover: #2a3036;
   --site-brand: #2dd4bf; --site-brand-fg: #042f2e; --site-brand-hover: #5eead4;
-  --site-skeleton: #343a40; --site-scheme: dark;
+  --site-skeleton: #343a40; --site-sale: #f97066; --site-error: #f97066;
+  --site-scheme: dark;
 }
 ```
 
@@ -620,6 +634,8 @@ html.dark {
       buttonHoverBackground: "var(--site-brand-hover)",
       focusRing: "var(--site-brand)",
       skeleton: "var(--site-skeleton)",
+      sale: "var(--site-sale)",
+      error: "var(--site-error)",
       radius: "var(--site-radius)",
       colorScheme: "var(--site-scheme)",
     },
@@ -629,17 +645,19 @@ html.dark {
 
 - **Map these first:** `background`, `foreground`, `mutedForeground` and the
   three `button*` tokens set most of what a shopper sees. Then `controlBorder`,
-  `skeleton` and `colorScheme`: without them the cart keeps the default theme's
-  values for the control outlines, the loading bars, the scrollbars and the
-  country list, which are the dark ones, wrong on a light page.
+  `skeleton`, `sale`, `error` and `colorScheme`: without them the cart keeps
+  the default theme's values for the control outlines, the loading bars, the
+  sale price, error messages, the scrollbars and the country list, which are
+  the dark ones, wrong on a light page (the dark `sale` and `error` reach only
+  2.77:1 and about 3.8:1 on white).
 - Leave `theme` out: a theme only fills in the tokens you do not pass.
 - Keep `mutedForeground` at 4.5:1 and `controlBorder` at 3:1 against
   `background` in both of your modes; the cart does not check your values.
 - Only a value with a `;` is dropped. Anything else is written as you pass it;
   a `var()` your page does not define gives that token's default.
 - Your font comes through already (the cart inherits it); `fontFamily` and
-  `fontSize` change it. The cart's root is where you mount `BitsnapCheckout`,
-  so your variables must be defined there or on an ancestor (`:root` is fine).
+  `fontSize` change it. The cart renders into `<body>`, not where you mount
+  `BitsnapCheckout`, so define your variables on `:root`, `html` or `body`.
 - The same works without React props: set the cart's variables in your CSS,
   for example `[data-bitsnap-checkout] { --bitsnap-checkout-control-border: var(--site-input); }`.
   A token passed in `appearance` wins over it.
@@ -803,7 +821,7 @@ reset on the elements listed above):
 | Token                     | Applies to                                              |
 | ------------------------- | ------------------------------------------------------- |
 | `fontFamily`              | The whole checkout                                      |
-| `fontSize`                | The whole checkout: every text size scales from it (default `16px`; 12 to 20 px). Touch targets keep 44 px |
+| `fontSize`                | The whole checkout: every text size scales from it (default `16px`; 12 to 20 px, never below 11 px). Use a length: a keyword like `"large"` sets the base, but every step renders at the root size. Touch targets keep 44 px |
 | `background`              | Panel, country trigger                                  |
 | `surface`                 | Country dropdown, search bar, selected payment method   |
 | `foreground`              | Titles, prices, total, country list                                   |
@@ -816,7 +834,7 @@ reset on the elements listed above):
 | `focusRing`               | Focus rings of the shared controls                      |
 | `controlBorder`           | Outline of the quantity stepper, country select, payment method cards and radios, notices, retry and empty-cart buttons (default `#737373`; `#8a8a8a` in the light theme; keep 3:1 on `background`) |
 | `skeleton`                | Loading placeholders (default `#333333`; `#d4d4d8` in the light theme) |
-| `colorScheme`             | `color-scheme` of the cart: scrollbars and the native country list (`"light"` / `"dark"`; default: from a hex `background`, else the theme) |
+| `colorScheme`             | `color-scheme` of the cart: scrollbars and the native country list (`"light"` / `"dark"`; default: from a hex `background`, else the theme). `--bitsnap-checkout-color-scheme` in your CSS also beats the guess |
 | `error`                   | Error message, unavailable product outline              |
 | `overlay`                 | Backdrop of the drawer and the dialog (default: 30 % black, 35 % in the light theme, 45 % behind the dialog) |
 | `radius`                  | Radius of the rounded elements; the defaults of the three below follow it |

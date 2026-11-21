@@ -29,8 +29,10 @@ export type CheckoutAppearanceTokens = {
   fontFamily?: string;
   /**
    * Base font size of the checkout (default `16px`). Every text size scales
-   * from it (12, 13, 14, 15, 16 and 20 px at the default); controls keep their
-   * 44 px touch targets.
+   * from it (12, 13, 14, 15, 16 and 20 px at the default; the two smallest
+   * never go below 11 px); controls keep their 44 px touch targets. Use a
+   * length: a keyword like `"large"` sets the base size, but every step then
+   * renders at the root size, because `calc()` cannot scale a keyword.
    */
   fontSize?: string;
   /** Panel background. */
@@ -51,7 +53,7 @@ export type CheckoutAppearanceTokens = {
   buttonHoverBackground?: string;
   /** Hover and selected surfaces: close button, country options. */
   hoverSurface?: string;
-  /** Focus ring color. Also applied to shared UI primitives through `--ring`. */
+  /** Focus ring color. */
   focusRing?: string;
   /**
    * Outline of the controls: quantity stepper, country select, payment-method
@@ -63,14 +65,15 @@ export type CheckoutAppearanceTokens = {
   skeleton?: string;
   /**
    * `color-scheme` of the cart (`"light"` or `"dark"`): scrollbars and the
-   * native country list. Default: from a hex `background` token, else the theme.
+   * native country list. Default: from a hex `background` token, else the
+   * theme. `--bitsnap-checkout-color-scheme` in your CSS works the same way.
    */
   colorScheme?: string;
   /** Error and unavailable state color. */
   error?: string;
   /** Backdrop color behind the cart. */
   overlay?: string;
-  /** Corner radius, applied through `--radius`. */
+  /** Corner radius. */
   radius?: string;
   /**
    * Corners of the dialog (default `radius` + 4 px) and the top corners of the
@@ -205,6 +208,12 @@ export type CheckoutAppearance = {
 };
 
 export type CheckoutBoundaryAttributes = {
+  /**
+   * Theme marker of the root. An attribute, not a bare `dark`/`light` class:
+   * a host rule like `.dark { --background: ... }` or a class-based Tailwind
+   * `dark:` variant would match a class on the cart root.
+   */
+  "data-bitsnap-checkout-theme": CheckoutTheme;
   "data-bitsnap-checkout-motion"?: "off";
 };
 
@@ -215,18 +224,18 @@ export type ResolvedCheckoutAppearance = {
   /** Tokens that are in effect. Empty entries were dropped. */
   tokens: CheckoutAppearanceTokens;
   elements: CheckoutAppearanceElements;
-  /** Theme marker class for the theme boundaries. */
-  boundaryClassName: string;
   /**
-   * Inline custom properties applied to the drawer root, plus `color-scheme`
-   * when the effective `background` token is a hex colour and no
-   * `colorScheme` token is set.
+   * Inline custom properties applied to the drawer root, plus
+   * `--bsc-scheme-guess` when the effective `background` token is a hex
+   * colour. The guess is a variable, not an inline `color-scheme`, so a
+   * `--bitsnap-checkout-color-scheme` from the host's CSS still beats it.
    */
   boundaryStyle: CSSProperties;
   /**
-   * Data attributes for the drawer root. `data-bitsnap-checkout-motion="off"`
-   * is set only when the `motionDuration` token is zero: CSS cannot test the
-   * value of a variable, so the stylesheet keys the motion-off rule on it.
+   * Data attributes for the drawer root: the theme marker, and
+   * `data-bitsnap-checkout-motion="off"` only when the `motionDuration` token
+   * is zero (CSS cannot test the value of a variable, so the stylesheet keys
+   * the motion-off rule on it).
    */
   boundaryAttributes: CheckoutBoundaryAttributes;
 };
@@ -296,30 +305,19 @@ export const CHECKOUT_THEME_PRESETS: Record<
 };
 
 /**
- * Some shared UI primitives (`Button`, `SelectTrigger`, ...) read the shadcn
- * theme variables instead of checkout tokens. Those are remapped so a themed
- * dropdown and themed primitives stay consistent. They are only written when
- * the matching token is in effect, so untouched tokens change nothing.
+ * Empty: nothing in the cart reads a shadcn variable (`cart.css` reads only
+ * `--bitsnap-checkout-*`). Writing them would also break a token that points
+ * at the host's shadcn variable: `background: "var(--background)"` would be
+ * written as `--background: var(--background)`, a cycle, and the cart would
+ * fall back to its dark default (19a review B1).
  */
-const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [
-  { token: "background", variable: "--background" },
-  { token: "foreground", variable: "--foreground" },
-  { token: "surface", variable: "--card" },
-  { token: "surface", variable: "--popover" },
-  { token: "foreground", variable: "--popover-foreground" },
-  { token: "mutedForeground", variable: "--muted-foreground" },
-  { token: "border", variable: "--border" },
-  { token: "border", variable: "--input" },
-  { token: "focusRing", variable: "--ring" },
-  { token: "error", variable: "--destructive" },
-  { token: "radius", variable: "--radius" },
-];
+const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [];
 
 /**
  * `color-scheme` for the root from the effective `background` token (N10):
  * `dark` when white text reads better on it, `light` otherwise. Only `#rgb`
  * and `#rrggbb` are read; any other value (`rgb()`, `var()`, a name) or no
- * `background` gives `undefined`, and the theme class decides in `cart.css`.
+ * `background` gives `undefined`, and the theme decides in `cart.css`.
  * Scrollbars, the native select popup and form controls follow it.
  */
 export function colorSchemeFor(
@@ -358,7 +356,9 @@ function withColorScheme(
   style: CSSProperties,
   colorScheme: "dark" | "light" | undefined,
 ): CSSProperties {
-  return colorScheme == null ? style : { ...style, colorScheme };
+  return colorScheme == null
+    ? style
+    : ({ ...style, "--bsc-scheme-guess": colorScheme } as CSSProperties);
 }
 
 export function resolveCheckoutAppearance(
@@ -380,17 +380,20 @@ export function resolveCheckoutAppearance(
     isCustomized: resolved.isCustomized,
     tokens: resolved.tokens,
     elements: resolved.elements,
-    boundaryClassName: resolved.theme,
-    // A `colorScheme` token decides in `cart.css`; the inline value would beat it.
+    // `cart.css` reads the guess under `--bitsnap-checkout-color-scheme`, so a
+    // `colorScheme` token, or that variable in the host's CSS, beats it (N1).
     boundaryStyle: withColorScheme(
       resolved.boundaryStyle,
       resolved.tokens.colorScheme == null
         ? colorSchemeFor(resolved.tokens.background)
         : undefined,
     ),
-    boundaryAttributes: isMotionOff(resolved.tokens.motionDuration)
-      ? { "data-bitsnap-checkout-motion": "off" }
-      : {},
+    boundaryAttributes: {
+      "data-bitsnap-checkout-theme": resolved.theme,
+      ...(isMotionOff(resolved.tokens.motionDuration)
+        ? { "data-bitsnap-checkout-motion": "off" as const }
+        : {}),
+    },
   };
 }
 

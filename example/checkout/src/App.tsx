@@ -16,7 +16,8 @@ type Scenario =
   | "elements"
   | "external-css"
   | "custom"
-  | "host";
+  | "host"
+  | "shadcn";
 
 const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
   default: undefined,
@@ -92,6 +93,29 @@ const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
       error: "var(--site-error)",
       radius: "var(--site-radius)",
       colorScheme: "var(--site-scheme)",
+    },
+  },
+  // `?theme=shadcn`: a shadcn/ui site. The tokens point at the site's own
+  // shadcn variables, whose `.dark` rule would also match a bare `dark` class
+  // on the cart root (19a review B1, S1).
+  shadcn: {
+    tokens: {
+      background: "var(--background)",
+      surface: "var(--card)",
+      foreground: "var(--foreground)",
+      mutedForeground: "var(--muted-foreground)",
+      border: "var(--border)",
+      controlBorder: "var(--input)",
+      hoverSurface: "var(--accent)",
+      buttonBackground: "var(--primary)",
+      buttonForeground: "var(--primary-foreground)",
+      buttonHoverBackground: "var(--primary)",
+      focusRing: "var(--ring)",
+      skeleton: "var(--muted)",
+      error: "var(--destructive)",
+      sale: "var(--destructive)",
+      radius: "var(--radius)",
+      colorScheme: "var(--scheme)",
     },
   },
 };
@@ -180,7 +204,7 @@ export default function App({
         ))}
       </fieldset>
 
-      {scenario === "host" && (
+      {(scenario === "host" || scenario === "shadcn") && (
         <button
           type="button"
           className="host-toggle"

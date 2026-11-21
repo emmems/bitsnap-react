@@ -90,7 +90,10 @@ export function CartFrame({
 }) {
   const shown = resolvePresentation(presentation);
   useCartOpenMark(isVisible);
-  // The drawer renders inside the checkout root: the stylesheet is scoped to `.bitsnap-react`.
+  // The root carries no `bitsnap-react` class: `cart.css` is not scoped to it,
+  // and the main stylesheet's `.bitsnap-react { --background: ... }` would
+  // redefine the shadcn variables on the root, so a token `var(--background)`
+  // would read the library's value instead of the host's (19a review B1).
   // No auto-animate here: it would run its "add" keyframes (opacity 0 for the
   // first ~250 ms) on the portalled panel. The stylesheet animates the overlay
   // and the panel on Radix's `data-state` instead.
@@ -98,8 +101,7 @@ export function CartFrame({
   // The opener lives outside of the dialog, so Radix does not know which element to give the focus back to.
   const returnFocusTo = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const { boundaryClassName, boundaryStyle, boundaryAttributes } =
-    useCheckoutAppearance();
+  const { boundaryStyle, boundaryAttributes } = useCheckoutAppearance();
   const root = useCheckoutSlot("root");
   const overlay = useCheckoutSlot("overlay");
   const panel = useCheckoutSlot("panel");
@@ -111,7 +113,7 @@ export function CartFrame({
       data-bitsnap-checkout-slot="root"
       data-bitsnap-checkout-presentation={shown}
       {...boundaryAttributes}
-      className={cx("bitsnap-react", boundaryClassName, root.className)}
+      className={root.className}
       style={{ zIndex: 999999, ...boundaryStyle, ...root.style }}
     >
       {rootElement != null && (

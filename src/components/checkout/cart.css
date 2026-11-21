@@ -62,8 +62,9 @@
     --bsc-btn-r: var(--bitsnap-checkout-button-radius, var(--bsc-radius));
     /* Type scale from `fontSize` (D22): 12, 13, 14, 15, 16, 20 px at 16 px. */
     --bsc-fs: var(--bitsnap-checkout-font-size, 16px);
-    --bsc-t12: calc(var(--bsc-fs) * 0.75);
-    --bsc-t13: calc(var(--bsc-fs) * 0.8125);
+    /* The two smallest steps (Omnibus line, meta text) stop at 11 px. */
+    --bsc-t12: max(11px, var(--bsc-fs) * 0.75);
+    --bsc-t13: max(11px, var(--bsc-fs) * 0.8125);
     --bsc-t14: calc(var(--bsc-fs) * 0.875);
     --bsc-t15: calc(var(--bsc-fs) * 0.9375);
     --bsc-t20: calc(var(--bsc-fs) * 1.25);
@@ -75,18 +76,20 @@
  * Each literal is the fallback of its own token, which no preset writes, so
  * only a merchant value (a token, or the variable in the merchant's CSS)
  * replaces it, as `overlay` does.
- * `color-scheme` follows the theme class here; the resolver writes it inline
- * from an effective hex `background` token, which wins (N10). These come after
- * the firewall, whose `all: initial` resets `color-scheme`. */
-[data-bitsnap-checkout="root"]:where(.dark) {
-    color-scheme: var(--bitsnap-checkout-color-scheme, dark);
+ * The theme is an attribute, never a bare `dark`/`light` class, so a host
+ * `.dark { ... }` rule or class-based `dark:` variant cannot match the root.
+ * `color-scheme`: the merchant's variable, else the resolver's guess from a hex
+ * `background` token (`--bsc-scheme-guess`, N10), else the theme. These come
+ * after the firewall, whose `all: initial` resets `color-scheme`. */
+[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="dark"]) {
+    color-scheme: var(--bitsnap-checkout-color-scheme, var(--bsc-scheme-guess, dark));
     --bsc-control-border: var(--bitsnap-checkout-control-border, #737373);
     --bsc-skeleton: var(--bitsnap-checkout-skeleton, #333333);
     --bsc-overlay: rgb(0 0 0 / 0.3);
 }
 
-[data-bitsnap-checkout="root"]:where(.light) {
-    color-scheme: var(--bitsnap-checkout-color-scheme, light);
+[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="light"]) {
+    color-scheme: var(--bitsnap-checkout-color-scheme, var(--bsc-scheme-guess, light));
     --bsc-control-border: var(--bitsnap-checkout-control-border, #8a8a8a);
     --bsc-skeleton: var(--bitsnap-checkout-skeleton, #d4d4d8);
     --bsc-overlay: rgb(0 0 0 / 0.35);
@@ -95,7 +98,7 @@
 /* The dialog blocks the page with nothing beside it, so its overlay is
  * stronger, in both themes. A merchant `overlay` token still wins: nothing
  * else writes `--bitsnap-checkout-overlay` (the light preset has no overlay). */
-[data-bitsnap-checkout="root"]:where(.dark, .light):where([data-bitsnap-checkout-presentation="dialog"]) {
+[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme]):where([data-bitsnap-checkout-presentation="dialog"]) {
     --bsc-overlay: rgb(0 0 0 / 0.45);
 }
 
@@ -1050,7 +1053,7 @@
     box-shadow: inset 0 0 0 1px #d4d4d8;
 }
 
-[data-bitsnap-checkout="root"]:where(.dark) .bsc-method-logo-chip {
+[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="dark"]) .bsc-method-logo-chip {
     box-shadow: none;
 }
 

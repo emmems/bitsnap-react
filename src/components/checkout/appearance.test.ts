@@ -17,9 +17,8 @@ describe("resolveCheckoutAppearance", () => {
     assert.equal(resolved.isCustomized, false);
     assert.deepEqual(resolved.tokens, {});
     assert.deepEqual(resolved.elements, {});
-    assert.equal(resolved.boundaryClassName, "dark");
     assert.deepEqual(resolved.boundaryStyle, {});
-    assert.deepEqual(resolved.boundaryAttributes, {});
+    assert.deepEqual(resolved.boundaryAttributes, { "data-bitsnap-checkout-theme": "dark" });
   });
 
   it("treats an empty appearance like an omitted one", () => {
@@ -70,7 +69,7 @@ describe("resolveCheckoutAppearance", () => {
     });
 
     assert.equal(resolved.theme, "light");
-    assert.equal(resolved.boundaryClassName, "light");
+    assert.equal(resolved.boundaryAttributes["data-bitsnap-checkout-theme"], "light");
     assert.equal(resolved.tokens.background, "#ffffff");
     assert.equal(resolved.tokens.buttonBackground, "#635bff");
     assert.equal(resolved.tokens.buttonForeground, "#ffffff");
@@ -84,31 +83,36 @@ describe("resolveCheckoutAppearance", () => {
     assert.deepEqual(resolved.boundaryStyle, {});
   });
 
-  it("maps tokens onto the shared shadcn variables of the dropdown", () => {
-    const resolved = resolveCheckoutAppearance({
-      tokens: { surface: "#f9fafb", foreground: "#18181b" },
-    });
-
-    const style = resolved.boundaryStyle as Record<string, string>;
-
-    // The country dropdown renders `bg-popover` outside of the checkout root,
-    // so the shared variables have to travel with the boundary.
-    assert.equal(style["--popover"], "#f9fafb");
-    assert.equal(style["--popover-foreground"], "#18181b");
-    assert.equal(style["--bitsnap-checkout-surface"], "#f9fafb");
-  });
-
-  it("exposes radius and focus ring through the shared variables", () => {
-    const resolved = resolveCheckoutAppearance({
-      tokens: { radius: "12px", focusRing: "#635bff" },
-    });
-
-    const style = resolved.boundaryStyle as Record<string, string>;
-
-    assert.equal(style["--radius"], "12px");
-    assert.equal(style["--ring"], "#635bff");
+  it("writes only --bitsnap-checkout-* variables, never a shadcn one (19a review B1)", () => {
+    const tokens = {
+      background: "#ffffff",
+      surface: "#f9fafb",
+      foreground: "#18181b",
+      mutedForeground: "#71717a",
+      border: "#e4e4e7",
+      radius: "12px",
+      focusRing: "#635bff",
+      error: "#dc2626",
+    };
+    const style = resolveCheckoutAppearance({ tokens }).boundaryStyle as Record<string, string>;
+    assert.deepEqual(
+      Object.keys(style).filter((name) => !name.startsWith("--bitsnap-checkout-") && name !== "--bsc-scheme-guess"),
+      [],
+    );
     assert.equal(style["--bitsnap-checkout-radius"], "12px");
     assert.equal(style["--bitsnap-checkout-focus-ring"], "#635bff");
+  });
+
+  it("follows the host's shadcn variables without overwriting them (19a review B1)", () => {
+    const style = resolveCheckoutAppearance({
+      tokens: { background: "var(--background)", foreground: "var(--foreground)", radius: "var(--radius)" },
+    }).boundaryStyle as Record<string, string>;
+    // `--background: var(--background)` would be a cycle: the token would go
+    // invalid and the cart would fall back to its dark default.
+    assert.equal(style["--background"], undefined);
+    assert.equal(style["--foreground"], undefined);
+    assert.equal(style["--radius"], undefined);
+    assert.equal(style["--bitsnap-checkout-background"], "var(--background)");
   });
 
   it("is customized when only elements are provided", () => {
@@ -128,7 +132,7 @@ describe("resolveCheckoutAppearance", () => {
 
 describe("checkout color-scheme (N10)", () => {
   const scheme = (appearance: Parameters<typeof resolveCheckoutAppearance>[0]) =>
-    resolveCheckoutAppearance(appearance).boundaryStyle.colorScheme;
+    (resolveCheckoutAppearance(appearance).boundaryStyle as Record<string, string>)["--bsc-scheme-guess"];
 
   it("follows the effective background token, a preset value included", () => {
     assert.equal(scheme({ tokens: { background: "#ffffff" } }), "light");
@@ -321,18 +325,20 @@ describe("1.31.0 tokens: sale, panelWidth, motionDuration", () => {
     for (const value of ["0", "0ms", "0s", "0.0s", " 0MS ", "-0"]) {
       assert.deepEqual(
         resolveCheckoutAppearance({ tokens: { motionDuration: value } }).boundaryAttributes,
-        { "data-bitsnap-checkout-motion": "off" },
+        { "data-bitsnap-checkout-theme": "dark", "data-bitsnap-checkout-motion": "off" },
         value,
       );
     }
     for (const value of ["240ms", "0.1s", "10ms", "var(--host-duration)", "calc(0ms)"]) {
       assert.deepEqual(
         resolveCheckoutAppearance({ tokens: { motionDuration: value } }).boundaryAttributes,
-        {},
+        { "data-bitsnap-checkout-theme": "dark" },
         value,
       );
     }
-    assert.deepEqual(resolveCheckoutAppearance({ theme: "light" }).boundaryAttributes, {});
+    assert.deepEqual(resolveCheckoutAppearance({ theme: "light" }).boundaryAttributes, {
+      "data-bitsnap-checkout-theme": "light",
+    });
   });
 
   it("still writes the duration variable when motion is off", () => {
@@ -390,7 +396,7 @@ describe("1.32.0 tokens: the cart follows the site's look (step 19a, D22)", () =
     });
     assert.deepEqual(CHECKOUT_THEME_PRESETS.dark, {});
     assert.equal(
-      (resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<string, string>).colorScheme,
+      (resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<string, string>)["--bsc-scheme-guess"],
       "light",
     );
   });
@@ -412,17 +418,21 @@ describe("1.32.0 tokens: the cart follows the site's look (step 19a, D22)", () =
     }
   });
 
-  it("lets a colorScheme token decide instead of the hex background's guess", () => {
-    const guessed = resolveCheckoutAppearance({ tokens: { background: "#ffffff" } });
-    assert.equal((guessed.boundaryStyle as Record<string, string>).colorScheme, "light");
+  it("writes the hex background's guess as a variable, never an inline color-scheme", () => {
+    const guessed = resolveCheckoutAppearance({ tokens: { background: "#ffffff" } }).boundaryStyle as Record<string, string>;
+    assert.equal(guessed["--bsc-scheme-guess"], "light");
+    // An inline `color-scheme` would beat a `--bitsnap-checkout-color-scheme`
+    // set in the host's CSS (19a review N1); `cart.css` reads the guess under it.
+    assert.equal(guessed.colorScheme, undefined);
+    assert.equal((resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<string, string>).colorScheme, undefined);
     const chosen = resolveCheckoutAppearance({ tokens: { background: "#ffffff", colorScheme: "dark" } });
     const style = chosen.boundaryStyle as Record<string, string>;
-    assert.equal(style.colorScheme, undefined, "an inline color-scheme would beat the token");
+    assert.equal(style["--bsc-scheme-guess"], undefined, "the token decides");
     assert.equal(style["--bitsnap-checkout-color-scheme"], "dark");
-    // The light preset's background no longer writes it either once the token is set.
     assert.equal(
-      (resolveCheckoutAppearance({ theme: "light", tokens: { colorScheme: "var(--s)" } }).boundaryStyle as Record<string, string>)
-        .colorScheme,
+      (resolveCheckoutAppearance({ theme: "light", tokens: { colorScheme: "var(--s)" } }).boundaryStyle as Record<string, string>)[
+        "--bsc-scheme-guess"
+      ],
       undefined,
     );
   });

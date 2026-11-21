@@ -275,18 +275,18 @@ describe("cart.css isolation", () => {
     // Each literal is the fallback of its own token's variable (D22), which no preset writes.
     const expected = {
       dark: {
-        "color-scheme": "var(--bitsnap-checkout-color-scheme, dark)",
+        "color-scheme": "var(--bitsnap-checkout-color-scheme, var(--bsc-scheme-guess, dark))",
         "--bsc-control-border": "var(--bitsnap-checkout-control-border, #737373)",
         "--bsc-skeleton": "var(--bitsnap-checkout-skeleton, #333333)",
       },
       light: {
-        "color-scheme": "var(--bitsnap-checkout-color-scheme, light)",
+        "color-scheme": "var(--bitsnap-checkout-color-scheme, var(--bsc-scheme-guess, light))",
         "--bsc-control-border": "var(--bitsnap-checkout-control-border, #8a8a8a)",
         "--bsc-skeleton": "var(--bitsnap-checkout-skeleton, #d4d4d8)",
       },
     };
     for (const [theme, values] of Object.entries(expected)) {
-      const selector = `[data-bitsnap-checkout="root"]:where(.${theme})`;
+      const selector = `[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="${theme}"])`;
       const index = topLevel.findIndex((rule) => rule.selectors.includes(selector));
       assert.ok(index > firewall, `${selector} must come after the firewall (all: initial resets color-scheme)`);
       for (const [property, value] of Object.entries(values)) {
@@ -300,7 +300,7 @@ describe("cart.css isolation", () => {
   it("keeps the per-theme literals above their contrast bars on both panels (R14, N02)", () => {
     const panels = { dark: ["#171717", "#262626"], light: ["#ffffff", "#f9fafb"] } as const;
     for (const [theme, [panel, surface]] of Object.entries(panels)) {
-      const block = findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+      const block = findTop(`[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="${theme}"])`)!;
       const control = fallbackOf(block.declarations.get("--bsc-control-border")!);
       const skeleton = fallbackOf(block.declarations.get("--bsc-skeleton")!);
       assert.ok(contrastRatio(control, panel) >= 3, `${theme} control border on the panel`);
@@ -463,7 +463,7 @@ describe("cart.css content rules", () => {
     const chip = findTop("[data-bitsnap-checkout] .bsc-method-logo-chip");
     assert.equal(chip?.declarations.get("background-color"), "#ffffff");
     assert.equal(
-      findTop('[data-bitsnap-checkout="root"]:where(.dark) .bsc-method-logo-chip')?.declarations.get("box-shadow"),
+      findTop('[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="dark"]) .bsc-method-logo-chip')?.declarations.get("box-shadow"),
       "none",
     );
   });
@@ -741,10 +741,10 @@ describe("cart.css dialog and compact geometry (step 18, D8, R06)", () => {
   });
 
   it("gives the dialog a stronger overlay as a literal, which a merchant overlay token still beats (N01)", () => {
-    const rule = findTop('[data-bitsnap-checkout="root"]:where(.dark, .light):where([data-bitsnap-checkout-presentation="dialog"])');
+    const rule = findTop('[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme]):where([data-bitsnap-checkout-presentation="dialog"])');
     assert.equal(rule?.declarations.get("--bsc-overlay"), "rgb(0 0 0 / 0.45)");
     for (const theme of ["dark", "light"]) {
-      const block = findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+      const block = findTop(`[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="${theme}"])`)!;
       assert.ok(topLevel.indexOf(rule!) > topLevel.indexOf(block), `after the ${theme} block`);
     }
     assert.equal(findTop(slot("overlay"))?.declarations.get("background-color"), "var(--bitsnap-checkout-overlay, var(--bsc-overlay))");
@@ -962,7 +962,7 @@ describe("cart.css express divider (N1, N2, N6)", () => {
 
   /** The cart's express block with these buttons; `define` registers custom elements first. */
   function express(buttons: { apple?: string; google?: string; wide?: string }, define: string[] = []) {
-    const { window } = new JSDOM(`<div data-bitsnap-checkout="root" class="dark">
+    const { window } = new JSDOM(`<div data-bitsnap-checkout="root" data-bitsnap-checkout-theme="dark">
       <div data-bitsnap-checkout-slot="options" class="bsc-options">
         <div class="bsc-express">
           <div data-bitsnap-checkout-wallets="" class="bsc-wallets">
@@ -1069,7 +1069,7 @@ describe("cart.css follows the site's look (step 19a, D22)", () => {
   const DIALOG = `${slot("panel")}:where([data-bitsnap-checkout-presentation="dialog"])`;
   const root = findTop('[data-bitsnap-checkout="root"]')!;
   const sheet = styleRules.find((rule) => rule.atRules.length === 1 && rule.atRules[0] === COMPACT && rule.selectors.includes(DIALOG))!;
-  const themeBlock = (theme: "dark" | "light") => findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+  const themeBlock = (theme: "dark" | "light") => findTop(`[data-bitsnap-checkout="root"]:where([data-bitsnap-checkout-theme="${theme}"])`)!;
   const NEW_TOKENS = [
     "controlBorder",
     "skeleton",
@@ -1094,9 +1094,13 @@ describe("cart.css follows the site's look (step 19a, D22)", () => {
       const replacement = raw == null ? computed(fallback, env, depth + 1) : computed(raw, env, depth + 1);
       out = out.slice(0, at) + replacement + out.slice(end);
     }
-    return out.replace(/calc\(\s*([\d.]+)px\s*([*+])\s*([\d.]+)(px)?\s*\)/g, (_, a, op, b) =>
-      `${op === "*" ? Number(a) * Number(b) : Number(a) + Number(b)}px`,
-    );
+    return out
+      .replace(/calc\(\s*([\d.]+)px\s*([*+])\s*([\d.]+)(px)?\s*\)/g, (_, a, op, b) =>
+        `${op === "*" ? Number(a) * Number(b) : Number(a) + Number(b)}px`,
+      )
+      .replace(/max\(\s*([\d.]+)px\s*,\s*([\d.]+)px\s*\*\s*([\d.]+)\s*\)/g, (_, floor, a, b) =>
+        `${Math.max(Number(floor), Number(a) * Number(b))}px`,
+      );
   }
 
   /** The custom properties in effect on the root for an appearance, then one rule's own. */
@@ -1237,6 +1241,25 @@ describe("cart.css follows the site's look (step 19a, D22)", () => {
     assert.equal(read(large, top(".bsc-total-value"), "font-size"), "22.5px");
     assert.equal(read(large, top(".bsc-cta"), "font-size"), "18px");
     assert.equal(read({ tokens: { buttonFontSize: "14px" } }, top(".bsc-cta"), "font-size"), "14px");
+
+    // The two smallest steps stop at 11 px (19a review N2); the others scale on.
+    const small: CheckoutAppearance = { tokens: { fontSize: "14px" } };
+    assert.equal(read(small, top(".bsc-line-omnibus"), "font-size"), "11px");
+    assert.equal(read(small, top(".bsc-line-meta"), "font-size"), "11.375px");
+    assert.equal(read({ tokens: { fontSize: "12px" } }, top(".bsc-line-meta"), "font-size"), "11px");
+    assert.equal(read(small, top(".bsc-total-label"), "font-size"), "12.25px");
+  });
+
+  it("lets the host's --bitsnap-checkout-color-scheme beat the guess from a hex background (19a review N1)", () => {
+    for (const appearance of [{ theme: "light" }, { tokens: { background: "#ffffff" } }] as CheckoutAppearance[]) {
+      const resolved = resolveCheckoutAppearance(appearance);
+      const env = envFor(appearance);
+      assert.equal(computed(themeBlock(resolved.theme).declarations.get("color-scheme")!, env), "light", "the guess without a host value");
+      env.set("--bitsnap-checkout-color-scheme", "dark");
+      assert.equal(computed(themeBlock(resolved.theme).declarations.get("color-scheme")!, env), "dark", "the host value wins");
+    }
+    // No token, no host value: the theme decides, as before.
+    assert.equal(computed(themeBlock("dark").declarations.get("color-scheme")!, envFor(undefined)), "dark");
   });
 
   it("passes a host variable through, so the site's own dark switch reaches the cart", () => {

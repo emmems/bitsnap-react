@@ -54,6 +54,17 @@ describe("resolveAppearanceCore", () => {
     });
   });
 
+  it("skips a shadcn write that would read the same variable", () => {
+    assert.deepEqual(
+      resolve({ tokens: { background: "var(--background)", radius: "calc(var(--radius) + 2px)" } }).boundaryStyle,
+      { "--acme-background": "var(--background)", "--acme-radius": "calc(var(--radius) + 2px)" },
+    );
+    assert.deepEqual(resolve({ tokens: { background: "var(--radius)" } }).boundaryStyle, {
+      "--acme-background": "var(--radius)",
+      "--background": "var(--radius)",
+    });
+  });
+
   it("applies presets underneath caller tokens and drops undefined ones", () => {
     const resolved = resolve({
       theme: "dark",

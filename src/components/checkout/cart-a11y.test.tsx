@@ -142,7 +142,11 @@ describe(`cart accessibility (${presentation})`, () => {
     assert.ok(panel, "the dialog renders");
     assert.equal(panel.getAttribute("aria-modal"), "true");
     assert.equal(panel.getAttribute("data-bitsnap-checkout-slot"), "panel");
-    assert.ok(panel.closest(".bitsnap-react"), "it renders inside the scoped root");
+    const root = panel.closest('[data-bitsnap-checkout="root"]');
+    assert.ok(root, "it renders inside the cart root");
+    // No `bitsnap-react` on the root: the main stylesheet's `.bitsnap-react`
+    // block would redefine `--background` & co. there (19a review B1).
+    assert.equal(root.classList.contains("bitsnap-react"), false);
     assert.equal(panel.getAttribute("data-bitsnap-checkout-presentation"), presentation);
     const title = doc().getElementById(panel.getAttribute("aria-labelledby")!)!;
     assert.equal(title.tagName, "H1");

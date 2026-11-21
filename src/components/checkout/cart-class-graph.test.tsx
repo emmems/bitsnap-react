@@ -11,9 +11,9 @@ import { IsOneClickPaymentAvailableResponseSchema } from "src/gen/proto/public/v
  * Class graph of the cart (PLAN D5, P15; part 2 step 7a; review S3).
  *
  * `cart.css` is hand-written and holds no Tailwind utilities, so a class name
- * the cart renders works only if it is a `bsc-*` class, the `bitsnap-react`
- * scope, the root's theme marker (`dark`, `light`, on the root only) or the
- * merchant's own (`appearance.elements`, the trigger's `className`).
+ * the cart renders works only if it is a `bsc-*` class, `bitsnap-react` (the
+ * trigger only) or the merchant's own (`appearance.elements`, the trigger's
+ * `className`). The theme is `data-bitsnap-checkout-theme`, not a class.
  *
  * Two checks:
  * 1. Rendered: mounts `BitsnapCheckout` (trigger included) and drives it into
@@ -35,9 +35,12 @@ import { IsOneClickPaymentAvailableResponseSchema } from "src/gen/proto/public/v
  *    the `bitsnap-react` scope class and nothing else.
  */
 
-/** The cart's own classes; `dark` and `light` are allowed on the root only. */
+/**
+ * The cart's own classes. No bare `dark`/`light`, not even on the root: a
+ * host `.dark { ... }` rule would match it (the theme is
+ * `data-bitsnap-checkout-theme`).
+ */
 const OURS = /^(bsc-[\w-]+|bitsnap-react)$/;
-const ROOT_ONLY = new Set(["dark", "light"]);
 
 const page = setupReactPage();
 
@@ -316,7 +319,6 @@ function collect(where: string) {
     const value = element.getAttribute("class") ?? "";
     for (const token of value.split(/\s+/).filter(Boolean)) {
       if (OURS.test(token) || token.startsWith("merchant-")) continue;
-      if (ROOT_ONLY.has(token) && element.getAttribute("data-bitsnap-checkout") === "root") continue;
       if (!offenders.has(token)) offenders.set(token, `${where}: <${element.tagName.toLowerCase()} class="${value}">`);
     }
   }
@@ -487,11 +489,11 @@ describe("cart class graph", () => {
     collect("refresh failed");
   });
 
-  it("renders only bsc-*, bitsnap-react, the root's theme marker and merchant classes", () => {
+  it("renders only bsc-*, bitsnap-react and merchant classes", () => {
     assert.deepEqual(
       [...offenders].map(([token, where]) => `${token} (${where})`),
       [],
-      "classes the cart must not render: use bsc-* classes and cart.css (dark/light only on the root)",
+      "classes the cart must not render: use bsc-* classes and cart.css",
     );
   });
 });
