@@ -1,8 +1,7 @@
 /**
- * Runtime exports of `src/cart/index.ts` (`bitsnap-react/cart`), in one place:
- * `tsup.config.ts` builds the CommonJS shim from it and `verify-package.mjs`
- * checks that it matches the ESM entry (and that each name is the same value
- * the main entry exports).
+ * Runtime exports of `src/cart/index.ts` (`bitsnap-react/cart`):
+ * `verify-package.mjs` checks that the ESM and CommonJS entries export exactly
+ * these names, each the same value the main entry exports.
  */
 export const CART_EXPORTS = [
   "ApplePayButton",

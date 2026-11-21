@@ -1,58 +1,16 @@
 import { execSync } from "node:child_process";
 import { defineConfig, type Options } from "tsup";
 import type { Plugin } from "esbuild";
-import { CART_EXPORTS } from "./scripts/cart-exports.mjs";
 
 import { name, version } from "./package.json";
 
 /**
- * Runtime exports of the subpath entries that are thin re-exports of
- * `./index.js` in the CommonJS build (see `verify-package.mjs`, which checks
- * that each list matches its ESM entry). `cart` lives in
- * `scripts/cart-exports.mjs`, which the package check reads too.
+ * The CommonJS `catalog` and `cart` entries need no shim: tsup builds the
+ * CommonJS output with splitting too, so they re-export the same shared chunks
+ * as `index.js` and a page that mixes `bitsnap-react` and its subpaths has one
+ * copy of the cart state (`verify-package.mjs` checks every export is the same
+ * value as in the main entry).
  */
-const CATALOG_EXPORTS = [
-  "ProductList",
-  "useProducts",
-  "formatProductPrice",
-  "PRODUCT_LIST_SLOT_NAMES",
-];
-
-const CJS_SHIMS: Record<string, { file: RegExp; names: string[] }> = {
-  catalog: { file: /src[\\/]catalog[\\/]index\.ts$/, names: CATALOG_EXPORTS },
-  cart: { file: /src[\\/]cart[\\/]index\.ts$/, names: CART_EXPORTS },
-};
-
-/**
- * The CommonJS `catalog` and `cart` entries are thin re-exports of
- * `./index.js`. Bundling them separately would give CommonJS consumers a
- * second copy of the cart state, constants and stores next to the one in
- * `index.js`. (ESM shares chunks between entries, so it stays lean; the saving
- * of `bitsnap-react/cart` is for ESM bundlers.)
- */
-const cjsShims: Plugin = {
-  name: "cjs-shims",
-  setup(build) {
-    if (build.initialOptions.format !== "cjs") {
-      return;
-    }
-    for (const { file, names } of Object.values(CJS_SHIMS)) {
-      build.onLoad({ filter: file }, () => ({
-        loader: "js",
-        resolveDir: __dirname,
-        contents: [
-          'Object.defineProperty(exports,"__esModule",{value:true});',
-          'var m=require("./index.js");',
-          ...names.map((name) => `exports.${name}=m.${name};`),
-        ].join("\n"),
-      }));
-    }
-    build.onResolve({ filter: /^\.\/index\.js$/ }, (args) => ({
-      path: args.path,
-      external: true,
-    }));
-  },
-};
 
 /**
  * `bitsnap-react/viewer3d` is ESM only (three and R3F are ESM). The CommonJS
@@ -171,7 +129,7 @@ export default defineConfig((overrideOptions) => {
     platform: "browser",
     // three and React Three Fiber are optional peers of `bitsnap-react/viewer3d`.
     external: ["react", "react-dom", /^three($|\/)/, /^@react-three\//],
-    esbuildPlugins: [cjsShims, viewer3dCjsStub],
+    esbuildPlugins: [viewer3dCjsStub],
     define: {
       PACKAGE_NAME: `"${name}"`,
       PACKAGE_VERSION: `"${version}"`,

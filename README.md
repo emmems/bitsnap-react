@@ -80,8 +80,8 @@ defaults, overridable through `texts`).
 - **New: `bitsnap-react/cart`, the cart without the rest of the SDK.**
   `import { BitsnapCheckout } from "bitsnap-react/cart"` with
   `import "bitsnap-react/cart/cart.css"` ships no panel, returns, course, product
-  list, consent or chat code: 118 KB gzip of JavaScript instead of 227 KB for the
-  same `BitsnapCheckout` from `bitsnap-react` (ESM bundlers). `bitsnap-react`
+  list, consent or chat code: 118 KB gzip of JavaScript instead of 175 KB for the
+  same `BitsnapCheckout` from `bitsnap-react` (227 KB in 1.31; ESM bundlers). `bitsnap-react`
   exports everything it did and nothing changes for it. See
   [Import only the cart](#import-only-the-cart).
 - **`zod` is gone from the cart.** The cart reads `localStorage`, `/countries` and
@@ -479,10 +479,10 @@ import { Bitsnap, BitsnapCheckout, setProjectID } from "bitsnap-react/cart";
 import "bitsnap-react/cart/cart.css";
 ```
 
-It exports `BitsnapCheckout` (and its props and appearance types), `Bitsnap`,
+It exports, among others, `BitsnapCheckout` (and its props and appearance types), `Bitsnap`,
 `setProjectID`, `setLocale`, `getLocale`, `setCustomHost`, `createCheckout`,
 `createPaymentURL`, `getPaymentMethodChoice`, `LinkRequest`, `BuyErrorData`,
-`ITEM_IDS_NOT_FOUND` and the express buttons the cart contains (`ApplePayButton`,
+`ITEM_IDS_NOT_FOUND`, `CHECKOUT_SLOT_NAMES` and the express buttons the cart contains (`ApplePayButton`,
 `GooglePayButton`, `InPostPayButton`, `RevolutPayButton`). Everything is the same
 code as in `bitsnap-react`, so a page can mix both imports and still has one
 cart: one store, one `setProjectID`.
@@ -491,7 +491,8 @@ cart: one store, one `setProjectID`.
   about 118 KB gzip of JavaScript, against about 175 KB for
   `import { BitsnapCheckout } from "bitsnap-react"`. The saving is the panel,
   returns, course, consent and chat code the main entry carries. A CommonJS
-  `require("bitsnap-react/cart")` loads the main CommonJS file and saves nothing.
+  `require("bitsnap-react/cart")` loads the shared CommonJS chunks the cart needs
+  and shares its state with `require("bitsnap-react")`.
 - **Stylesheet.** `bitsnap-react/cart/cart.css` (also served as
   `bitsnap-react/dist/cart.css`) holds every rule the cart uses, 4.3 KB gzip. It
   is already part of `bitsnap-react/dist/index.css`: import one of them (both

@@ -228,7 +228,7 @@ assert.ok(
   }
   assert.ok(
     readFileSync(join(dist, "cart.js"), "utf8").length < 2000,
-    "dist/cart.js must be a thin re-export of index.js",
+    "dist/cart.js must only re-export the shared chunks",
   );
 
   // Resolution through the exports map: both import conditions, the types, and the stylesheet.
