@@ -8,11 +8,12 @@
  * lives here, not in React Query.
  *
  * Google Pay's answer is also kept on the device, in `googlePayConfig` of the
- * stored cart: a positive one for good (as before 1.31.0), a negative one for
- * 10 minutes, stamped with `checkedAt` and the shop it is for. A negative
- * answer without a usable stamp is expired: an older SDK in another tab
- * rewrites the cart and drops the stamp, which must not make "no Google Pay"
- * permanent (P18).
+ * stored cart, for 10 minutes, stamped with `checkedAt` and the shop it is for
+ * (`checkedFor`), whether it is a yes or a no. An answer without a usable
+ * stamp, for another host or project, or older than the TTL, is expired: an
+ * older SDK in another tab rewrites the cart and drops the stamp, which must
+ * not make "no Google Pay" permanent (P18), and a stored "yes" must not be
+ * trusted for another shop.
  */
 
 /** How long an answer is reused, and a stored "no Google Pay" trusted. */
@@ -25,9 +26,9 @@ export type StoredGooglePayConfig = {
   merchantName: string;
   gateway: string;
   gatewayId: string;
-  /** When a negative answer was given (ms since epoch). */
+  /** When the answer was given (ms since epoch). */
   checkedAt?: number;
-  /** `host|projectID` a negative answer is for. */
+  /** `host|projectID` the answer is for. */
   checkedFor?: string;
 };
 
@@ -121,7 +122,7 @@ export function createWalletAvailability(
     return flight;
   }
 
-  function storedNegativeIsFresh(stored: StoredGooglePayConfig, key: string) {
+  function storedAnswerIsFresh(stored: StoredGooglePayConfig, key: string) {
     const age = now() - (stored.checkedAt ?? NaN);
     return (
       stored.checkedFor === key &&
@@ -141,10 +142,9 @@ export function createWalletAvailability(
       const host = deps.host();
       const key = `${host}|${projectID}`;
       const stored = deps.readStored();
-      if (stored?.isAvailable === true) {
-        return stored;
-      }
-      if (stored != null && storedNegativeIsFresh(stored, key)) {
+      // A stored answer, yes or no, counts only when it is stamped for this
+      // host and project and is younger than the TTL; otherwise ask again.
+      if (stored != null && storedAnswerIsFresh(stored, key)) {
         return stored;
       }
       const { at, answer } = await answerFor(host, projectID);
@@ -156,6 +156,8 @@ export function createWalletAvailability(
               gatewayId: answer.googlePayConfig.gatewayMerchantId,
               merchantName: answer.googlePayConfig.merchantName,
               merchantId: answer.googlePayConfig.merchantId,
+              checkedAt: at,
+              checkedFor: key,
             }
           : // The time of the answer, not of this read: a reuse from memory
             // does not stretch the 10 minutes.

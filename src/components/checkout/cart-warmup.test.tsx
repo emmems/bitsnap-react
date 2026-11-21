@@ -573,17 +573,55 @@ describe("wallet availability (slice 5)", () => {
     assert.equal(state.asks, 3, "another shop");
   });
 
-  it("a positive Google Pay answer is kept as before: no request while it is stored", async () => {
+  it("a positive Google Pay answer is stamped and reused for 10 minutes: no request while it is fresh", async () => {
     const { state, create, answerAtOnce } = setup({ applePay: false, googlePay: true });
     answerAtOnce();
     const config = await create().googlePay("p1");
     assert.deepEqual(
       { ...config },
-      { isAvailable: true, gateway: "g", gatewayId: "gm", merchantName: "Shop", merchantId: "m" },
+      {
+        isAvailable: true,
+        gateway: "g",
+        gatewayId: "gm",
+        merchantName: "Shop",
+        merchantId: "m",
+        checkedAt: 1_000_000,
+        checkedFor: "https://bitsnap.pl|p1",
+      },
     );
-    state.at += 24 * 60 * 60_000;
+    state.at += walletModule.WALLET_AVAILABILITY_TTL_MS - 1;
+    assert.equal((await create().googlePay("p1")).isAvailable, true);
+    assert.equal(state.asks, 1);
+  });
+
+  it("a positive answer for project A is not used for project B", async () => {
+    const { state, create, answerAtOnce } = setup({ applePay: false, googlePay: true });
+    answerAtOnce();
+    await create().googlePay("pA");
+    assert.equal(state.asks, 1);
+    assert.equal(state.stored?.checkedFor, "https://bitsnap.pl|pA");
+    await create().googlePay("pB");
+    assert.equal(state.asks, 2, "another project is asked");
+    assert.equal(state.stored?.checkedFor, "https://bitsnap.pl|pB");
+  });
+
+  it("a positive answer older than the TTL is asked again", async () => {
+    const { state, create, answerAtOnce } = setup({ applePay: false, googlePay: true });
+    answerAtOnce();
+    await create().googlePay("p1");
+    state.at += walletModule.WALLET_AVAILABILITY_TTL_MS;
+    const config = await create().googlePay("p1");
+    assert.equal(state.asks, 2);
+    assert.equal(config.checkedAt, state.at, "restamped");
+  });
+
+  it("a stored positive answer without a stamp, from an older SDK, is asked again", async () => {
+    const { state, create, answerAtOnce } = setup({ applePay: false, googlePay: true });
+    answerAtOnce();
+    state.stored = { isAvailable: true, gateway: "g", gatewayId: "gm", merchantName: "Shop", merchantId: "m" };
     await create().googlePay("p1");
     assert.equal(state.asks, 1);
+    assert.equal(state.stored?.checkedFor, "https://bitsnap.pl|p1");
   });
 
   it("the answer in memory is reused for 10 minutes, and nothing is written when nothing changed", async () => {

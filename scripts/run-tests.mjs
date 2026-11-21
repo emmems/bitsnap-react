@@ -97,13 +97,24 @@ try {
 } catch {
   finish(1, 'no per-file tally was written; the test run did not finish');
 }
-const silent = built.filter((b) => !tally[b.file] || tally[b.file].tests === 0);
+// A file is lost if it has no tally, ran no tests, never emitted its own
+// `test:summary` (its process exited early), or the summary counts more tests
+// than were tallied (it lost results it had reported).
+const silent = built.filter((b) => {
+  const t = tally[b.file];
+  return !t || t.tests === 0 || typeof t.summary !== 'number' || t.summary > t.tests;
+});
 if (silent.length > 0) {
   finish(
     1,
-    `${silent.length} test file(s) ran no tests (empty, truncated or broken module). ` +
+    `${silent.length} test file(s) ran no tests or lost results (empty, truncated, exited early or broken module). ` +
       `The count above is missing them even though nothing failed:\n  ` +
-      silent.map((b) => b.entry).join('\n  '),
+      silent
+        .map((b) => {
+          const t = tally[b.file];
+          return t ? `${b.entry} (tallied ${t.tests}, summary ${t.summary ?? 'none'})` : b.entry;
+        })
+        .join('\n  '),
   );
 }
 const total = Object.values(tally).reduce((sum, f) => sum + f.tests, 0);

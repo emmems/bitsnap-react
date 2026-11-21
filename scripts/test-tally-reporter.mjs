@@ -23,6 +23,15 @@ export default async function* tallyReporter(source) {
   const perFile = new Map();
   const tee = (async function* () {
     for await (const event of source) {
+      // Node 24 emits one `test:summary` per test file that finished, with its
+      // own `counts.tests`. A file whose process exited early emits none. The
+      // run-wide summary has no `file`. The runner compares this number to the
+      // tally, to catch a file that lost only part of its results.
+      if (event.type === 'test:summary' && event.data.file) {
+        const { file, counts } = event.data;
+        if (!perFile.has(file)) perFile.set(file, { tests: 0, failed: 0 });
+        perFile.get(file).summary = counts?.tests;
+      }
       if (event.type === 'test:pass' || event.type === 'test:fail') {
         const { file, name, nesting, details } = event.data;
         if (file) {
