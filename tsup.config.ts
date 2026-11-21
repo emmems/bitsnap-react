@@ -107,6 +107,9 @@ const liveChatEmbeds: Options = {
   define: { BITSNAP_REACT_EMBED_VERSION: JSON.stringify(version) },
 };
 
+/** One watcher for `cart.css` per watch session. */
+let cartCssWatcher: { close(): void } | undefined;
+
 export default defineConfig((overrideOptions) => {
   const isWatch = !!overrideOptions.watch;
   const shouldPublish = !!overrideOptions.env?.publish;
@@ -133,6 +136,13 @@ export default defineConfig((overrideOptions) => {
     onSuccess: async () => {
       const { buildCartCss } = await import("./scripts/build-cart-css.mjs");
       await buildCartCss(__dirname);
+      // `cart.css` is not imported, so tsup's watcher skips it: rebuild it on change.
+      if (isWatch && !cartCssWatcher) {
+        const { watch } = await import("node:fs");
+        cartCssWatcher = watch(`${__dirname}/src/components/checkout/cart.css`, () => {
+          buildCartCss(__dirname).catch((error) => console.error(error));
+        });
+      }
       if (shouldPublish) {
         execSync("pnpm publish", { stdio: "inherit" });
       }

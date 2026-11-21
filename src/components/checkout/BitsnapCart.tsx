@@ -304,7 +304,8 @@ function BitsnapCart({
         aria-controls={isCartVisible ? panelId : undefined}
         style={{ position: "relative" }}
         // The default look (`cart.css`) applies only without a merchant class (D20).
-        data-bitsnap-checkout-trigger={className ? "custom" : "default"}
+        // `className=""` keeps meaning "no default look", as before (D20).
+        data-bitsnap-checkout-trigger={className === undefined ? "default" : "custom"}
         className={className ? `bitsnap-react ${className}` : "bitsnap-react"}
       >
         {children ? (

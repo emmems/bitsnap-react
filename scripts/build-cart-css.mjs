@@ -12,13 +12,16 @@
 //    `test:package` check that `dist/cart.css` is contained verbatim in
 //    `dist/index.css`.
 //
-// Idempotent: a second run over the same `dist/index.css` appends nothing.
+// Idempotent: the appended block sits between START and END markers and is
+// replaced on every run, so a changed `cart.css` never leaves an old copy.
 import { transform } from "esbuild";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_MAP_COMMENT = /\n?\/\*# sourceMappingURL=[^*]*\*\/\s*$/;
+const START = "/* bitsnap-cart:start */";
+const END = "/* bitsnap-cart:end */";
 
 export async function buildCartCss(root = resolve(dirname(fileURLToPath(import.meta.url)), "..")) {
   const source = readFileSync(join(root, "src/components/checkout/cart.css"), "utf8");
@@ -32,12 +35,16 @@ export async function buildCartCss(root = resolve(dirname(fileURLToPath(import.m
   writeFileSync(join(root, "dist/cart.css"), `${cart}\n`);
 
   const indexPath = join(root, "dist/index.css");
-  const index = readFileSync(indexPath, "utf8");
-  if (index.includes(cart)) return;
+  let index = readFileSync(indexPath, "utf8");
+  const start = index.indexOf(START);
+  const end = index.indexOf(END);
+  if (start !== -1 && end > start) {
+    index = index.slice(0, start) + index.slice(end + END.length);
+  }
   const comment = SOURCE_MAP_COMMENT.exec(index);
   const head = comment ? index.slice(0, comment.index) : index.replace(/\s*$/, "");
   const tail = comment ? `\n${comment[0].trim()}\n` : "\n";
-  writeFileSync(indexPath, `${head}\n${cart}${tail}`);
+  writeFileSync(indexPath, `${head.replace(/\s*$/, "")}\n${START}\n${cart}\n${END}${tail}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
