@@ -7,7 +7,7 @@ import { warmCart } from "./cart-warmup";
 import { buyErrorFromResponse } from "./buy-error";
 import { buildURL } from "./helper.methods";
 import { Err } from "./lib/err";
-import { LinkRequest } from "./link.request.schema";
+import type { LinkRequest } from "./link.request";
 import {
   fetchPaymentMethodChoice,
   type PaymentMethodChoice,

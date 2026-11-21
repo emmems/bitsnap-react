@@ -6,16 +6,32 @@
     "cart-main": {
       "forbidStatic": [
         "node_modules/hls.js/",
-        "node_modules/dompurify/"
+        "node_modules/dompurify/",
+        "node_modules/zod/"
       ],
-      "jsGzipKB": 227.0
+      "jsGzipKB": 180.1
     },
     "cart-main-ns": {
       "forbidStatic": [
         "node_modules/hls.js/",
-        "node_modules/dompurify/"
+        "node_modules/dompurify/",
+        "node_modules/zod/"
       ],
-      "jsGzipKB": 362.5
+      "jsGzipKB": 319.7
+    },
+    "cart-subpath": {
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/",
+        "node_modules/zod/",
+        "node_modules/lucide-react/",
+        "node_modules/tailwind-merge/",
+        "node_modules/class-variance-authority/",
+        "node_modules/@radix-ui/react-select/",
+        "node_modules/react-phone-number-input/",
+        "node_modules/input-otp/"
+      ],
+      "jsGzipKB": 121.8
     },
     "catalog": {
       "jsGzipKB": 26.5
@@ -50,5 +66,5 @@
     "dist/index.css": 23.8
   },
   "maxDependencies": 27,
-  "tarballBytes": 1875000
+  "tarballBytes": 1880000
 }

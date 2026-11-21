@@ -12,7 +12,6 @@ import {
   PreOrderItemSchema,
 } from "src/gen/proto/public/v1/public_api_pb";
 import { PublicApiClient } from "src/public.api.client";
-import zod from "zod";
 import { getCartInstrument, type Instrument } from "@/src/analytics/instrument";
 import type { ExpressCartUpload } from "@/src/express/contracts";
 import { withClientParam } from "@/src/lib/client-header";
@@ -27,7 +26,7 @@ import {
   findProductForCartItem,
 } from "./cart-items";
 import { round } from "./lib/round.number";
-import { LinkRequest } from "./link.request.schema";
+import type { LinkRequest } from "./link.request";
 import {
   createPaymentURL,
   getPaymentMethodChoice,
@@ -36,6 +35,13 @@ import {
 } from "./methods";
 import type { SingleProduct, SingleProductVariant } from "./product.details.model";
 import { useCheckoutStore } from "./state";
+import {
+  parseCountryList,
+  parseStoredCheckout,
+  type Checkout,
+  type CheckoutProduct,
+  type GooglePayConfig,
+} from "./validate";
 import { getLocale, normalizeLocale } from "./locale";
 import {
   toLineDetails,
@@ -577,36 +583,8 @@ export const useCartProvider = () => {
 
 export default CartProvider;
 
-const googlePayConfigSchema = zod.object({
-  isAvailable: zod.boolean(),
-  merchantId: zod.string(),
-  merchantName: zod.string(),
-  gateway: zod.string(),
-  gatewayId: zod.string(),
-  // A bad stamp only expires a negative answer; it never breaks the cart.
-  checkedAt: zod.number().optional().catch(undefined),
-  checkedFor: zod.string().optional().catch(undefined),
-});
-const checkoutProduct = zod.object({
-  id: zod.string(),
-  productID: zod.string(),
-  quantity: zod.number(),
-  priceVersion: zod.string().optional(),
-  amount: zod.number().int().nonnegative().optional(),
-  metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-  url: zod.string().optional(),
-});
-type CheckoutProduct = zod.infer<typeof checkoutProduct>;
-const checkoutSchema = zod.object({
-  country: zod.string().optional(),
-  couponCode: zod.string().optional(),
-  selectedDeliveryMethod: zod.string().optional(),
-  postalCode: zod.string().optional(),
-  email: zod.string().optional(),
-  products: zod.array(checkoutProduct).optional(),
-  googlePayConfig: googlePayConfigSchema.optional(),
-});
-export type GooglePayConfig = zod.infer<typeof googlePayConfigSchema>;
+export type { Checkout, GooglePayConfig };
+
 const emptyCheckout: Checkout = {
   country: undefined,
   couponCode: undefined,
@@ -616,7 +594,6 @@ const emptyCheckout: Checkout = {
   products: [],
   googlePayConfig: undefined,
 };
-export type Checkout = zod.infer<typeof checkoutSchema>;
 
 const checkoutKey = "checkout";
 
@@ -786,7 +763,7 @@ function getCheckout(): Checkout {
     if (value == null) {
       return { ...emptyCheckout, products: [] };
     }
-    return checkoutSchema.parse(JSON.parse(value));
+    return parseStoredCheckout(JSON.parse(value));
   } catch (e) {
     return { ...emptyCheckout, products: [] };
   }
@@ -1132,14 +1109,7 @@ export const getCheckoutMethods: (
       }
 
       try {
-        return zod
-          .array(
-            zod.object({
-              name: zod.string(),
-              code: zod.string(),
-            }),
-          )
-          .parse(await result.json());
+        return parseCountryList(await result.json());
       } catch (e) {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error

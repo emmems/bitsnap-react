@@ -77,6 +77,22 @@ defaults, overridable through `texts`).
 
 ## 1.32.0 (unreleased)
 
+- **New: `bitsnap-react/cart`, the cart without the rest of the SDK.**
+  `import { BitsnapCheckout } from "bitsnap-react/cart"` with
+  `import "bitsnap-react/cart/cart.css"` ships no panel, returns, course, product
+  list, consent or chat code: 118 KB gzip of JavaScript instead of 227 KB for the
+  same `BitsnapCheckout` from `bitsnap-react` (ESM bundlers). `bitsnap-react`
+  exports everything it did and nothing changes for it. See
+  [Import only the cart](#import-only-the-cart).
+- **`zod` is gone from the cart.** The cart reads `localStorage`, `/countries` and
+  the `window.cart.buyProduct` / `ADD_TO_CART` payloads with small built-in
+  checks (same rules as the zod schemas), which takes about 52 KB gzip out of
+  the cart for `bitsnap-react` users too. `LinkRequest` is a plain type: the
+  package's `.d.ts` no longer needs `zod` for it (`bitsnap-react/models` still
+  does). A bad `buyProduct` argument or `ADD_TO_CART` payload is ignored with a
+  `console.warn` that names the field, as before; the warned error is a plain
+  `Error` named `InvalidInputError` instead of a `ZodError`.
+
 - **New: `presentation="dialog"`.** `BitsnapCheckout` opens as the right drawer
   (default, unchanged) or as a centred dialog; on phones, also in landscape,
   the dialog is a bottom sheet. Adding to the cart opens it in the chosen
@@ -452,6 +468,36 @@ import "bitsnap-react/dist/index.css";
 
 The stylesheet ships ready to use. Do not run it through a PostCSS prefixer or
 compile the library's Tailwind source again: the rules are already scoped.
+
+### Import only the cart
+
+If a page only needs the cart, import it from `bitsnap-react/cart` and use the
+cart's own stylesheet:
+
+```tsx
+import { Bitsnap, BitsnapCheckout, setProjectID } from "bitsnap-react/cart";
+import "bitsnap-react/cart/cart.css";
+```
+
+It exports `BitsnapCheckout` (and its props and appearance types), `Bitsnap`,
+`setProjectID`, `setLocale`, `getLocale`, `setCustomHost`, `createCheckout`,
+`createPaymentURL`, `getPaymentMethodChoice`, `LinkRequest`, `BuyErrorData`,
+`ITEM_IDS_NOT_FOUND` and the express buttons the cart contains (`ApplePayButton`,
+`GooglePayButton`, `InPostPayButton`, `RevolutPayButton`). Everything is the same
+code as in `bitsnap-react`, so a page can mix both imports and still has one
+cart: one store, one `setProjectID`.
+
+- **Size.** In an ESM bundler (Next.js, Astro, Vite) `bitsnap-react/cart` adds
+  about 118 KB gzip of JavaScript, against about 175 KB for
+  `import { BitsnapCheckout } from "bitsnap-react"`. The saving is the panel,
+  returns, course, consent and chat code the main entry carries. A CommonJS
+  `require("bitsnap-react/cart")` loads the main CommonJS file and saves nothing.
+- **Stylesheet.** `bitsnap-react/cart/cart.css` (also served as
+  `bitsnap-react/dist/cart.css`) holds every rule the cart uses, 4.3 KB gzip. It
+  is already part of `bitsnap-react/dist/index.css`: import one of them (both
+  together only repeat the rules). `cart.css` does not include the product list, returns or panel styles.
+- **Product list.** `ProductList` is in `bitsnap-react/catalog`; its "Add to cart"
+  button opens the cart through the same shared state when both are on a page.
 
 ### Brand colors, font and radius
 

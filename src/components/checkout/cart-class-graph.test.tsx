@@ -28,10 +28,11 @@ import { IsOneClickPaymentAvailableResponseSchema } from "src/gen/proto/public/v
  *    scenario asserts that its state rendered, so a state that silently stops
  *    rendering fails here instead of passing unchecked.
  * 2. Static backstop: every string literal inside a `className=` attribute or
- *    a `cx(` call in the files the `/cart` import graph reaches from
- *    `CartComponent` and `CartFrame` must be a `bsc-*` class or in
+ *    a `cx(` call in the files the `bitsnap-react/cart` entry
+ *    (`src/cart/index.ts`) reaches must be a `bsc-*` class or in
  *    `STATIC_ALLOWED`. This catches a Tailwind utility in a branch the
- *    rendered check cannot reach.
+ *    rendered check cannot reach. The allowlist is at zero (PLAN D5): it holds
+ *    the `bitsnap-react` scope class and nothing else.
  */
 
 /** The cart's own classes; `dark` and `light` are allowed on the root only. */
@@ -506,7 +507,13 @@ const STATIC_ALLOWED = new Set([
   "bitsnap-react",
 ]);
 
-const ROOTS = ["src/components/checkout/CartComponent.tsx", "src/components/checkout/CartFrame.tsx"];
+/** The `bitsnap-react/cart` entry, and the two components the rendered half mounts. */
+const ROOTS = [
+  "src/cart/index.ts",
+  "src/components/checkout/BitsnapCart.tsx",
+  "src/components/checkout/CartComponent.tsx",
+  "src/components/checkout/CartFrame.tsx",
+];
 
 /** `.ts`/`.tsx` files under the package reached by value imports (static and dynamic) from the roots. */
 function cartGraph(): string[] {
@@ -644,6 +651,7 @@ describe("cart class graph, static backstop", () => {
     const files = cartGraph();
     const names = files.map((file) => relative(process.cwd(), file));
     for (const expected of [
+      "src/cart/index.ts",
       "src/components/checkout/CartFrame.tsx",
       "src/components/checkout/CartLines.tsx",
       "src/components/checkout/SingleProduct.tsx",
@@ -659,6 +667,16 @@ describe("cart class graph, static backstop", () => {
     ]) {
       assert.ok(names.includes(expected), `the graph misses ${expected}`);
     }
+    // The entry does not reach the rest of the SDK, apart from three small shared helpers
+    // (the host list and the cookie reader of analytics, and the panel's host setting).
+    const sharedHelpers = ["src/consent/core/hosts.ts", "src/consent/core/cookie.ts", "src/panel/config.ts"];
+    const outside = names.filter(
+      (name) =>
+        (/^src\/(panel|returns|course|chat|consent|catalog|viewer3d|ui)\//.test(name) ||
+          /^src\/components\/(returns|products|notifications)\//.test(name)) &&
+        !sharedHelpers.includes(name),
+    );
+    assert.deepEqual(outside, [], "the cart entry reaches code outside the cart");
     let checked = 0;
     const bad: string[] = [];
     for (const file of files) {

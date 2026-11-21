@@ -62,6 +62,9 @@ export default function Checkout({ projectID, products }: {
 Fetch products with `BitsnapBackend` on the server and pass only public fields.
 Import the exported CSS. Configure the project before calling cart methods.
 `presentation="dialog"` opens the cart as a centred dialog (bottom sheet on phones).
+For a page that needs only the cart, import from `bitsnap-react/cart` and
+`bitsnap-react/cart/cart.css` instead of `bitsnap-react` and `bitsnap-react/dist/index.css`
+(smaller bundle; same cart and same `Bitsnap` API; `dist/index.css` already contains `cart.css`).
 For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`.
 
 ## Other components

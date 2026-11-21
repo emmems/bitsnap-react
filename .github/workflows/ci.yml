@@ -60,4 +60,4 @@ jobs:
       # Same tests as the `test:*-ssr` scripts, without their rebuilds: `dist/`
       # comes from the Build step above.
       - name: SSR tests
-        run: 'node --test test/returns-widget.ssr.test.cjs test/catalog.ssr.test.cjs test/course.ssr.test.cjs test/express.ssr.test.cjs test/login.ssr.test.cjs'
+        run: 'node --test test/returns-widget.ssr.test.cjs test/catalog.ssr.test.cjs test/cart.ssr.test.cjs test/course.ssr.test.cjs test/express.ssr.test.cjs test/login.ssr.test.cjs'

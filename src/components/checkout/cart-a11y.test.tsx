@@ -497,6 +497,69 @@ describe("cart loading", () => {
     assert.equal(dialog()!.querySelector('[role="alert"]')?.textContent, "Subscriptions cannot be added to the cart yet.");
     delete (globalThis as { alert?: () => void }).alert;
   });
+
+  it("ignores a bad ADD_TO_CART payload with a warning, then still accepts a good one", async () => {
+    await mount();
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => void warnings.push(args);
+    const post = (payload: unknown) =>
+      React.act(async () => {
+        page.win.dispatchEvent(
+          new page.win.MessageEvent("message", { data: { id: "x", type: "ADD_TO_CART", payload } }),
+        );
+      });
+
+    await post({ id: 5, quantity: 1 });
+    await post({ id: "var1", quantity: "2" });
+    await post(undefined);
+    await settle();
+    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 0);
+    assert.equal(useCheckoutStore.getState().isCartVisible, false);
+    assert.equal(dialog(), null);
+    const problems = warnings
+      .filter(([message]) => message === "cannot add item to cart")
+      .map(([, error]) => (error as Error).message);
+    assert.deepEqual(problems, [
+      "addToCart.id: expected a string",
+      "addToCart.quantity: expected a number",
+      "addToCart: expected an object",
+    ]);
+
+    await post({ id: "var1", quantity: 2, somethingElse: true });
+    await settle();
+    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 2);
+    assert.equal(useCheckoutStore.getState().isCartVisible, true);
+  });
+
+  it("window.cart.buyProduct warns about a bad argument and sends nothing", async () => {
+    await mount();
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => void warnings.push(args);
+    const requests: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((input: string, init?: RequestInit) => {
+      requests.push(String(input));
+      return realFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const cart = (page.win as unknown as { cart: { buyProduct(args: unknown): Promise<void> } }).cart;
+      assert.equal(typeof cart.buyProduct, "function");
+      await cart.buyProduct({ productID: 7 });
+      await cart.buyProduct(null);
+      await cart.buyProduct({ productID: "var1", marketingAgreement: "yes" });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    assert.deepEqual(requests, []);
+    assert.deepEqual(
+      warnings.map(([error]) => (error as Error).message),
+      [
+        "buyProduct.productID: expected a string",
+        "buyProduct: expected an object",
+        "buyProduct.marketingAgreement: expected a boolean",
+      ],
+    );
+  });
 });
 
 describe("cart after the redirect to the payment", () => {

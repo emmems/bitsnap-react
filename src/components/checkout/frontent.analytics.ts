@@ -1,33 +1,28 @@
-import zod from "zod";
 import { round } from "./lib/round.number";
 
-const eventPayload = zod.object({
-  event: zod.enum([
-    "purchase",
-    "addToCart",
-    "customizeProduct",
-    "viewCart",
-    "removeFromCart",
-    "initiateCheckout",
-    "lead",
-  ]),
-  step: zod.string().optional(),
-  value: zod.number().optional(),
-  currency: zod.string().optional(),
-  content_name: zod.string().optional(),
-  items: zod
-    .array(
-      zod.object({
-        id: zod.string(),
-        name: zod.string(),
-        price: zod.number().default(0),
-        currency: zod.string().default("PLN"),
-        quantity: zod.number().default(1),
-      })
-    )
-    .optional(),
-});
-type EventPayload = zod.infer<typeof eventPayload>;
+type EventPayload = {
+  event:
+    | "purchase"
+    | "addToCart"
+    | "customizeProduct"
+    | "viewCart"
+    | "removeFromCart"
+    | "initiateCheckout"
+    | "lead";
+  step?: string | undefined;
+  value?: number | undefined;
+  currency?: string | undefined;
+  content_name?: string | undefined;
+  items?:
+    | {
+        id: string;
+        name: string;
+        price: number;
+        currency: string;
+        quantity: number;
+      }[]
+    | undefined;
+};
 
 export function sendAnalyticEvent(payload: EventPayload) {
   if (typeof window == "undefined") {

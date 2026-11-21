@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef } from "react";
-import zod from "zod";
 import {
   InstrumentProvider,
   useCartInstrument,
@@ -16,21 +15,16 @@ import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
 import { getLocale, setLocale } from "./locale";
+import {
+  parseAddToCartPayload,
+  parseBuyProductArgs,
+  type AddToCartEvent,
+} from "./validate";
 import { getCheckoutText, type CheckoutTextKey } from "./texts";
 
 enum CartEvent {
   ADD_TO_CART = "ADD_TO_CART",
 }
-
-const cartAddToCartSchema = zod.object({
-  id: zod.string(),
-  isSubscription: zod.boolean().default(false),
-  quantity: zod.number(),
-  metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-  url: zod.string().optional(),
-});
-
-type CartAddToCartEvent = zod.infer<typeof cartAddToCartSchema>;
 
 export type BitsnapCartProps = {
   projectID: string;
@@ -155,16 +149,7 @@ function BitsnapCart({
       window["cart"] = {
         buyProduct: async (args: unknown) => {
           try {
-            const payload = zod
-              .object({
-                productID: zod.string(),
-                email: zod.string().optional(),
-                name: zod.string().optional(),
-                country: zod.string().optional(),
-                marketingAgreement: zod.boolean().optional(),
-                locale: zod.string().optional(),
-              })
-              .parse(args);
+            const payload = parseBuyProductArgs(args);
             const methods = getCheckoutMethods(projectID);
             try {
               const products = await methods.getProducts();
@@ -205,7 +190,7 @@ function BitsnapCart({
     }
 
     try {
-      const data = cartAddToCartSchema.parse(payload);
+      const data = parseAddToCartPayload(payload);
 
       if (data.isSubscription) {
         await handleAddingSubscriptionToCart(projectID, data);
@@ -234,7 +219,7 @@ function BitsnapCart({
 
   async function handleAddingSubscriptionToCart(
     projectID: string,
-    event: CartAddToCartEvent,
+    event: AddToCartEvent,
   ) {
     console.warn(
       "subscriptions cannot be added to the cart yet",
