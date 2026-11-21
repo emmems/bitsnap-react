@@ -348,6 +348,7 @@ export function useCartView(locale: string, open = true): CartViewState {
 
   const now = Date.now();
   const view = buildView(localLines, snapshot, now);
+  const walletsSettle = walletsSettleAt(view, session.gate, now);
 
   // Remember what each line showed once it is painted; a price that changes on
   // screen is marked at once (N15). After every commit of the open drawer, with
@@ -373,19 +374,33 @@ export function useCartView(locale: string, open = true): CartViewState {
         session.was.delete(lineId);
       }
     }
-    if (!sameMarks(view, session.gate)) {
+    // A re-mark or a returning price moves the settle time without changing
+    // which lines are marked: render again so the timer below is re-armed.
+    if (
+      !sameMarks(view, session.gate) ||
+      walletsSettleAt(view, session.gate, Date.now()) !== walletsSettle
+    ) {
       rerender();
     }
   });
 
   // A price mark stops holding the wallets back once its price has been on
-  // screen for `PRICE_SEEN_MS`: one re-render at that moment.
-  const walletsSettle = walletsSettleAt(view, session.gate, now);
+  // screen for `PRICE_SEEN_MS`: one re-render at that moment. A timer that
+  // fires early (clock skew) waits again instead of leaving the wallets inert.
   React.useEffect(() => {
     if (walletsSettle == null) {
       return;
     }
-    const timer = setTimeout(rerender, Math.max(walletsSettle - Date.now(), 0) + 1);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const wake = () => {
+      const left = walletsSettle - Date.now();
+      if (left > 0) {
+        timer = setTimeout(wake, left + 1);
+      } else {
+        rerender();
+      }
+    };
+    wake();
     return () => clearTimeout(timer);
   }, [walletsSettle]);
 
