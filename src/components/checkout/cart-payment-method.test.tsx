@@ -401,6 +401,7 @@ describe("payment logos in the method cards", () => {
     assert.equal(img.getAttribute("width"), "60");
     assert.equal(img.getAttribute("height"), "20");
     assert.equal(img.getAttribute("decoding"), "async");
+    assert.equal(img.getAttribute("referrerpolicy"), "no-referrer", "no page URL to the logo host");
     assert.equal(img.className, "bsc-method-logo-img");
   });
 

@@ -3,8 +3,9 @@
  *
  * The library reads the project ID from a `script[data-name="internal-cart"]`
  * tag and talks to `https://bitsnap.pl` through `fetch`, so intercepting both
- * is enough to render every checkout state offline (the payment logos load
- * from this app's `public/logos`).
+ * is enough to render every checkout state offline (with `?logos=1` the API
+ * moves to this page's origin, which serves the payment logos from
+ * `public/logos`).
  */
 
 const PROJECT_ID = "example-project";
@@ -106,8 +107,10 @@ export type MockOptions = {
 
 /**
  * Generic placeholder logos from `public/logos` (no real brand marks). The
- * cart takes `https:` logo URLs, and `http:` only on localhost, so open the
- * example on `localhost` to see them.
+ * cart keeps only logos from the API origin (or bitsnap.pl), and `http:` only
+ * when that API origin is itself http on localhost, so with `?logos=1` the
+ * mock API moves to this page's origin (`data-custom-host`): open the example
+ * on `localhost` to see them.
  */
 function paymentLogos() {
   const logo = (id: string, width: number, chip?: boolean) => ({
@@ -131,6 +134,10 @@ export function installCheckoutMocks(options: MockOptions = {}) {
   const script = document.createElement("script");
   script.setAttribute("data-id", PROJECT_ID);
   script.setAttribute("data-name", "internal-cart");
+  if (options.paymentLogos === true) {
+    // The mock API answers on this origin, which also serves the logos.
+    script.setAttribute("data-custom-host", window.location.origin);
+  }
   document.head.appendChild(script);
 
   window.fetch = async (input, init) => {

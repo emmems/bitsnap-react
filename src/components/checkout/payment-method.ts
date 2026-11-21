@@ -11,6 +11,7 @@
  * timeout) counts as "nothing to choose", so the cart buys as before.
  */
 
+import { DEFAULT_HOST } from "./constants";
 import type { CheckoutTextKey } from "./texts";
 
 /** `cod` is cash on delivery: the buyer pays the courier (Poland only, shipped carts). */
@@ -23,7 +24,11 @@ export type ManualAccountType = "bankTransfer" | "blik";
  */
 export type PaymentLogo = {
   id: string;
-  /** Absolute `https:` URL (`http:` only on localhost, for local development). */
+  /**
+   * Absolute URL on the payment-methods endpoint's origin or on Bitsnap's
+   * default host, `https:` (`http:` only when that API origin is itself http
+   * on localhost, for local development).
+   */
   src: string;
   alt: string;
   /** Intrinsic size: only the aspect ratio is used, the height is the slot's. */
@@ -66,13 +71,39 @@ function uniqueKnown<T extends string>(value: unknown, known: readonly T[]): T[]
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** `https:`, or `http:` on localhost (a local backend in development). */
-function isLogoUrl(value: unknown): value is string {
+/**
+ * The origins a logo may load from: the payment-methods endpoint's (a custom
+ * API host) and Bitsnap's default host (the server builds `src` from its
+ * public URL, which can differ from a custom API host). Never any other host,
+ * so a bad answer cannot make the buyer's browser probe a local network or
+ * load a tracking pixel.
+ */
+export function paymentLogoOrigins(endpoint?: string): string[] {
+  const origins = [DEFAULT_HOST];
+  if (endpoint) {
+    try {
+      origins.unshift(new URL(endpoint).origin);
+    } catch {
+      // A relative or bad endpoint adds nothing.
+    }
+  }
+  return [...new Set(origins.map((origin) => new URL(origin).origin))];
+}
+
+/**
+ * An absolute URL without credentials on one of `origins`: `https:`, or
+ * `http:` only when that allowed origin is itself http on localhost (a local
+ * backend in development).
+ */
+function isLogoUrl(value: unknown, origins: readonly string[]): value is string {
   if (typeof value !== "string" || value.length > 2048) {
     return false;
   }
   try {
     const url = new URL(value);
+    if (url.username || url.password || !origins.includes(url.origin)) {
+      return false;
+    }
     return (
       url.protocol === "https:" ||
       (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname))
@@ -85,7 +116,7 @@ function isLogoUrl(value: unknown): value is string {
 const isSize = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0;
 
-function parseLogo(value: unknown): PaymentLogo | null {
+function parseLogo(value: unknown, origins: readonly string[]): PaymentLogo | null {
   if (typeof value !== "object" || value == null) {
     return null;
   }
@@ -93,7 +124,7 @@ function parseLogo(value: unknown): PaymentLogo | null {
   if (typeof id !== "string" || !id || typeof alt !== "string") {
     return null;
   }
-  if (!isLogoUrl(src) || !isSize(width) || !isSize(height)) {
+  if (!isLogoUrl(src, origins) || !isSize(width) || !isSize(height)) {
     return null;
   }
   return chip === true ? { id, src, alt, width, height, chip } : { id, src, alt, width, height };
@@ -104,7 +135,7 @@ function parseLogo(value: unknown): PaymentLogo | null {
  * `MAX_LOGOS_PER_METHOD` each, without repeated ids; `undefined` when none
  * is left. A bad entry is dropped, never the whole answer.
  */
-function parseLogos(value: unknown): PaymentMethodChoice["logos"] {
+function parseLogos(value: unknown, origins: readonly string[]): PaymentMethodChoice["logos"] {
   if (typeof value !== "object" || value == null || Array.isArray(value)) {
     return undefined;
   }
@@ -116,7 +147,7 @@ function parseLogos(value: unknown): PaymentMethodChoice["logos"] {
     }
     const logos: PaymentLogo[] = [];
     for (const item of list) {
-      const logo = parseLogo(item);
+      const logo = parseLogo(item, origins);
       if (logo && !logos.some((other) => other.id === logo.id)) {
         logos.push(logo);
       }
@@ -134,9 +165,13 @@ function parseLogos(value: unknown): PaymentMethodChoice["logos"] {
 /**
  * The choice in a `payment-methods` answer, or `null` when there is nothing
  * to choose: `choice: null`, a malformed answer, or fewer than two known
- * methods. Methods this version does not know are left out.
+ * methods. Methods this version does not know are left out. Logos are kept
+ * only on `logoOrigins` (see `paymentLogoOrigins`).
  */
-export function parsePaymentMethodChoice(body: unknown): PaymentMethodChoice | null {
+export function parsePaymentMethodChoice(
+  body: unknown,
+  logoOrigins: readonly string[] = paymentLogoOrigins(),
+): PaymentMethodChoice | null {
   if (typeof body !== "object" || body == null) {
     return null;
   }
@@ -152,7 +187,7 @@ export function parsePaymentMethodChoice(body: unknown): PaymentMethodChoice | n
     (choice as { manualAccountTypes?: unknown }).manualAccountTypes,
     ACCOUNT_TYPES,
   );
-  const logos = parseLogos((choice as { logos?: unknown }).logos);
+  const logos = parseLogos((choice as { logos?: unknown }).logos, logoOrigins);
   return logos ? { methods, manualAccountTypes, logos } : { methods, manualAccountTypes };
 }
 
@@ -184,6 +219,8 @@ export function preloadPaymentLogos(choice: PaymentMethodChoice | null | undefin
     preloaded.add(src);
     const image = new Image();
     image.decoding = "async";
+    // Before `src`, so the first request already sends no referrer.
+    image.referrerPolicy = "no-referrer";
     image.src = src;
   }
 }
@@ -244,7 +281,7 @@ export async function fetchPaymentMethodChoice(
     if (!response.ok) {
       return null;
     }
-    return parsePaymentMethodChoice(await response.json());
+    return parsePaymentMethodChoice(await response.json(), paymentLogoOrigins(url));
   } catch {
     return null;
   } finally {

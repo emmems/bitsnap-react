@@ -916,7 +916,11 @@ bitsnap.pl). They are decorative: the card text names the methods, so screen
 readers skip them. Style them with the `paymentMethodLogos` (row) and
 `paymentMethodLogo` (item) slots and the `paymentLogoHeight` token. A logo the
 page cannot load, for example because the site's Content Security Policy does
-not allow images from bitsnap.pl in `img-src`, is hidden.
+not allow images from bitsnap.pl in `img-src`, is hidden. Plain logos have no
+dark variant, so the server sends artwork that works on both backgrounds or
+marks it `chip` (drawn on a white tile); logos load only from the Bitsnap API
+origin (the endpoint's, or bitsnap.pl), without a referrer, and others are
+dropped.
 
 When "Next step" fails, the cart shows the text of the backend error code
 (`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,

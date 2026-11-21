@@ -157,6 +157,7 @@ function PaymentMethodLogo({ logo }: { logo: PaymentLogo }) {
         alt=""
         aria-hidden="true"
         decoding="async"
+        referrerPolicy="no-referrer"
         width={logo.width}
         height={logo.height}
         onError={() => setFailed(true)}

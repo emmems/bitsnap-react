@@ -49,6 +49,7 @@ let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let renderToString: typeof import("react-dom/server").renderToString;
 let focusManager: typeof import("@tanstack/react-query").focusManager;
+let notifyManager: typeof import("@tanstack/react-query").notifyManager;
 let onlineManager: typeof import("@tanstack/react-query").onlineManager;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
 let Bitsnap: typeof import("./methods.ts").Bitsnap;
@@ -62,7 +63,7 @@ before(async () => {
   React = await import("react");
   createRoot = (await import("react-dom/client")).createRoot;
   renderToString = (await import("react-dom/server")).renderToString;
-  ({ focusManager, onlineManager } = await import("@tanstack/react-query"));
+  ({ focusManager, onlineManager, notifyManager } = await import("@tanstack/react-query"));
   BitsnapCheckout = (await import("./BitsnapCart.tsx")).default;
   ({ Bitsnap } = await import("./methods.ts"));
   ({ useCheckoutStore } = await import("./state.ts"));
@@ -1000,6 +1001,71 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
     assert.equal(wallets()!.hasAttribute("inert"), false, "seen for over a second: active");
     assert.equal(notice(), "Cena się zmieniła: była 25,00 zł, jest 30,00 zł.", "the notice stays");
     assert.notEqual(wallets()!.getAttribute("aria-disabled"), "true");
+  });
+
+  it("a re-mark moves the settle time without a mark change: inert until its new price was seen for a second", async () => {
+    await mount();
+    await add("pa");
+    setPrice("pa", 3000, "va2");
+    productsMode = "pending";
+    await open();
+    await releaseProducts();
+    assert.equal(wallets()!.hasAttribute("inert"), true, "marked: inert");
+
+    // ~600 ms later a refetch brings another price for the same line: it stays
+    // marked, only its settle time moves. React Query's own notifications are
+    // held back, so the render that shows the new price (the snapshot write) is
+    // the last one and only the drawer itself can re-arm the timer.
+    await settle(600);
+    productsMode = "ok";
+    setPrice("pa", 3500, "va3");
+    notifyManager.setScheduler(() => {});
+    try {
+      lookAtCart(31_000); // past the 30 s staleTime, so a focus refetches; the first settle time is long past
+      await React.act(async () => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+      focusManager.setFocused(undefined);
+      await settle();
+      const remarked = realNow();
+      assert.ok(linePrices()[0]?.startsWith(PLN("35,00")), "the newer price shows");
+      assert.equal(wallets()!.hasAttribute("inert"), true, "re-marked: inert");
+
+      await settle(remarked + 500 - realNow());
+      assert.equal(wallets()!.hasAttribute("inert"), true, "under a second after the re-mark: still inert");
+
+      await settle(remarked + 1400 - realNow());
+      assert.equal(wallets()!.hasAttribute("inert"), false, "a second after the re-mark: active");
+      assert.equal(
+        text(doc().querySelector('[data-bitsnap-checkout-price="updated"]')),
+        "Cena się zmieniła: była 30,00 zł, jest 35,00 zł.",
+        "the notice names the re-marked price",
+      );
+    } finally {
+      notifyManager.setScheduler((callback) => setTimeout(callback, 0));
+    }
+  });
+
+  it("a settle timer that fires early waits again: never released early, never left inert", async () => {
+    await mount();
+    await add("pa");
+    setPrice("pa", 3000, "va2");
+    productsMode = "pending";
+    await open();
+    await releaseProducts();
+    const marked = realNow();
+    assert.equal(wallets()!.hasAttribute("inert"), true);
+
+    // The clock steps back 600 ms after the timer was armed: it fires ~1 s
+    // after the mark while Date.now() is still ~600 ms short of the settle time.
+    await settle(300);
+    clockOffset -= 600;
+    await settle(marked + 1150 - realNow());
+    assert.equal(wallets()!.hasAttribute("inert"), true, "the early timer does not release the wallets");
+
+    await settle(marked + 2000 - realNow());
+    assert.equal(wallets()!.hasAttribute("inert"), false, "the re-armed timer releases them");
   });
 
   it("take the whole local cart as items, also an unconfirmed line; Apple Pay keeps every line", async () => {

@@ -451,6 +451,36 @@ describe("cart.css content rules", () => {
     );
   });
 
+  it("resets host img styles on the logo artwork", () => {
+    const img = findTop("[data-bitsnap-checkout] .bsc-method-logo-img")!;
+    for (const [property, value] of Object.entries({
+      "border-radius": "0",
+      "box-shadow": "none",
+      filter: "none",
+      opacity: "1",
+      "min-width": "0",
+      "min-height": "0",
+      "max-width": "96px",
+    })) {
+      assert.equal(img.declarations.get(property), value, property);
+    }
+  });
+
+  it("draws chip artwork as tall as a plain logo without changing the row's height", () => {
+    const chip = findTop("[data-bitsnap-checkout] .bsc-method-logo-chip")!;
+    assert.equal(chip.declarations.get("box-sizing"), "border-box");
+    // Slot height + the 2 px top and bottom padding: the image (height 100%) is the slot's height.
+    assert.equal(chip.declarations.get("padding"), "2px 5px");
+    assert.equal(chip.declarations.get("height"), "calc(var(--bsc-logo-h) + 4px)");
+    // The padding is taken back by the margin, so the tile lays out at the slot's height.
+    assert.equal(chip.declarations.get("margin-block"), "-2px");
+    const indexOf = (selector: string) => topLevel.findIndex((rule) => rule.selectors.includes(selector));
+    assert.ok(
+      indexOf("[data-bitsnap-checkout] .bsc-method-logo") < indexOf("[data-bitsnap-checkout] .bsc-method-logo-chip"),
+      "the chip height wins over the slot height at equal specificity",
+    );
+  });
+
   it("lists every state rule after its base rule, so the state wins at equal specificity", () => {
     const indexOf = (selector: string) => topLevel.findIndex((rule) => rule.selectors.includes(selector));
     let checked = 0;

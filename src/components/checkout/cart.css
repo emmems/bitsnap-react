@@ -1003,17 +1003,31 @@
     height: var(--bsc-logo-h);
 }
 
+/* The resets keep host `img` styles (rounded corners, shadows, filters, fades,
+ * min sizes) off the artwork. */
 [data-bitsnap-checkout] .bsc-method-logo-img {
     display: block;
     width: auto;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     max-width: 96px;
     object-fit: contain;
+    border-radius: 0;
+    box-shadow: none;
+    filter: none;
+    opacity: 1;
 }
 
 /* A logo drawn for white gets a white tile: on the dark panel it would
- * otherwise vanish; on the light one a hairline keeps the tile's edge. */
+ * otherwise vanish; on the light one a hairline keeps the tile's edge. The
+ * padding goes around the artwork, so it draws as tall as a plain logo; the
+ * negative block margin keeps the tile's layout height at the slot's, so the
+ * row is the same height with or without chips. */
 [data-bitsnap-checkout] .bsc-method-logo-chip {
+    box-sizing: border-box;
+    height: calc(var(--bsc-logo-h) + 4px);
+    margin-block: -2px;
     padding: 2px 5px;
     border-radius: 4px;
     background-color: #ffffff;

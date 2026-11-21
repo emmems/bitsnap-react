@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   effectivePaymentMethod,
+  fetchPaymentMethodChoice,
   manualPaymentTitleKey,
   MAX_LOGOS_PER_METHOD,
   parsePaymentMethodChoice,
+  paymentLogoOrigins,
   paymentLogoUrls,
   preloadPaymentLogos,
   withoutCod,
@@ -135,13 +137,72 @@ describe("parsePaymentMethodChoice: logos", () => {
     assert.equal("logos" in parse({ online: bad })!, false);
   });
 
-  it("accepts http only on localhost, for a local backend", () => {
-    const local = [
-      logo("a", { src: "http://localhost:4321/logos/a.svg" }),
-      logo("b", { src: "http://127.0.0.1/b.svg" }),
-      logo("c", { src: "http://[::1]:5173/c.svg" }),
+  it("keeps logos only on the API origin or Bitsnap's default host", () => {
+    const origins = paymentLogoOrigins("https://api.shop.example/api/integrations/p/public-commerce/payment-methods");
+    assert.deepEqual(origins, ["https://api.shop.example", "https://bitsnap.pl"]);
+    const parseOn = (logos: unknown, logoOrigins: string[]) =>
+      parsePaymentMethodChoice(
+        { choice: { methods: ["online", "manual"], manualAccountTypes: [], logos } },
+        logoOrigins,
+      )?.logos;
+    const api = logo("api", { src: "https://api.shop.example/logos/api.svg" });
+    const bitsnap = logo("bitsnap");
+    const dropped = [
+      logo("other", { src: "https://tracker.example/pixel.gif" }),
+      logo("sub", { src: "https://cdn.bitsnap.pl/x.svg" }),
+      logo("port", { src: "https://bitsnap.pl:8443/x.svg" }),
+      logo("ip", { src: "https://192.168.1.1/x.svg" }),
+      logo("loop", { src: "https://127.0.0.1/x.svg" }),
+      logo("localhttp", { src: "http://localhost:4321/x.svg" }),
+      logo("creds", { src: "https://user:pass@bitsnap.pl/x.svg" }),
+      logo("user", { src: "https://user@api.shop.example/x.svg" }),
     ];
-    assert.deepEqual(parse({ manual: local })?.logos, { manual: local });
+    assert.deepEqual(parseOn({ online: [...dropped, api, bitsnap] }, origins), { online: [api, bitsnap] });
+    // Without an endpoint only the default host is allowed (also the parser's default).
+    assert.deepEqual(parseOn({ online: [api, bitsnap] }, paymentLogoOrigins()), { online: [bitsnap] });
+    assert.deepEqual(parse({ online: [api, bitsnap] })?.logos, { online: [bitsnap] });
+    assert.deepEqual(paymentLogoOrigins("/relative"), ["https://bitsnap.pl"]);
+  });
+
+  it("accepts http only from an http localhost API's own origin", () => {
+    const parseOn = (logos: unknown, endpoint: string) =>
+      parsePaymentMethodChoice(
+        { choice: { methods: ["online", "manual"], manualAccountTypes: [], logos } },
+        paymentLogoOrigins(endpoint),
+      )?.logos;
+    for (const origin of ["http://localhost:4321", "http://127.0.0.1", "http://[::1]:5173"]) {
+      const local = logo("a", { src: `${origin}/logos/a.svg` });
+      assert.deepEqual(parseOn({ manual: [local] }, `${origin}/api/payment-methods`), { manual: [local] }, origin);
+      // The same logo is dropped when the API is https, and from another local port.
+      assert.equal(parseOn({ manual: [local] }, "https://bitsnap.pl/api/payment-methods"), undefined, origin);
+      assert.equal(parseOn({ manual: [local] }, `${origin}9/api/payment-methods`), undefined, origin);
+    }
+    // http on a non-local API origin is still refused.
+    const plain = logo("p", { src: "http://shop.example/p.svg" });
+    assert.equal(parseOn({ manual: [plain] }, "http://shop.example/api/payment-methods"), undefined);
+  });
+
+  it("checks logos against the endpoint the answer came from", async () => {
+    const originalFetch = globalThis.fetch;
+    const local = logo("local", { src: "http://localhost:4321/logos/local.svg" });
+    const other = logo("other", { src: "https://elsewhere.example/x.svg" });
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          choice: { methods: ["online", "manual"], manualAccountTypes: [], logos: { online: [local, other, logo("blik")] } },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    try {
+      const init = { headers: {}, body: "{}" };
+      const fromLocal = await fetchPaymentMethodChoice("http://localhost:4321/api/payment-methods", init);
+      assert.deepEqual(fromLocal?.logos, { online: [local, logo("blik")] });
+      const fromBitsnap = await fetchPaymentMethodChoice("https://bitsnap.pl/api/payment-methods", init);
+      assert.deepEqual(fromBitsnap?.logos, { online: [logo("blik")] });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("keeps at most six per method and drops repeated ids", () => {
@@ -173,7 +234,10 @@ describe("parsePaymentMethodChoice: logos", () => {
       preloadPaymentLogos(choice);
       globals.Image = class {
         decoding = "";
+        referrerPolicy = "";
         set src(value: string) {
+          // Set before src, so the first request already has it.
+          assert.equal(this.referrerPolicy, "no-referrer");
           loaded.push(value);
         }
       };
