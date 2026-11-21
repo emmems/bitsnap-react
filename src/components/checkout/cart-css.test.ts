@@ -588,8 +588,14 @@ describe("cart.css dialog and compact geometry (step 18, D8, R06)", () => {
     assert.equal(dialog.declarations.get("width"), "min(100vw - 32px, var(--bitsnap-checkout-panel-width, 480px))");
     assert.equal(
       dialog.declarations.get("max-height"),
-      "var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px))",
+      "var(--bitsnap-checkout-panel-max-height, min(100vh - 48px, 704px))",
+      "vh first: a dvh value is invalid where dvh is unknown, and the cap would be lost",
     );
+    const dvh = styleRules.find(
+      (rule) => rule.atRules.length === 1 && rule.atRules[0] === "@supports (height: 1dvh)" && rule.selectors.includes(DIALOG),
+    );
+    assert.equal(dvh?.declarations.get("max-height"), "var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px))");
+    assert.ok(styleRules.indexOf(dvh!) > styleRules.indexOf(dialog), "the dvh cap comes after the vh cap");
     assert.equal(dialog.declarations.has("transform"), false, "a transform would hold fixed descendants");
     // After the drawer's side widths, so it wins at the same specificity.
     const wide = styleRules.findIndex((rule) => rule.atRules[0] === "@media (min-width: 1200px)");
@@ -602,8 +608,27 @@ describe("cart.css dialog and compact geometry (step 18, D8, R06)", () => {
     assert.equal(sheet.declarations.get("inset"), "auto 0 0 0");
     assert.equal(sheet.declarations.get("margin"), "0");
     assert.equal(sheet.declarations.get("width"), "100%");
-    assert.equal(sheet.declarations.get("max-height"), "min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px))");
+    assert.equal(sheet.declarations.get("max-height"), "min(92vh, var(--bitsnap-checkout-panel-max-height, 704px))");
     assert.ok(styleRules.indexOf(sheet) > styleRules.indexOf(findTop(DIALOG)!), "the sheet comes after the dialog");
+    const sheetDvh = styleRules.find(
+      (rule) =>
+        rule.atRules.length === 2 &&
+        rule.atRules[0] === COMPACT &&
+        rule.atRules[1] === "@supports (height: 1dvh)" &&
+        rule.selectors.includes(DIALOG),
+    );
+    assert.equal(sheetDvh?.declarations.get("max-height"), "min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px))");
+    const dialogDvh = styleRules.find((rule) => rule.atRules.length === 1 && rule.atRules[0] === "@supports (height: 1dvh)" && rule.selectors.includes(DIALOG));
+    assert.ok(styleRules.indexOf(sheetDvh!) > styleRules.indexOf(dialogDvh!), "the sheet's dvh cap beats the dialog's");
+    assert.ok(styleRules.indexOf(sheetDvh!) > styleRules.indexOf(sheet));
+    // No dvh cap outside @supports (the drawer's `height` repeats a vh value
+    // in the same rule instead, checked above).
+    for (const rule of styleRules) {
+      for (const [property, value] of rule.declarations) {
+        if (property !== "max-height" || !/dvh\b/.test(value) || rule.atRules.some((atRule) => atRule.startsWith("@supports"))) continue;
+        assert.fail(`${rule.selectors.join(", ")} { ${property}: ${value} } has no vh fallback`);
+      }
+    }
     const drawer = compactRule(slot("panel"));
     assert.equal(drawer?.declarations.get("width"), "100%");
   });
@@ -622,6 +647,26 @@ describe("cart.css dialog and compact geometry (step 18, D8, R06)", () => {
     assert.equal(headerRule?.declarations.get("min-height"), "calc(56px + env(safe-area-inset-top))");
     // After the base header rule, whose padding shorthand would otherwise win.
     assert.ok(styleRules.indexOf(headerRule!) > styleRules.indexOf(findTop("[data-bitsnap-checkout] .bsc-header")!));
+  });
+
+  it("gives the lines one more row on a landscape phone: no note, a tighter footer, a 44 px CTA", () => {
+    const short = (selector: string) =>
+      styleRules.find((rule) => rule.atRules.length === 1 && rule.atRules[0] === "@media (max-height: 500px)" && rule.selectors.includes(selector));
+    const footer = short("[data-bitsnap-checkout] .bsc-footer");
+    assert.equal(footer?.declarations.get("padding"), "8px 16px calc(8px + env(safe-area-inset-bottom))");
+    const note = short("[data-bitsnap-checkout] .bsc-note");
+    assert.equal(note?.declarations.get("display"), "none");
+    const cta = short("[data-bitsnap-checkout] .bsc-cta");
+    assert.equal(cta?.declarations.get("min-height"), "44px", "never under the 44 px touch target");
+    assert.equal(short("[data-bitsnap-checkout] .bsc-skeleton-cta")?.declarations.get("height"), "44px");
+    for (const [rule, base] of [
+      [footer, ".bsc-footer"],
+      [note, ".bsc-note"],
+      [cta, ".bsc-cta"],
+      [short("[data-bitsnap-checkout] .bsc-skeleton-cta"), ".bsc-skeleton-cta"],
+    ] as const) {
+      assert.ok(styleRules.indexOf(rule!) > styleRules.indexOf(findTop(`[data-bitsnap-checkout] ${base}`)!), `${base}: after its base rule`);
+    }
   });
 
   it("drops Continue shopping from a sheet at most 500 px high, after its base rule", () => {
@@ -926,15 +971,31 @@ describe("cart.css standalone express parts (S2, S4)", () => {
     assert.equal(spinner.get("width"), "16px");
     assert.match(spinner.get("animation") ?? "", /^bitsnap-cart-spin /);
     const text = cascade(doc.querySelector('#busy [data-bitsnap-checkout-part="sr"]')!);
-    assert.equal(text.get("position"), "absolute");
-    assert.equal(text.get("clip-path"), "inset(50%)");
+    assert.equal(text.get("position"), "absolute !important");
+    assert.equal(text.get("clip-path"), "inset(50%) !important");
   });
 
   it("hides the empty-cart announcement visually inside the cart (N7)", () => {
     const { window } = new JSDOM('<div data-bitsnap-checkout="root"><p data-bitsnap-checkout-part="sr" role="status">x</p></div>');
     const text = cascade(window.document.querySelector('[data-bitsnap-checkout-part="sr"]')!);
-    assert.equal(text.get("position"), "absolute");
+    assert.equal(text.get("position"), "absolute !important");
     assert.equal(text.get("width"), "1px");
-    assert.equal(text.get("margin"), "0", "the reset applies; the part rule keeps it off screen");
+    assert.equal(text.get("margin"), "-1px", "the helper's own reset wins over the cart's");
+  });
+
+  it("keeps the visually-hidden helper hidden under host rules on a standalone wallet button", () => {
+    const rule = topLevel.find((entry) => entry.selectors.includes('[data-bitsnap-checkout-part="sr"]'));
+    assert.ok(rule);
+    // A host `span { position: static; margin: 4px; padding: 4px; border: 1px solid }`
+    // beats (0,1,0) only with !important on what keeps it off screen; the box
+    // reset is the usual visually-hidden one.
+    assert.equal(rule.declarations.get("position"), "absolute !important");
+    assert.equal(rule.declarations.get("clip-path"), "inset(50%) !important");
+    assert.equal(rule.declarations.get("clip"), "rect(0 0 0 0) !important");
+    assert.equal(rule.declarations.get("margin"), "-1px");
+    assert.equal(rule.declarations.get("padding"), "0");
+    assert.equal(rule.declarations.get("border"), "0");
+    assert.equal(rule.declarations.get("overflow"), "hidden");
+    assert.deepEqual(specificity(rule.selectors[0]), [0, 1, 0], "the specificity rule holds; only !important is the exception");
   });
 });

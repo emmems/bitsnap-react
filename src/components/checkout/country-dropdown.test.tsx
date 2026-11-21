@@ -132,3 +132,35 @@ describe("country select (D4)", () => {
     }
   });
 });
+
+describe("localCountryNames fallbacks", () => {
+  const server = [
+    { name: "Poland (server)", code: "PL" },
+    { name: "Nowhere (server)", code: "ZZ" },
+  ];
+
+  it("names known codes in the locale and keeps the server's name for an unknown code", async () => {
+    const { localCountryNames } = await import("./CountrySelector.tsx");
+    const names = localCountryNames(server, "pl-PL");
+    assert.equal(names[0]!.name, new Intl.DisplayNames(["pl-PL"], { type: "region" }).of("PL"));
+    assert.notEqual(names[0]!.name, "Poland (server)");
+    assert.deepEqual(names[1], { name: "Nowhere (server)", code: "ZZ" }, "ZZ is not a region: server name");
+  });
+
+  it("keeps every server name for a malformed locale (pl_PL)", async () => {
+    const { localCountryNames } = await import("./CountrySelector.tsx");
+    assert.deepEqual(localCountryNames(server, "pl_PL"), server);
+  });
+
+  it("keeps every server name when the runtime has no Intl.DisplayNames", async () => {
+    const { localCountryNames } = await import("./CountrySelector.tsx");
+    const intl = Intl as { DisplayNames?: typeof Intl.DisplayNames };
+    const original = intl.DisplayNames;
+    delete intl.DisplayNames;
+    try {
+      assert.deepEqual(localCountryNames(server, "pl-PL"), server);
+    } finally {
+      intl.DisplayNames = original;
+    }
+  });
+});

@@ -12,6 +12,7 @@ import {
   trackPrices,
   walletItems,
   walletsInert,
+  walletsSettleAt,
   type CartView,
   type CartViewFresh,
   type PriceGateState,
@@ -694,6 +695,39 @@ describe("wallet state (N1, N2)", () => {
     assert.equal(walletsInert(marked), true);
     const snapshotOnly = buildCartView([line("l1", "a")], snapshotOf(details("a")), undefined, NOW);
     assert.equal(walletsInert(snapshotOnly), true);
+  });
+
+  it("a mark settles for the wallets once its fresh price has been on screen for PRICE_SEEN_MS", () => {
+    const fresh = [details("a", { version: "v2", price: 1500 })];
+    const lines = [line("l1", "a", { priceVersion: "v1" })];
+    const mark: PriceMark = { priceVersion: "v2", shownPrice: 1500, markedAt: NOW };
+    const seenNow: Record<string, ShownPrice> = { l1: { price: 1500, currency: "PLN", since: NOW } };
+    const gate = stateOf(seenNow, { l1: mark });
+    const marksOf = (state: PriceGateState) => state.marks as Map<string, PriceMark>;
+    const view = viewOf(lines, fresh, marksOf(gate));
+    assert.equal(view.lines[0]!.marked, true);
+    assert.equal(walletsInert(view, gate, NOW + PRICE_SEEN_MS - 1), true, "under a second");
+    assert.equal(walletsSettleAt(view, gate, NOW), NOW + PRICE_SEEN_MS);
+    assert.equal(walletsInert(view, gate, NOW + 1100), false, "seen for over a second");
+    assert.equal(walletsSettleAt(view, gate, NOW + 1100), undefined, "nothing left to wait for");
+    assert.equal(walletsInert(view, undefined, NOW + 1100), true, "without the gate state a mark holds");
+    // The mark itself stays: /buy still goes through runPriceGate, which clears it.
+    assert.equal(runPriceGate(gate, view, NOW + 1100).result, "pass");
+
+    // Not settled: another version, another price on screen, a stale or snapshot line.
+    const otherVersion = stateOf(seenNow, { l1: { ...mark, priceVersion: "v1" } });
+    assert.equal(walletsInert(viewOf(lines, fresh, marksOf(otherVersion)), otherVersion, NOW + 5000), true);
+    assert.equal(walletsSettleAt(viewOf(lines, fresh, marksOf(otherVersion)), otherVersion, NOW), undefined);
+    const otherPrice = stateOf({ l1: { price: 1400, currency: "PLN", since: NOW - 9000 } }, { l1: mark });
+    assert.equal(walletsInert(viewOf(lines, fresh, marksOf(otherPrice)), otherPrice, NOW + 5000), true);
+    const otherCurrency = stateOf({ l1: { price: 1500, currency: "EUR", since: NOW - 9000 } }, { l1: mark });
+    assert.equal(walletsInert(viewOf(lines, fresh, marksOf(otherCurrency)), otherCurrency, NOW + 5000), true);
+    const notShown = stateOf({}, { l1: mark });
+    assert.equal(walletsInert(viewOf(lines, fresh, marksOf(notShown)), notShown, NOW + 5000), true);
+    const beforeOpen = buildCartView(lines, {}, freshOf(fresh, ["a"], false, []), NOW, marksOf(gate));
+    assert.equal(walletsInert(beforeOpen, gate, NOW + 5000), true);
+    const snapshotOnly = buildCartView(lines, snapshotOf(fresh[0]!), undefined, NOW, marksOf(gate));
+    assert.equal(walletsInert(snapshotOnly, gate, NOW + 5000), true);
   });
 
   it("is inert on a confirmed answer from before the open; the server prices wallets without a version check (m3)", () => {

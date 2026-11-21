@@ -18,8 +18,8 @@ export interface CountrySelectorProps {
 /**
  * Country names in the cart's locale ("Polska" in a Polish cart), from
  * `Intl.DisplayNames`. The server's name stays when the runtime has no
- * `Intl.DisplayNames`, does not know the locale or the code, or the code is
- * not a region code.
+ * `Intl.DisplayNames`, does not know the locale or the code, the code is
+ * not a region code, or it is the unknown region `ZZ`.
  */
 export function localCountryNames(
   countries: { name: string; code: string }[],
@@ -34,10 +34,20 @@ export function localCountryNames(
   } catch {
     return countries;
   }
+  // `ZZ` is CLDR's "Unknown Region": named ("Nieznany region") even with
+  // `fallback: "none"`. A code named like it is not a country to show.
+  let unknown: string | undefined;
+  try {
+    unknown = names.of("ZZ");
+  } catch {
+    unknown = undefined;
+  }
   return countries.map((country) => {
     try {
       const name = names.of(country.code.toUpperCase());
-      return name != null && name.length > 0 ? { ...country, name } : country;
+      return name != null && name.length > 0 && name !== unknown
+        ? { ...country, name }
+        : country;
     } catch {
       return country;
     }

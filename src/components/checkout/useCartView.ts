@@ -30,6 +30,8 @@ import {
   runPriceGate,
   suggestedAmounts,
   trackPrices,
+  walletsInert,
+  walletsSettleAt,
   type CartView,
   type CartViewFresh,
   type PriceGateResult,
@@ -183,6 +185,12 @@ export type CartViewState = {
   localSignature: string;
   /** The unit price a marked line showed before its price changed on screen. */
   priceWas(lineId: string): number | undefined;
+  /**
+   * The wallet buttons must not take a click: a line has no answer from after
+   * the open, or a price mark the drawer has not shown for `PRICE_SEEN_MS`
+   * (`walletsInert`). Re-renders by itself when a mark settles.
+   */
+  walletsInert: boolean;
   /** The line shows a snapshot price older than 60 s while a revalidation runs. */
   isRefreshing(productID: string): boolean;
   /** The catalog product of a line whose product id is a variant (analytics). */
@@ -369,6 +377,17 @@ export function useCartView(locale: string, open = true): CartViewState {
       rerender();
     }
   });
+
+  // A price mark stops holding the wallets back once its price has been on
+  // screen for `PRICE_SEEN_MS`: one re-render at that moment.
+  const walletsSettle = walletsSettleAt(view, session.gate, now);
+  React.useEffect(() => {
+    if (walletsSettle == null) {
+      return;
+    }
+    const timer = setTimeout(rerender, Math.max(walletsSettle - Date.now(), 0) + 1);
+    return () => clearTimeout(timer);
+  }, [walletsSettle]);
 
   async function revalidate(noCache: boolean): Promise<boolean> {
     const ids = productIDsOf(readLocalCartLines());
@@ -591,6 +610,7 @@ export function useCartView(locale: string, open = true): CartViewState {
     isFetching,
     localSignature,
     priceWas: (lineId) => session.was.get(lineId),
+    walletsInert: walletsInert(view, session.gate, now),
     isRefreshing: (productID) => {
       const entry = snapshot[productID];
       return (

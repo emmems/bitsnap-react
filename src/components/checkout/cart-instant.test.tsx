@@ -984,6 +984,24 @@ describe("instant drawer: express buttons (D12, N1, N2)", () => {
     assert.equal(wallets()!.getAttribute("aria-disabled"), "true");
   });
 
+  it("wake up once the marked price has been on screen for a second; the notice stays", async () => {
+    await mount();
+    await add("pa");
+    setPrice("pa", 3000, "va2");
+    productsMode = "pending";
+    await open();
+    await releaseProducts();
+    const notice = () => text(doc().querySelector('[data-bitsnap-checkout-price="updated"]'));
+    assert.equal(notice(), "Cena się zmieniła: była 25,00 zł, jest 30,00 zł.");
+    await settle(300);
+    assert.equal(wallets()!.hasAttribute("inert"), true, "under a second: still inert");
+    // Real time: the drawer schedules its own re-render at `since + 1 s`.
+    await settle(900);
+    assert.equal(wallets()!.hasAttribute("inert"), false, "seen for over a second: active");
+    assert.equal(notice(), "Cena się zmieniła: była 25,00 zł, jest 30,00 zł.", "the notice stays");
+    assert.notEqual(wallets()!.getAttribute("aria-disabled"), "true");
+  });
+
   it("take the whole local cart as items, also an unconfirmed line; Apple Pay keeps every line", async () => {
     enableApplePay(true);
     oneClick = { applePay: true };

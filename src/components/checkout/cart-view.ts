@@ -537,15 +537,92 @@ export function runPriceGate(
 // ------------------------------------------------------------------ wallets
 
 /**
+ * The time a marked line's mark stops holding the wallets back, or `undefined`
+ * when it cannot settle yet (or `gate` is not given). A wallet charges the
+ * catalog price, never an `amount`, and is never "next step": the mark itself
+ * stays (the "was X, is Y" notice and the gate of `/buy` keep it), the wallets
+ * only need that the open drawer has shown the price they charge for
+ * `PRICE_SEEN_MS`. So the line must show a fresh answer from after the open
+ * (`gateFresh`, `source === "fresh"`), the mark must be that answer's version
+ * (`""` without one) and its price, and the line must have been showing that
+ * price and currency (`shown`) since the returned time minus `PRICE_SEEN_MS`.
+ */
+function walletMarkSettlesAt(
+  item: CartViewLine,
+  gate: PriceGateState | undefined,
+): number | undefined {
+  const mark = gate?.marks.get(item.line.id);
+  const shown = gate?.shown.get(item.line.id);
+  const { details } = item;
+  if (
+    mark == null ||
+    shown == null ||
+    details == null ||
+    !item.gateFresh ||
+    item.source !== "fresh" ||
+    !item.priceKnown ||
+    item.payWhatYouWant === "amount"
+  ) {
+    return undefined;
+  }
+  const price = chargedUnitPrice(item.payWhatYouWant, details);
+  if (
+    mark.priceVersion !== (freshVersion(item) ?? "") ||
+    mark.shownPrice !== price ||
+    shown.price !== price ||
+    shown.currency !== details.currency
+  ) {
+    return undefined;
+  }
+  return shown.since + PRICE_SEEN_MS;
+}
+
+/**
  * Every wallet button is inert while any local line has no answer from after
- * the drawer opened (`gateFresh`) or carries an unaccepted price mark (D12,
- * N1). Not `confirmed`: the wallet order is priced from the server catalog at
- * authorisation with no version or amount check (instapay
+ * the drawer opened (`gateFresh`) or carries a price mark that has not settled
+ * for the wallets (D12, N1): see `walletMarkSettlesAt`. Without `gate` every
+ * mark holds them. Not `confirmed`: the wallet order is priced from the server
+ * catalog at authorisation with no version or amount check (instapay
  * `server/public-api/public-api.service.ts` `authorizeOneClickPayment`), so an
  * answer cached before the open is not enough.
  */
-export function walletsInert(view: Pick<CartView, "lines">): boolean {
-  return view.lines.some((item) => !item.gateFresh || item.marked);
+export function walletsInert(
+  view: Pick<CartView, "lines">,
+  gate?: PriceGateState,
+  now = 0,
+): boolean {
+  return view.lines.some((item) => {
+    if (!item.gateFresh) {
+      return true;
+    }
+    if (!item.marked) {
+      return false;
+    }
+    const settlesAt = walletMarkSettlesAt(item, gate);
+    return settlesAt == null || now < settlesAt;
+  });
+}
+
+/**
+ * The next moment `walletsInert` may turn false only because time passed: the
+ * earliest mark that will settle after `now`. The drawer re-renders then.
+ */
+export function walletsSettleAt(
+  view: Pick<CartView, "lines">,
+  gate: PriceGateState,
+  now: number,
+): number | undefined {
+  let next: number | undefined;
+  for (const item of view.lines) {
+    if (!item.marked) {
+      continue;
+    }
+    const settlesAt = walletMarkSettlesAt(item, gate);
+    if (settlesAt != null && settlesAt > now && (next == null || settlesAt < next)) {
+      next = settlesAt;
+    }
+  }
+  return next;
 }
 
 /** What the wallet buttons take as `items`. */

@@ -14,28 +14,47 @@ import { useCheckoutStore } from "./state";
  */
 export const CART_OPEN_ATTRIBUTE = "data-bitsnap-cart-open";
 
-/** Open carts on the page: closing one of two open carts keeps the attribute. */
-let openCarts = 0;
+/**
+ * Open carts on the page, kept on `<html>` under a registry symbol rather than
+ * in this module: a page can load two copies of the library (two bundles), and
+ * closing one copy's cart must not drop the mark while the other's is open.
+ */
+const OPEN_CARTS = Symbol.for("bitsnap.cart.openCount");
+
+type CountedElement = HTMLElement & { [OPEN_CARTS]?: number };
+
+/**
+ * Counts one open cart on `html` and sets the mark; the returned function
+ * uncounts it and removes the mark when no cart is left open. Exported for
+ * tests.
+ */
+export function markCartOpen(html: HTMLElement): () => void {
+  const counted = html as CountedElement;
+  counted[OPEN_CARTS] = (counted[OPEN_CARTS] ?? 0) + 1;
+  html.setAttribute(CART_OPEN_ATTRIBUTE, "");
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    const left = Math.max(0, (counted[OPEN_CARTS] ?? 0) - 1);
+    counted[OPEN_CARTS] = left;
+    if (left === 0) {
+      html.removeAttribute(CART_OPEN_ATTRIBUTE);
+    }
+  };
+}
 
 /**
  * Marks `<html>` with `data-bitsnap-cart-open` while `open`. A layout effect,
  * so the consent banner is hidden before the cart's first frame is painted.
  */
 function useCartOpenMark(open: boolean) {
-  useLayoutEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    const html = document.documentElement;
-    openCarts += 1;
-    html.setAttribute(CART_OPEN_ATTRIBUTE, "");
-    return () => {
-      openCarts = Math.max(0, openCarts - 1);
-      if (openCarts === 0) {
-        html.removeAttribute(CART_OPEN_ATTRIBUTE);
-      }
-    };
-  }, [open]);
+  useLayoutEffect(
+    () => (open ? markCartOpen(document.documentElement) : undefined),
+    [open],
+  );
 }
 
 /**

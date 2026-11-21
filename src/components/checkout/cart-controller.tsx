@@ -16,7 +16,6 @@ import {
   catalogUnitPrice,
   hasPayWhatYouWantLine,
   walletItems,
-  walletsInert,
   type CartViewLine,
   type WalletItem,
 } from "./cart-view";
@@ -644,7 +643,9 @@ function useCartControllerState(
           : sum,
       0,
     );
-  React.useEffect(() => {
+  // A layout effect: the header re-renders with the new count before the frame
+  // that shows the unavailable row is painted, never one frame later.
+  React.useLayoutEffect(() => {
     useCheckoutStore.setState({ unavailableInCart: unavailableQuantity });
   }, [unavailableQuantity]);
   React.useEffect(
@@ -674,7 +675,7 @@ function useCartControllerState(
     showReviewPrices: showReviewPrices && lines.length > 0,
     wallets: {
       mounted: walletsMounted.current,
-      inert: walletsInert(view) || unavailable.length > 0,
+      inert: cart.walletsInert || unavailable.length > 0,
       oneClick,
       items: walletItems(view),
     },

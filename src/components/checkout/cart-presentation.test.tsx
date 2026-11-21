@@ -219,6 +219,43 @@ function seedWithUnavailable() {
   useCheckoutStore.setState({ numberOfProductsInCart: 5 });
 }
 
+describe("cart open mark shared by two copies of the library (D19)", () => {
+  const OPEN_CARTS = Symbol.for("bitsnap.cart.openCount");
+  const counted = () => html() as HTMLElement & { [OPEN_CARTS]?: number };
+
+  afterEach(() => {
+    delete counted()[OPEN_CARTS];
+    html().removeAttribute(CART_OPEN);
+  });
+
+  it("keeps the mark while another copy's cart is open", async () => {
+    // Another bundle on the page opened its cart: it counted itself on <html>.
+    counted()[OPEN_CARTS] = 1;
+    html().setAttribute(CART_OPEN, "");
+    await mount();
+    await open();
+    assert.equal(counted()[OPEN_CARTS], 2, "both open carts are counted in one place");
+    await React.act(async () => slot("closeButton")!.click());
+    await settle();
+    assert.equal(html().hasAttribute(CART_OPEN), true, "the other copy's cart is still open");
+    assert.equal(counted()[OPEN_CARTS], 1);
+  });
+
+  it("two independent counters share the count: the mark goes with the last release", async () => {
+    const { markCartOpen } = await import("./CartFrame.tsx");
+    const first = markCartOpen(html());
+    const second = markCartOpen(html());
+    assert.equal(html().getAttribute(CART_OPEN), "");
+    first();
+    first();
+    assert.equal(html().hasAttribute(CART_OPEN), true, "a repeated release counts once");
+    assert.equal(counted()[OPEN_CARTS], 1);
+    second();
+    assert.equal(html().hasAttribute(CART_OPEN), false);
+    assert.equal(counted()[OPEN_CARTS], 0);
+  });
+});
+
 for (const presentation of ["drawer", "dialog"] as const) {
   describe(`cart open mark for the consent banner (${presentation}, D19)`, () => {
     it("sets data-bitsnap-cart-open on <html> while open, removes it on close and unmount", async () => {
@@ -326,6 +363,45 @@ describe("unavailable line", () => {
     await React.act(async () => slot("closeButton")!.click());
     await settle();
     assert.equal(useCheckoutStore.getState().unavailableInCart, 0, "forgotten when the cart closes");
+  });
+});
+
+describe("header count with an unavailable line", () => {
+  it("is set in the commit that first shows the unavailable row, before that frame can paint", async () => {
+    seedWithUnavailable();
+    // A Profiler's onRender runs in the commit, after its children's layout
+    // effects and before their passive effects (which a browser may run after
+    // the frame is painted). The count the header reads must be right by then.
+    const atCommit: Array<{ row: boolean; unavailable: number }> = [];
+    const container = doc().createElement("div");
+    doc().body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await React.act(async () => {
+      root.render(
+        <React.Profiler
+          id="cart"
+          onRender={() =>
+            atCommit.push({
+              row: doc().querySelector("[data-bitsnap-checkout-unavailable]") != null,
+              unavailable: useCheckoutStore.getState().unavailableInCart,
+            })
+          }
+        >
+          <BitsnapCheckout projectID={TEST_KEY} locale="en-US" analytics={false} />
+        </React.Profiler>,
+      );
+    });
+    await open();
+    await settle();
+    const withRow = atCommit.filter((entry) => entry.row);
+    assert.ok(withRow.length > 0, "the unavailable row rendered");
+    assert.deepEqual(
+      withRow.map((entry) => entry.unavailable),
+      withRow.map(() => 3),
+      "every commit that shows the row already left its 3 units out of the header count",
+    );
+    assert.equal(slot("title")?.textContent, "Cart (2)");
   });
 });
 

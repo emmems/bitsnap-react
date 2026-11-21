@@ -243,10 +243,19 @@
     margin: auto;
     width: min(100vw - 32px, var(--bitsnap-checkout-panel-width, 480px));
     height: fit-content;
-    max-height: var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px));
+    max-height: var(--bitsnap-checkout-panel-max-height, min(100vh - 48px, 704px));
     border: 1px solid var(--bsc-border);
     border-radius: calc(var(--bsc-radius) + 4px);
     box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
+}
+
+/* `dvh` only where it parses: elsewhere a `dvh` declaration is invalid at
+ * computed time (the cap would be lost and the CTA could leave the screen), so
+ * the `vh` cap above stays. The token still wins in both. */
+@supports (height: 1dvh) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"]) {
+        max-height: var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px));
+    }
 }
 
 /* Compact layout, written after the side widths (same specificity, later
@@ -266,11 +275,17 @@
         inset: auto 0 0 0;
         margin: 0;
         width: 100%;
-        max-height: min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px));
+        max-height: min(92vh, var(--bitsnap-checkout-panel-max-height, 704px));
         border: 0;
         border-top: 1px solid var(--bsc-border);
         border-radius: calc(var(--bsc-radius) + 8px) calc(var(--bsc-radius) + 8px) 0 0;
         box-shadow: 0 -8px 32px rgb(0 0 0 / 0.25);
+    }
+
+    @supports (height: 1dvh) {
+        [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"]) {
+            max-height: min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px));
+        }
     }
 }
 
@@ -1001,6 +1016,25 @@
     color: var(--bsc-muted);
 }
 
+/* A landscape phone (at most 500 px high): the footer gives the lines its
+ * room. No "discounts, delivery and taxes" note (the next step shows them),
+ * tighter padding, a 44 px CTA (still the minimum touch target). After the
+ * footer, note and CTA rules, so it wins at the same specificity. */
+@media (max-height: 500px) {
+    [data-bitsnap-checkout] .bsc-footer {
+        padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+    }
+
+    [data-bitsnap-checkout] .bsc-note {
+        display: none;
+    }
+
+    [data-bitsnap-checkout] .bsc-cta {
+        min-height: 44px;
+        margin-top: 6px;
+    }
+}
+
 [data-bitsnap-checkout] .bsc-notice {
     display: flex;
     align-items: flex-start;
@@ -1128,6 +1162,13 @@
     border-radius: var(--bsc-radius);
 }
 
+/* As tall as the CTA on a landscape phone (see the footer's short rule). */
+@media (max-height: 500px) {
+    [data-bitsnap-checkout] .bsc-skeleton-cta {
+        height: 44px;
+    }
+}
+
 /* ---- Parts that also render outside the cart (S2, S4, N7) -----------------
  * `<InPostPayButton>`, `<RevolutPayButton>` and `<GooglePayButton>` also
  * render with no checkout root: these parts carry their own attribute, in and
@@ -1135,12 +1176,19 @@
 
 /* Read by screen readers, not shown: the empty-cart announcement and the
  * Google Pay status. */
+/* The one visually-hidden helper: a host rule on a standalone wallet button's
+ * text (`span { position: static }`) must not bring it back, so `position`
+ * and the clip are `!important` here, and only here outside motion off. */
 [data-bitsnap-checkout-part="sr"] {
-    position: absolute;
+    position: absolute !important;
     width: 1px;
     height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
     overflow: hidden;
-    clip-path: inset(50%);
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
     white-space: nowrap;
 }
 
