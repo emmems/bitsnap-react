@@ -67,41 +67,15 @@ class FakeApplePaySession {
   abort() {}
 }
 
-/**
- * A ResizeObserver the test can fire, so the "or" divider (shown once an
- * express wrapper has a height) renders. jsdom lays nothing out: a wrapper
- * reports a height through the patched `getBoundingClientRect` below.
- */
-const observers = new Set<{ fire: () => void }>();
-class RecordingResizeObserver {
-  private elements = new Set<Element>();
-  constructor(private callback: ResizeObserverCallback) {}
-  observe(element: Element) {
-    this.elements.add(element);
-    observers.add(this);
-  }
-  unobserve(element: Element) {
-    this.elements.delete(element);
-  }
-  disconnect() {
-    this.elements.clear();
-    observers.delete(this);
-  }
-  fire() {
-    this.callback([], this as unknown as ResizeObserver);
-  }
+// auto-animate attaches only where `window` has a ResizeObserver; jsdom has none.
+class NoopResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
 }
 for (const target of [globalThis, page.win] as unknown as Record<string, unknown>[]) {
-  Object.defineProperty(target, "ResizeObserver", { value: RecordingResizeObserver, configurable: true, writable: true });
+  Object.defineProperty(target, "ResizeObserver", { value: NoopResizeObserver, configurable: true, writable: true });
 }
-const elementProto = (page.win as unknown as { Element: typeof Element }).Element.prototype;
-const realRect = elementProto.getBoundingClientRect;
-elementProto.getBoundingClientRect = function (this: Element) {
-  const rect = realRect.call(this);
-  if (!this.classList.contains("bsc-express-btn")) return rect;
-  const box = { x: 0, y: 0, top: 0, left: 0, right: 300, bottom: 44, width: 300, height: 44 };
-  return { ...box, toJSON: () => box } as DOMRect;
-};
 
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
@@ -283,7 +257,6 @@ afterEach(async () => {
 
 after(() => {
   cartCheckoutModule.expressAreaChunk.load = realExpressLoad;
-  elementProto.getBoundingClientRect = realRect;
   teardownReactPage();
 });
 
@@ -321,9 +294,6 @@ const open = async () => {
   await React.act(async () => Bitsnap.showCart());
   await settle();
 };
-
-/** Fires the resize observers, so the "or" divider sees the express wrappers. */
-const resize = () => React.act(async () => observers.forEach((observer) => observer.fire()));
 
 async function clickNext() {
   const button = $('[data-bitsnap-checkout-slot="checkoutButton"]')!;
@@ -364,8 +334,6 @@ describe("cart class graph", () => {
       await open();
       lookAtCart();
       await settle(60);
-      await resize();
-      await settle();
       assert.ok($('[data-bitsnap-checkout-slot="productName"] a.bsc-line-link'), "the product link renders");
       assert.ok($('[data-bitsnap-checkout-slot="productUnitPrice"]'), "the unit price line renders");
       assert.ok($('[data-bitsnap-checkout-price="omnibus"]'), "the Omnibus line renders");
@@ -415,6 +383,31 @@ describe("cart class graph", () => {
       collect(`empty ${presentation}`);
     });
   }
+
+  it("gives the footer skeleton the footer slot's class and style, the bars the skeleton slot's (N3)", async () => {
+    await mount();
+    await add("var1", 1);
+    await unmountAll();
+    page.win.localStorage.removeItem("bitsnap-cart-view");
+    productsMode = "pending";
+    await mount({
+      appearance: {
+        elements: {
+          footer: { className: "merchant-footer", style: { paddingTop: "3px" } },
+          skeleton: { className: "merchant-skeleton" },
+        },
+      },
+    });
+    await open();
+    const footer = $('[data-bitsnap-checkout-slot="footer"]')!;
+    assert.ok(footer.classList.contains("bsc-skeleton"), "the footer is the loading skeleton");
+    assert.equal(footer.className, "bsc-footer bsc-skeleton merchant-footer");
+    assert.equal(footer.style.paddingTop, "3px");
+    assert.equal(
+      footer.querySelector('[data-bitsnap-checkout-slot="skeleton"]')?.className,
+      "bsc-skeleton-footer merchant-skeleton",
+    );
+  });
 
   it("renders a price-updated line with the wallets-updating and review notices", async () => {
     await mount({ appearance: { elements: merchantElements() } });
@@ -579,9 +572,43 @@ function classLiterals(source: string): string[] {
       expression = balanced(code, at - 1);
     }
     scannedUntil = at + expression.length;
-    for (const literal of expression.matchAll(/"([^"\\]*)"|'([^'\\]*)'|`([^`]*)`/g)) {
-      const text = literal[1] ?? literal[2] ?? literal[3].replace(/\$\{[^}]*\}/g, " ");
-      tokens.push(...text.split(/\s+/).filter(Boolean));
+    tokens.push(...stringTokens(expression));
+  }
+  return tokens;
+}
+
+/**
+ * Class tokens in the string literals of an expression. A template literal's
+ * text counts, and each `${…}` hole is read as an expression of its own, so a
+ * ternary or a nested template inside it is not skipped.
+ */
+function stringTokens(expression: string): string[] {
+  const tokens: string[] = [];
+  const words = (text: string) => tokens.push(...text.split(/\s+/).filter(Boolean));
+  for (let i = 0; i < expression.length; i++) {
+    const quote = expression[i];
+    if (quote === '"' || quote === "'") {
+      let text = "";
+      for (i++; i < expression.length && expression[i] !== quote; i++) {
+        if (expression[i] === "\\") i++;
+        text += expression[i];
+      }
+      words(text);
+    } else if (quote === "`") {
+      let text = "";
+      for (i++; i < expression.length && expression[i] !== "`"; i++) {
+        if (expression[i] === "\\") {
+          text += expression[++i];
+        } else if (expression[i] === "$" && expression[i + 1] === "{") {
+          const hole = balanced(expression, i + 1);
+          tokens.push(...stringTokens(hole));
+          text += " ";
+          i += hole.length + 2;
+        } else {
+          text += expression[i];
+        }
+      }
+      words(text);
     }
   }
   return tokens;
@@ -594,10 +621,13 @@ describe("cart class graph, static backstop", () => {
       '<p className={cx("bsc-a", ok && "text-sm", { x: 1 })} />',
       "<span className={`bsc-b ${extra} mt-2`} />",
       "const c = cx('bsc-c', 'rounded-md');",
+      // Strings inside template holes: a ternary, a nested template, an object.
+      '<i className={`bsc-d ${open ? "gap-2" : `px-${n} py-1`} ${x({ a: "b" })}`} />',
+      '<b className={cx(`bsc-e ${busy ? "opacity-50" : ""}`, ok ? "bsc-f" : "w-full")} />',
     ].join("\n");
     assert.deepEqual(
       classLiterals(sample).filter((token) => !token.startsWith("bsc-")),
-      ["flex", "p-4", "text-sm", "mt-2", "rounded-md"],
+      ["flex", "p-4", "text-sm", "mt-2", "rounded-md", "gap-2", "px-", "py-1", "b", "opacity-50", "w-full"],
     );
   });
 
@@ -605,10 +635,18 @@ describe("cart class graph, static backstop", () => {
     const files = cartGraph();
     const names = files.map((file) => relative(process.cwd(), file));
     for (const expected of [
+      "src/components/checkout/CartFrame.tsx",
       "src/components/checkout/CartLines.tsx",
       "src/components/checkout/SingleProduct.tsx",
+      "src/components/checkout/Skeleton.tsx",
+      "src/components/checkout/ProductPrice.tsx",
+      "src/components/checkout/icons.tsx",
       "src/components/checkout/CartExpressArea.tsx",
+      "src/components/checkout/ApplePay.tsx",
+      "src/components/checkout/GooglePay.tsx",
       "src/components/express/ExpressStatus.tsx",
+      "src/components/express/InPostPayButton.tsx",
+      "src/components/express/RevolutPayButton.tsx",
     ]) {
       assert.ok(names.includes(expected), `the graph misses ${expected}`);
     }

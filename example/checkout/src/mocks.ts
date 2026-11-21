@@ -91,9 +91,19 @@ export type MockOptions = {
   latencyMs?: number;
   /** Makes `/products` fail, for the "could not load" state. */
   failProducts?: boolean;
+  /** Raises a sale price, so a stored cart view shows "price updated". */
+  priceChange?: boolean;
+  /** Leaves the last product out of `/products`: an unavailable row. */
+  missingProduct?: boolean;
+  /** `/buy` never answers: the busy "Go to checkout" button. */
+  pendingBuy?: boolean;
+  /** Delays only `/countries`, so the "choose a country" hint can be seen. */
+  countriesLatencyMs?: number;
 };
 
 export function installCheckoutMocks(options: MockOptions = {}) {
+  // Screenshot scripts flip an option on a live page: `window.__checkoutMocks.priceChange = true`.
+  (window as unknown as { __checkoutMocks: MockOptions }).__checkoutMocks = options;
   const script = document.createElement("script");
   script.setAttribute("data-id", PROJECT_ID);
   script.setAttribute("data-name", "internal-cart");
@@ -115,13 +125,32 @@ export function installCheckoutMocks(options: MockOptions = {}) {
       if (options.failProducts === true) {
         return json({}, 500);
       }
+      let result = PRODUCTS;
+      if (options.priceChange === true) {
+        // The sale price went up, with a new price version.
+        result = result.map((product) =>
+          product.id === "course-2"
+            ? {
+                ...product,
+                price: 15900,
+                pricing: { ...(product.pricing as object), effectivePrice: 15900, priceVersion: "v2" },
+              }
+            : product,
+        );
+      }
+      if (options.missingProduct === true) {
+        result = result.slice(0, -1);
+      }
       return json({
         success: true,
-        result: PRODUCTS,
+        result,
       });
     }
 
     if (url.includes("/public-commerce/countries")) {
+      if (options.countriesLatencyMs != null) {
+        await new Promise((resolve) => setTimeout(resolve, options.countriesLatencyMs));
+      }
       return json(COUNTRIES);
     }
 
@@ -130,6 +159,9 @@ export function installCheckoutMocks(options: MockOptions = {}) {
     }
 
     if (url.includes("/public-commerce/buy")) {
+      if (options.pendingBuy === true) {
+        return new Promise<Response>(() => {});
+      }
       if (options.unavailableProducts === true) {
         return json({ itemIds: ["course-1"] }, 400);
       }
@@ -141,11 +173,12 @@ export function installCheckoutMocks(options: MockOptions = {}) {
   };
 }
 
-export function seedCart(productIDs: string[] = MOCK_PRODUCT_IDS) {
+/** `country: ""` is a cart with no country chosen (a missing one reads as "PL"). */
+export function seedCart(productIDs: string[] = MOCK_PRODUCT_IDS, country = "PL") {
   localStorage.setItem(
     "checkout",
     JSON.stringify({
-      country: "PL",
+      country,
       couponCode: undefined,
       email: undefined,
       selectedDeliveryMethod: undefined,

@@ -632,8 +632,10 @@
     gap: 8px;
 }
 
-/* Nothing to show yet (or ever): the block takes no row of the options grid. */
-[data-bitsnap-checkout] .bsc-express:where([data-bitsnap-checkout-empty]) {
+/* Nothing to show yet (or ever): the block takes no row of the options grid.
+ * "Something" is a real express button (the list is the one of the "or"
+ * divider below), a status line or the wallets note. */
+[data-bitsnap-checkout] .bsc-express:where(:not(:has(apple-pay-button:defined, .google-pay-button-container:not(.not-ready):not(:empty), inpost-izi-button:defined, [data-bitsnap-express="revolutPay"] > :first-child:not(:empty), .bsc-express-status, .bsc-wallets-note))) {
     margin-bottom: -16px;
 }
 
@@ -651,11 +653,8 @@
     flex-basis: 100%;
 }
 
+/* Size and alignment: `[data-bitsnap-checkout-part="status"]` below. */
 [data-bitsnap-checkout] .bsc-express-status {
-    margin-top: 6px;
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: center;
     color: var(--bsc-muted);
 }
 
@@ -673,12 +672,22 @@
     color: var(--bsc-muted);
 }
 
+/* The "or" divider shows only under a real express button (N1, N2): CSS reads
+ * the buttons as they render, so it needs no measuring and shows in the same
+ * frame. Wrappers that only hold a status line or an unloaded widget do not
+ * count. A real button: Apple Pay's and InPost's elements once their script
+ * defined them, Google Pay's container once ready (the library keeps
+ * `.not-ready` on it otherwise), the frame Revolut's SDK mounted. */
 [data-bitsnap-checkout] .bsc-or {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 12px;
     font-size: 13px;
     color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] :where(.bsc-express:has(apple-pay-button:defined, .google-pay-button-container:not(.not-ready):not(:empty), inpost-izi-button:defined, [data-bitsnap-express="revolutPay"] > :first-child:not(:empty))) .bsc-or {
+    display: flex;
 }
 
 [data-bitsnap-checkout] .bsc-or-line {
@@ -882,7 +891,8 @@
     text-align: center;
 }
 
-[data-bitsnap-checkout] .bsc-spinner {
+[data-bitsnap-checkout] .bsc-spinner,
+[data-bitsnap-checkout-part] .bsc-spinner {
     display: inline-block;
     flex: none;
     width: 16px;
@@ -978,6 +988,39 @@
 [data-bitsnap-checkout] .bsc-skeleton-cta {
     height: 52px;
     border-radius: var(--bsc-radius);
+}
+
+/* ---- Parts that also render outside the cart (S2, S4, N7) -----------------
+ * `<InPostPayButton>`, `<RevolutPayButton>` and `<GooglePayButton>` also
+ * render with no checkout root: these parts carry their own attribute, in and
+ * out of the cart. (0,1,0), after the reset. */
+
+/* Read by screen readers, not shown: the empty-cart announcement and the
+ * Google Pay status. */
+[data-bitsnap-checkout-part="sr"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+[data-bitsnap-checkout-part="status"] {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+[data-bitsnap-checkout-part="wallet-busy"] {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+[data-bitsnap-checkout-part="wallet-busy"]:where(:empty) {
+    display: none;
 }
 
 /* ---- Cart trigger (D20) ---------------------------------------------------

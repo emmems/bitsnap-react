@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useCartController } from "./cart-controller";
 import { useCheckoutSlot } from "./appearance.context";
 import { AlertIcon, BagIcon } from "./icons";
@@ -43,6 +44,14 @@ export function CartLines({
   const retryText = useCheckoutText("retry");
   const unavailableText = useCheckoutText("unavailableProduct");
 
+  // The empty state replaces the last line the buyer removed: a live region
+  // that is already on screen says so (a new `role="status"` is often silent).
+  const hadLines = useRef(false);
+  if (status === "ready" && lines.length + unavailable.length > 0) {
+    hadLines.current = true;
+  }
+  const announceEmpty = status === "empty" && hadLines.current;
+
   const noticeAlert = notice != null && notice.length > 0 && (
     <p
       role="alert"
@@ -69,6 +78,10 @@ export function CartLines({
 
   return (
     <>
+      <p role="status" data-bitsnap-checkout-part="sr" data-bitsnap-checkout-announcer="">
+        {announceEmpty ? emptyCartText : null}
+      </p>
+
       {status === "loading" && (
         <>
           <LineSkeleton className={skeleton.className} style={skeleton.style} />

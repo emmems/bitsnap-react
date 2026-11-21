@@ -97,7 +97,6 @@ export function CartOptions() {
   // Taken once per mount: the drawer mounts this at each open, so a failed
   // chunk is retried at the next open, not at every render.
   const [CartExpressArea] = React.useState(expressAreaComponent);
-  const hasExpress = useHasExpress();
 
   // The express chunk loads while `/products` is asked, not after it: the
   // buttons mount once the server confirmed the cart (slice 5).
@@ -127,16 +126,12 @@ export function CartOptions() {
       style={options.style}
     >
       {wallets.mounted && (
-        <div
-          className="bsc-express"
-          data-bitsnap-checkout-empty={
-            !hasExpress.value && !showWalletsNote ? "" : undefined
-          }
-        >
+        // cart.css collapses this block when it shows nothing and shows the
+        // "or" divider only under a real express button (`:has()`, N1, N2).
+        <div className="bsc-express">
           {/* Inert while a line is unconfirmed or price-marked (D12, N1): no
               click or key starts a wallet; an open wallet sheet is untouched. */}
           <div
-            ref={hasExpress.ref}
             data-bitsnap-checkout-wallets=""
             aria-disabled={wallets.inert ? "true" : undefined}
             inert={wallets.inert}
@@ -164,13 +159,11 @@ export function CartOptions() {
               {walletsUpdatingText}
             </p>
           )}
-          {hasExpress.value && (
-            <p className="bsc-or" data-bitsnap-checkout-divider="">
-              <span className="bsc-or-line" aria-hidden="true" />
-              {orText}
-              <span className="bsc-or-line" aria-hidden="true" />
-            </p>
-          )}
+          <p className="bsc-or" data-bitsnap-checkout-divider="">
+            <span className="bsc-or-line" aria-hidden="true" />
+            {orText}
+            <span className="bsc-or-line" aria-hidden="true" />
+          </p>
         </div>
       )}
 
@@ -206,33 +199,6 @@ export function CartOptions() {
       )}
     </div>
   );
-}
-
-/**
- * Whether an express button takes space: the "or" divider follows the
- * express buttons, whose availability only their own components know. The
- * container resizes whenever a button appears or goes, and each button
- * wrapper is measured then.
- */
-function useHasExpress() {
-  const [value, setValue] = React.useState(false);
-  const observer = React.useRef<ResizeObserver | null>(null);
-  const ref = React.useCallback((element: HTMLElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
-    if (element == null || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    observer.current = new ResizeObserver(() => {
-      setValue(
-        Array.from(element.children).some(
-          (child) => child.getBoundingClientRect().height > 0,
-        ),
-      );
-    });
-    observer.current.observe(element);
-  }, []);
-  return { ref, value };
 }
 
 /**
@@ -275,7 +241,7 @@ export function CartFooter() {
   const reviewPricesText = useCheckoutText("reviewPrices");
 
   if (status === "loading") {
-    return <FooterSkeleton className={skeleton.className} style={skeleton.style} />;
+    return <FooterSkeleton footer={footer} skeleton={skeleton} />;
   }
   if (!shown) {
     return null;

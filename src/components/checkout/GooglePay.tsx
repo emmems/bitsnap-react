@@ -4,6 +4,7 @@ import { isErr } from "./lib/err";
 import { currentProjectID } from "./project-id";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import { useCheckoutText } from "./texts.context";
 import {
   InstrumentProvider,
   useInstrument,
@@ -178,8 +179,28 @@ function GooglePayButtonComponent({
           }
         }}
       />
-      {isPending ? <span className="bsc-spinner" aria-hidden="true" /> : null}
+      <WalletBusy busy={isPending} />
     </React.Suspense>
+  );
+}
+
+/**
+ * The status under the Google Pay button: a spinner and a visually hidden
+ * "Confirming your payment…" while the payment is confirmed. On the page
+ * before that, so the text is announced (a region added with its text is
+ * often silent); its own attribute styles it outside the cart too.
+ */
+export function WalletBusy({ busy }: { busy: boolean }) {
+  const pendingText = useCheckoutText("expressPending");
+  return (
+    <span role="status" data-bitsnap-checkout-part="wallet-busy">
+      {busy ? (
+        <>
+          <span className="bsc-spinner" aria-hidden="true" />
+          <span data-bitsnap-checkout-part="sr">{pendingText}</span>
+        </>
+      ) : null}
+    </span>
   );
 }
 

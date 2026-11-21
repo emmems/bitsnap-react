@@ -239,6 +239,11 @@ describe(`cart accessibility (${presentation})`, () => {
       "the unit price for a quantity above 1",
     );
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="quantityControl"]')?.getAttribute("role"), "group");
+    assert.equal(
+      panel.querySelector('[data-bitsnap-checkout-slot="quantityControl"]')?.getAttribute("aria-label"),
+      "Quantity: Mug Blue",
+      "each stepper group names its line (N4)",
+    );
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="removeButton"]')?.getAttribute("title"), "Remove");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="removeButton"]')?.getAttribute("aria-label"), "Remove: Mug Blue");
     assert.deepEqual(
@@ -322,6 +327,100 @@ describe("cart line details", () => {
     } finally {
       product.variants[0].name = "Blue";
     }
+  });
+});
+
+describe("cart line removal", () => {
+  const removeButtons = () =>
+    Array.from(dialog()!.querySelectorAll<HTMLButtonElement>('[data-bitsnap-checkout-slot="removeButton"]'));
+  const announcer = () => dialog()!.querySelector<HTMLElement>("[data-bitsnap-checkout-announcer]")!;
+
+  it("moves the focus to the next line, then to the panel, and announces the empty cart (S1, N7)", async () => {
+    await mount();
+    await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+    await React.act(async () => void (await Bitsnap.addProductToCart("prod1", 1)));
+    await openCart();
+    const region = announcer();
+    assert.equal(region.getAttribute("role"), "status");
+    assert.equal(region.textContent, "", "nothing to announce while the cart has lines");
+    const [first, second] = removeButtons();
+    assert.ok(first && second, "two lines");
+
+    first.focus();
+    await React.act(async () => first.click());
+    await settle();
+    assert.ok(removeButtons().length === 1 && removeButtons()[0] === second, "the first line is gone");
+    // The panel's focus scope moves the focus to the panel when the line goes;
+    // the removal still hands it on to the remaining line.
+    assert.ok(doc().activeElement === second, "focus lands on the remaining line's remove button");
+
+    await React.act(async () => second.click());
+    await settle();
+    assert.equal(removeButtons().length, 0);
+    assert.ok(doc().activeElement === dialog(), "removing the last line leaves the focus on the panel");
+    assert.ok(announcer() === region, "the live region was on the page before the change");
+    assert.equal(region.textContent, "Your cart is empty.");
+    assert.ok(dialog()!.querySelector('[data-bitsnap-checkout-slot="emptyState"]'), "the empty state shows");
+  });
+
+  it("does not announce a cart that opens empty", async () => {
+    await mount();
+    await openCart();
+    assert.equal(announcer().textContent, "");
+  });
+
+  it("keeps the line at quantity 1 when 0 is typed: only the trash button removes (N5)", async () => {
+    await mount();
+    await React.act(async () => void (await Bitsnap.addProductToCart("var1", 2)));
+    await openCart();
+    const input = dialog()!.querySelector<HTMLInputElement>('[data-bitsnap-checkout-slot="quantityInput"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(page.win.HTMLInputElement.prototype, "value")!.set!;
+    input.focus();
+    await React.act(async () => {
+      setValue.call(input, "0");
+      input.dispatchEvent(new page.win.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => {
+      input.dispatchEvent(new page.win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    assert.equal(removeButtons().length, 1, "the line stays");
+    assert.equal(input.value, "1");
+    assert.ok(doc().activeElement === input, "the focus stays in the input");
+  });
+});
+
+describe("Google Pay status", () => {
+  it("announces the confirmation with a visually hidden status beside a spinner (S2)", async () => {
+    const { WalletBusy } = await import("./GooglePay.tsx");
+    const { CheckoutTextsProvider } = await import("./texts.context.tsx");
+    const container = doc().createElement("div");
+    doc().body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const render = (busy: boolean, locale = "en-US") =>
+      React.act(async () =>
+        root.render(
+          <CheckoutTextsProvider locale={locale}>
+            <WalletBusy busy={busy} />
+          </CheckoutTextsProvider>,
+        ),
+      );
+
+    await render(false);
+    const status = container.querySelector<HTMLElement>('[data-bitsnap-checkout-part="wallet-busy"]')!;
+    assert.equal(status.getAttribute("role"), "status", "the live region is on the page before the payment");
+    assert.equal(status.textContent, "");
+    assert.equal(status.children.length, 0, "empty, so cart.css hides it");
+
+    await render(true);
+    assert.ok(container.querySelector('[data-bitsnap-checkout-part="wallet-busy"]') === status, "the same region");
+    assert.equal(status.querySelector('[data-bitsnap-checkout-part="sr"]')?.textContent, "Confirming your payment…");
+    assert.equal(status.querySelector(".bsc-spinner")?.getAttribute("aria-hidden"), "true");
+    assert.equal(status.closest("[data-bitsnap-checkout]"), null, "no checkout root: the part attribute styles it");
+
+    await render(true, "pl-PL");
+    assert.equal(status.querySelector('[data-bitsnap-checkout-part="sr"]')?.textContent, "Potwierdzamy płatność…");
   });
 });
 

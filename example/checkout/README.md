@@ -23,6 +23,10 @@ pnpm dev
 | `/?unavailable=1`                   | Unavailable product + checkout error            |
 | `?latency=1500`                     | Loading skeletons                              |
 | `?fail=1`                           | Products cannot be loaded (retry state)        |
+| `?priceChange=1`                    | Price updated mark (open once without it first) |
+| `?missing=1`                        | Unavailable row                                |
+| `?buy=pending`                      | Busy "Go to checkout"                          |
+| `?country=none&countriesLatency=4000` | Country-missing hint                         |
 
 The radio buttons switch the appearance while the cart is open, which is part of
 the supported behaviour.

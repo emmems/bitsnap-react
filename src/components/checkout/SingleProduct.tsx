@@ -89,8 +89,16 @@ const SingleProduct = ({
     const panel = button.closest<HTMLElement>('[data-bitsnap-checkout-slot="panel"]');
     Promise.resolve(shouldUpdate(0))
       .then(() => {
+        // The write is async: by now React removed the line and the dialog's
+        // focus scope may have moved the focus to the panel itself.
         const active = document.activeElement;
-        if (active == null || active === document.body || !active.isConnected || active === button) {
+        if (
+          active == null ||
+          active === document.body ||
+          active === panel ||
+          !active.isConnected ||
+          active === button
+        ) {
           (next?.isConnected ? next : panel)?.focus({ preventScroll: true });
         }
       })
@@ -205,7 +213,7 @@ const SingleProduct = ({
       )}
 
       <div className="bsc-line-controls">
-        <QuantityComponent quantity={quantity} shouldUpdate={shouldUpdate} />
+        <QuantityComponent name={details.name} quantity={quantity} shouldUpdate={shouldUpdate} />
         <button
           data-bitsnap-checkout-slot="removeButton"
           type="button"
@@ -250,9 +258,12 @@ const ProductLink = ({
 };
 
 const QuantityComponent = ({
+  name,
   quantity,
   shouldUpdate,
 }: {
+  /** The line's name, so each group is told apart ("Quantity: Mug Blue"). */
+  name: string;
   quantity: number;
   shouldUpdate: (newQuantity: number) => Promise<unknown> | void;
 }) => {
@@ -294,7 +305,7 @@ const QuantityComponent = ({
     <div
       data-bitsnap-checkout-slot="quantityControl"
       role="group"
-      aria-label={quantityText}
+      aria-label={`${quantityText}: ${name}`}
       className={cx("bsc-stepper", quantityControl.className)}
       style={quantityControl.style}
     >

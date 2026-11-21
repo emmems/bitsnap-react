@@ -1,4 +1,7 @@
 import type { CSSProperties } from "react";
+import { cx } from "./lib/cx";
+
+type SlotProps = { className?: string; style?: CSSProperties };
 
 /** A pulsing placeholder bar; `cart.css` (`.bsc-pulse`) gives it the per-theme fill. */
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
@@ -44,22 +47,25 @@ function LineSkeleton({
  * the footer's grid row. The whole footer waits the same 150 ms as the lines.
  */
 function FooterSkeleton({
-  className,
-  style,
+  footer,
+  skeleton,
 }: {
-  className?: string;
-  style?: CSSProperties;
+  /** The `footer` slot: the same box as the loaded footer. */
+  footer: SlotProps;
+  /** The `skeleton` slot: the bars inside it. */
+  skeleton: SlotProps;
 }) {
   return (
     <div
       data-bitsnap-checkout-slot="footer"
       aria-hidden="true"
-      className="bsc-footer bsc-skeleton"
+      className={cx("bsc-footer bsc-skeleton", footer.className)}
+      style={footer.style}
     >
       <div
         data-bitsnap-checkout-slot="skeleton"
-        className={className ? `bsc-skeleton-footer ${className}` : "bsc-skeleton-footer"}
-        style={style}
+        className={cx("bsc-skeleton-footer", skeleton.className)}
+        style={skeleton.style}
       >
         <Skeleton className="bsc-skeleton-total" />
         <Skeleton className="bsc-skeleton-cta" />

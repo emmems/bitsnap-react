@@ -10,18 +10,26 @@ import { installCheckoutMocks, seedCart } from "./mocks";
 //   ?unavailable=1 -> the checkout action answers with item-ids-not-found
 //   ?latency=1500 -> loading state
 //   ?fail=1 -> the products cannot be loaded
+//   ?priceChange=1 -> the first price went up (open the cart once without it first)
+//   ?missing=1 -> the last product is no longer sold (unavailable row)
+//   ?buy=pending -> "Go to checkout" stays busy
+//   ?country=none&countriesLatency=4000 -> no country yet: the hint under the button
 const params = new URLSearchParams(window.location.search);
 
 installCheckoutMocks({
   unavailableProducts: params.get("unavailable") === "1",
   latencyMs: Number(params.get("latency") ?? 0) || undefined,
   failProducts: params.get("fail") === "1",
+  priceChange: params.get("priceChange") === "1",
+  missingProduct: params.get("missing") === "1",
+  pendingBuy: params.get("buy") === "pending",
+  countriesLatencyMs: Number(params.get("countriesLatency") ?? 0) || undefined,
 });
 
 if (params.get("cart") === "empty") {
   localStorage.removeItem("checkout");
 } else {
-  seedCart();
+  seedCart(undefined, params.get("country") === "none" ? "" : "PL");
 }
 
 createRoot(document.getElementById("root")!).render(

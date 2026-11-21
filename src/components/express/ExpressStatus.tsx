@@ -55,6 +55,8 @@ export function ExpressStatus({ phase }: { phase: ExpressPhase }) {
       role={isAlert ? "alert" : "status"}
       aria-live={isAlert ? "assertive" : "polite"}
       data-bitsnap-express-status={phase}
+      // Styles the line on a standalone InPost or Revolut button too.
+      data-bitsnap-checkout-part="status"
       className={cx(
         "bsc-express-status",
         isAlert && "bsc-express-status-alert",

@@ -714,3 +714,123 @@ describe("cart.css states (step 17)", () => {
     assert.equal(findTop("[data-bitsnap-checkout] .bsc-state-icon-error")?.declarations.get("color"), "var(--bsc-error)");
   });
 });
+
+/**
+ * The declarations that win on `element` among the top-level rules: the most
+ * specific selector, the later rule at equal specificity. jsdom matches
+ * `:has()`, `:where()` and `:defined` but does not cascade them itself.
+ */
+function cascade(element: Element): Map<string, string> {
+  const winners = new Map<string, { value: string; spec: Specificity }>();
+  for (const rule of topLevel) {
+    for (const selector of rule.selectors) {
+      let hit = false;
+      try {
+        hit = element.matches(selector);
+      } catch {
+        continue; // a pseudo-element selector
+      }
+      if (!hit) continue;
+      const spec = specificity(selector);
+      for (const [property, value] of rule.declarations) {
+        const previous = winners.get(property);
+        if (previous == null || compare(spec, previous.spec) >= 0) winners.set(property, { value, spec });
+      }
+    }
+  }
+  return new Map([...winners].map(([property, { value }]) => [property, value]));
+}
+
+describe("cart.css express divider (N1, N2, N6)", () => {
+  const GOOGLE_NOT_READY = '<div class="google-pay-button-container not-ready"><button type="button"></button></div>';
+  const REVOLUT_EMPTY = '<div data-bitsnap-express="revolutPay"><div></div></div>';
+  const ERROR_ONLY =
+    '<div data-bitsnap-express="revolutPay"><div></div><p class="bsc-express-status bsc-express-status-alert" data-bitsnap-express-status="load-failed" data-bitsnap-checkout-part="status" role="alert">Could not load</p></div>' +
+    '<p class="bsc-express-status bsc-express-status-alert" data-bitsnap-express-status="cart-unavailable" data-bitsnap-checkout-part="status" role="alert">Cart unavailable</p>';
+
+  /** The cart's express block with these buttons; `define` registers custom elements first. */
+  function express(buttons: { apple?: string; google?: string; wide?: string }, define: string[] = []) {
+    const { window } = new JSDOM(`<div data-bitsnap-checkout="root" class="dark">
+      <div data-bitsnap-checkout-slot="options" class="bsc-options">
+        <div class="bsc-express">
+          <div data-bitsnap-checkout-wallets="" class="bsc-wallets">
+            <div data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn">${buttons.apple ?? ""}</div>
+            <div data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn">${buttons.google ?? ""}</div>
+            <div data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn bsc-express-wide">${buttons.wide ?? ""}</div>
+          </div>
+          <p class="bsc-or" data-bitsnap-checkout-divider=""><span class="bsc-or-line"></span>or<span class="bsc-or-line"></span></p>
+        </div>
+      </div>
+    </div>`);
+    for (const name of define) window.customElements.define(name, class extends window.HTMLElement {});
+    const doc = window.document;
+    return {
+      divider: cascade(doc.querySelector(".bsc-or")!).get("display"),
+      collapsed: cascade(doc.querySelector(".bsc-express")!).get("margin-bottom") === "-16px",
+    };
+  }
+
+  it("hides the divider and collapses the block with no button", () => {
+    assert.deepEqual(express({}), { divider: "none", collapsed: true });
+    assert.deepEqual(
+      express({ apple: "<apple-pay-button></apple-pay-button>", google: GOOGLE_NOT_READY, wide: `<div data-bitsnap-express="inpostPay"><inpost-izi-button></inpost-izi-button></div>${REVOLUT_EMPTY}` }),
+      { divider: "none", collapsed: true },
+      "unloaded Apple Pay and InPost elements, a Google Pay container that is not ready, an empty Revolut frame",
+    );
+  });
+
+  it("hides the divider when a wrapper holds only status or error text, which still takes its row", () => {
+    assert.deepEqual(express({ google: GOOGLE_NOT_READY, wide: ERROR_ONLY }), { divider: "none", collapsed: false });
+  });
+
+  it("shows the divider under any real express button", () => {
+    const cases: Array<[string, Parameters<typeof express>[0], string[]]> = [
+      ["Apple Pay", { apple: "<apple-pay-button></apple-pay-button>" }, ["apple-pay-button"]],
+      ["Google Pay", { google: '<div class="google-pay-button-container"><button type="button"></button></div>' }, []],
+      ["InPost Pay", { wide: '<div data-bitsnap-express="inpostPay"><inpost-izi-button></inpost-izi-button></div>' }, ["inpost-izi-button"]],
+      ["Revolut Pay", { wide: '<div data-bitsnap-express="revolutPay"><div><iframe></iframe></div></div>' }, []],
+      ["Revolut Pay beside an InPost error", { wide: `${REVOLUT_EMPTY.replace("<div></div>", "<div><iframe></iframe></div>")}${ERROR_ONLY}` }, []],
+    ];
+    for (const [name, buttons, define] of cases) {
+      assert.deepEqual(express(buttons, define), { divider: "flex", collapsed: false }, name);
+    }
+  });
+});
+
+describe("cart.css standalone express parts (S2, S4)", () => {
+  it("centres the express status in small text outside the cart, and the cart's rule wins inside it", () => {
+    const { window } = new JSDOM(`<div data-bitsnap-express="revolutPay"><div></div>
+      <p id="alone" class="bsc-express-status bsc-express-status-alert" data-bitsnap-express-status="failed" data-bitsnap-checkout-part="status">x</p></div>
+      <div data-bitsnap-checkout="root"><div data-bitsnap-checkout-slot="paymentButtons">
+      <p id="cart" class="bsc-express-status bsc-express-status-alert" data-bitsnap-express-status="failed" data-bitsnap-checkout-part="status">x</p></div></div>`);
+    const alone = cascade(window.document.getElementById("alone")!);
+    assert.equal(alone.get("text-align"), "center");
+    assert.equal(alone.get("font-size"), "13px");
+    assert.equal(alone.get("margin"), "6px 0 0");
+    const cart = cascade(window.document.getElementById("cart")!);
+    assert.equal(cart.get("color"), "var(--bsc-error)");
+    assert.equal(cart.get("text-align"), "center");
+  });
+
+  it("shows the Google Pay spinner outside the cart and hides its status text visually", () => {
+    const { window } = new JSDOM(`<span id="idle" data-bitsnap-checkout-part="wallet-busy" role="status"></span>
+      <span id="busy" data-bitsnap-checkout-part="wallet-busy" role="status"><span class="bsc-spinner" aria-hidden="true"></span><span data-bitsnap-checkout-part="sr">Confirming</span></span>`);
+    const doc = window.document;
+    assert.equal(cascade(doc.getElementById("idle")!).get("display"), "none", "an idle status takes no space");
+    assert.equal(cascade(doc.getElementById("busy")!).get("display"), "flex");
+    const spinner = cascade(doc.querySelector("#busy .bsc-spinner")!);
+    assert.equal(spinner.get("width"), "16px");
+    assert.match(spinner.get("animation") ?? "", /^bitsnap-cart-spin /);
+    const text = cascade(doc.querySelector('#busy [data-bitsnap-checkout-part="sr"]')!);
+    assert.equal(text.get("position"), "absolute");
+    assert.equal(text.get("clip-path"), "inset(50%)");
+  });
+
+  it("hides the empty-cart announcement visually inside the cart (N7)", () => {
+    const { window } = new JSDOM('<div data-bitsnap-checkout="root"><p data-bitsnap-checkout-part="sr" role="status">x</p></div>');
+    const text = cascade(window.document.querySelector('[data-bitsnap-checkout-part="sr"]')!);
+    assert.equal(text.get("position"), "absolute");
+    assert.equal(text.get("width"), "1px");
+    assert.equal(text.get("margin"), "0", "the reset applies; the part rule keeps it off screen");
+  });
+});
