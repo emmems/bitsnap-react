@@ -3,6 +3,7 @@ import { useCheckoutSlot } from "./appearance.context";
 import { cx } from "./lib/cx";
 import {
   manualPaymentTitleKey,
+  type PaymentLogo,
   type PaymentMethod,
   type PaymentMethodChoice as Choice,
 } from "./payment-method";
@@ -12,7 +13,8 @@ import { useCheckoutTextResolver } from "./texts.context";
  * "Pay online", "transfer / BLIK to the seller's phone" or "cash on delivery",
  * shown above the checkout button when the shop offers two or more of them.
  * Native radios give the group semantics and the arrow-key navigation; the
- * whole card is the label.
+ * whole card is the label. A card shows the logos the server picked for it,
+ * if any, under its description.
  */
 export function PaymentMethodChoice({
   choice,
@@ -99,10 +101,67 @@ export function PaymentMethodChoice({
                   <span className="bsc-method-note">{card.note}</span>
                 )}
               </span>
+              <PaymentMethodLogos logos={choice.logos?.[method]} />
             </span>
           </label>
         );
       })}
     </fieldset>
+  );
+}
+
+/**
+ * The logos of one card. Decorative (the card text names the methods), so
+ * hidden from assistive technology. Each sits in a fixed-height slot sized
+ * from its intrinsic aspect ratio, so nothing moves when the images load.
+ */
+function PaymentMethodLogos({ logos }: { logos: PaymentLogo[] | undefined }) {
+  const row = useCheckoutSlot("paymentMethodLogos");
+  if (!logos?.length) {
+    return null;
+  }
+  return (
+    <span
+      data-bitsnap-checkout-slot="paymentMethodLogos"
+      aria-hidden="true"
+      className={cx("bsc-method-logos", row.className)}
+      style={row.style}
+    >
+      {logos.map((logo) => (
+        <PaymentMethodLogo key={logo.id} logo={logo} />
+      ))}
+    </span>
+  );
+}
+
+function PaymentMethodLogo({ logo }: { logo: PaymentLogo }) {
+  const item = useCheckoutSlot("paymentMethodLogo");
+  // A host CSP (img-src) may block the image: drop it instead of a broken icon.
+  const [failed, setFailed] = React.useState(false);
+  if (failed) {
+    return null;
+  }
+  return (
+    <span
+      data-bitsnap-checkout-slot="paymentMethodLogo"
+      data-payment-logo={logo.id}
+      className={cx(
+        "bsc-method-logo",
+        logo.chip && "bsc-method-logo-chip",
+        item.className,
+      )}
+      style={item.style}
+    >
+      <img
+        src={logo.src}
+        alt=""
+        aria-hidden="true"
+        decoding="async"
+        width={logo.width}
+        height={logo.height}
+        onError={() => setFailed(true)}
+        className="bsc-method-logo-img"
+      />
+    </span>
   );
 }

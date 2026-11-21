@@ -435,6 +435,22 @@ describe("cart.css content rules", () => {
     assert.equal(price("sale")?.declarations.get("color"), "var(--bitsnap-checkout-sale, #f87171)");
   });
 
+  it("gives the payment logos a fixed-height slot from the token and a white tile for chip logos (dark: no hairline)", () => {
+    const row = findTop("[data-bitsnap-checkout] .bsc-method-logos");
+    assert.equal(row?.declarations.get("--bsc-logo-h"), "var(--bitsnap-checkout-payment-logo-height, 20px)");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-method-logos:where(:empty)")?.declarations.get("display"), "none");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-method-logo")?.declarations.get("height"), "var(--bsc-logo-h)");
+    const img = findTop("[data-bitsnap-checkout] .bsc-method-logo-img");
+    assert.equal(img?.declarations.get("height"), "100%");
+    assert.equal(img?.declarations.get("width"), "auto");
+    const chip = findTop("[data-bitsnap-checkout] .bsc-method-logo-chip");
+    assert.equal(chip?.declarations.get("background-color"), "#ffffff");
+    assert.equal(
+      findTop('[data-bitsnap-checkout="root"]:where(.dark) .bsc-method-logo-chip')?.declarations.get("box-shadow"),
+      "none",
+    );
+  });
+
   it("lists every state rule after its base rule, so the state wins at equal specificity", () => {
     const indexOf = (selector: string) => topLevel.findIndex((rule) => rule.selectors.includes(selector));
     let checked = 0;

@@ -3,7 +3,8 @@
  *
  * The library reads the project ID from a `script[data-name="internal-cart"]`
  * tag and talks to `https://bitsnap.pl` through `fetch`, so intercepting both
- * is enough to render every checkout state offline.
+ * is enough to render every checkout state offline (the payment logos load
+ * from this app's `public/logos`).
  */
 
 const PROJECT_ID = "example-project";
@@ -99,7 +100,30 @@ export type MockOptions = {
   pendingBuy?: boolean;
   /** Delays only `/countries`, so the "choose a country" hint can be seen. */
   countriesLatencyMs?: number;
+  /** The payment-method choice with cash on delivery and server-picked logos in every card. */
+  paymentLogos?: boolean;
 };
+
+/**
+ * Generic placeholder logos from `public/logos` (no real brand marks). The
+ * cart takes `https:` logo URLs, and `http:` only on localhost, so open the
+ * example on `localhost` to see them.
+ */
+function paymentLogos() {
+  const logo = (id: string, width: number, chip?: boolean) => ({
+    id,
+    src: `${window.location.origin}/logos/${id}.svg`,
+    alt: id,
+    width,
+    height: 20,
+    ...(chip ? { chip } : {}),
+  });
+  return {
+    online: [logo("pay", 48), logo("card", 56, true), logo("bank", 56, true)],
+    manual: [logo("bank", 56, true), logo("phone", 56)],
+    cod: [logo("cash", 48)],
+  };
+}
 
 export function installCheckoutMocks(options: MockOptions = {}) {
   // Screenshot scripts flip an option on a live page: `window.__checkoutMocks.priceChange = true`.
@@ -155,6 +179,16 @@ export function installCheckoutMocks(options: MockOptions = {}) {
     }
 
     if (url.includes("/public-commerce/payment-methods")) {
+      if (options.paymentLogos === true) {
+        return json({
+          success: true,
+          choice: {
+            methods: ["online", "manual", "cod"],
+            manualAccountTypes: ["bankTransfer", "blik"],
+            logos: paymentLogos(),
+          },
+        });
+      }
       return json({ success: true, choice: { methods: ["online", "manual"], manualAccountTypes: ["blik"] } });
     }
 

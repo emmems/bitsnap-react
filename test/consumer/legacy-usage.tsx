@@ -84,6 +84,21 @@ export function DialogStore() {
   );
 }
 
+/** The payment logo slots and their height token (1.32.0). */
+export function PaymentLogosStore() {
+  const row: CheckoutSlotName = "paymentMethodLogos";
+  const item: CheckoutSlotName = "paymentMethodLogo";
+  return (
+    <BitsnapCheckout
+      projectID="your-project-id"
+      appearance={{
+        tokens: { paymentLogoHeight: "24px" },
+        elements: { [row]: { className: "store-logos" }, [item]: { style: { opacity: 0.9 } } },
+      }}
+    />
+  );
+}
+
 /** An empty appearance must stay valid. */
 export function DefaultStore() {
   return <BitsnapCheckout projectID="your-project-id" appearance={{}} />;

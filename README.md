@@ -87,6 +87,10 @@ defaults, overridable through `texts`).
 - **Drawer widths:** full screen below 640 px and on screens up to 500 px
   high, 380 px from 640 px, 420 px from 1200 px (before: 350 px from 768 px,
   420 px from 1280 px). Tablets from 640 to 767 px get a side panel.
+- **Payment logos in the payment-method cards.** When bitsnap.pl sends logos
+  with the payment-method choice, each card shows them under its description
+  (new slots `paymentMethodLogos`, `paymentMethodLogo`, new token
+  `paymentLogoHeight`). See [Paying online, by transfer / BLIK to a phone or on delivery](#paying-online-by-transfer--blik-to-a-phone-or-on-delivery).
 - **The consent banner (`bitsnap-react/consent`) hides while the cart is open**
   and comes back when it closes.
 - **Country names follow the cart's `locale`** ("Polska" in a Polish cart),
@@ -570,6 +574,8 @@ built-in styles):
 | `paymentButtons`     | Apple Pay / Google Pay wrappers              |
 | `paymentMethods`     | "How would you like to pay?" group (online, transfer / BLIK to a phone, cash on delivery) |
 | `paymentMethodOption`| Single payment method card                   |
+| `paymentMethodLogos` | Row of logos in a payment method card (only when the server sent logos for it) |
+| `paymentMethodLogo`  | One logo in that row; `.bsc-method-logo-chip` when it sits on a white tile |
 | `checkoutButton`     | "Next step" button                          |
 | `emptyState`         | Empty cart message                          |
 | `error`              | Checkout error message                      |
@@ -665,6 +671,7 @@ reset on the elements listed above):
 | `quantityControl`, `quantityInput`, `quantityButton`, `removeButton` | size, `border-radius`, `box-shadow` (the pill), `text-align`, `font-weight`, `color`, `cursor`; `background-color` on hover, `outline` on keyboard focus |
 | `options`, `countryLabel`, `countryTrigger` | layout, `padding`; the label's `font-size`, `font-weight`, `color`; the select's size, `border`, `border-radius`, `background`, `color`, `appearance`, `outline` on keyboard focus, `opacity` when disabled |
 | `paymentMethods`, `paymentMethodOption` | layout, `padding`, `border`, `border-radius`, `opacity`; `border-color` on hover; `border-color` and `box-shadow` when selected; `outline` on keyboard focus; the radio's `appearance`, size, `border`, `border-radius` |
+| `paymentMethodLogos`, `paymentMethodLogo` | layout, `gap`, `margin-top`, `height`; hidden when empty; the chip tile's `padding`, `border-radius`, `background-color`, `box-shadow`; the image's `width`, `height`, `max-width`, `object-fit` |
 | `paymentButtons` | `flex`, `min-width`; hidden when empty |
 | `footer`, `summary`, `totalLabel`, `totalValue`, `summaryNote` | layout, `padding`, `border-top`, `background-color`; `font-size`, `font-weight`, `color`, `text-align` of the texts |
 | `checkoutButton` | layout, `width`, `min-height`, `margin`, `padding`, `border-radius`, `background-color`, `color`, `font-size`, `font-weight`, `cursor`; `background-color` on hover, `outline` on keyboard focus, `opacity` and `cursor` when disabled or busy |
@@ -695,6 +702,7 @@ reset on the elements listed above):
 | `panelWidth`              | Drawer width from 640 px (default 380 px, 420 px from 1200 px), or the dialog's width (default 480 px, at most the screen minus 32 px); the compact layout stays full width |
 | `panelMaxHeight`          | Height cap of the dialog (default `min(100dvh - 48px, 704px)`); the bottom sheet also stays under 92 % of the screen. The drawer ignores it |
 | `motionDuration`          | Base duration of the cart's animations, read by the drawer's enter and exit (default `240ms`; at most `120ms`, fade only, under `prefers-reduced-motion`); `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted |
+| `paymentLogoHeight`       | Height of the logos in the payment method cards (default `20px`); the width follows each logo's aspect ratio |
 
 Every token accepts any CSS value and is written as-is, so
 `tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site.
@@ -900,6 +908,15 @@ and a plain `/buy`. `/buy` gets `paymentMethod: "online" | "manual" | "cod"`
 only when the choice was shown; the choice appears whenever the answer lists
 two or more methods this version knows (others are ignored). Apple Pay and Google Pay are online payments and do not
 change.
+
+The logos in the cards come from the server, which picks them for the shop's
+gateways and accounts (`choice.logos`); the cart only draws them, under each
+card's description, and shows none when the answer has none (an older
+bitsnap.pl). They are decorative: the card text names the methods, so screen
+readers skip them. Style them with the `paymentMethodLogos` (row) and
+`paymentMethodLogo` (item) slots and the `paymentLogoHeight` token. A logo the
+page cannot load, for example because the site's Content Security Policy does
+not allow images from bitsnap.pl in `img-src`, is hidden.
 
 When "Next step" fails, the cart shows the text of the backend error code
 (`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,

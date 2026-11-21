@@ -64,6 +64,8 @@ const catalog = new Map([
 let requests: { url: string; method: string }[];
 let pendingProducts: Array<() => void>;
 let holdProducts: boolean;
+/** What POST /payment-methods answers. */
+let methodsAnswer: unknown;
 const roots: Array<{ unmount: () => void }> = [];
 
 /** `requestIdleCallback` as a browser has it, run by hand. */
@@ -83,6 +85,7 @@ beforeEach(() => {
   requests = [];
   pendingProducts = [];
   holdProducts = false;
+  methodsAnswer = { success: true, choice: null };
   idle = [];
   idleGlobals.requestIdleCallback = (run: () => void, options?: { timeout?: number }) => {
     idle.push({ id: idle.length + 1, run, options, cancelled: false });
@@ -102,7 +105,7 @@ beforeEach(() => {
       return holdProducts ? new Promise<Response>((resolve) => pendingProducts.push(() => resolve(answer()))) : answer();
     }
     if (url.includes("/public-commerce/countries")) return json([{ name: "Polska", code: "PL" }]);
-    if (url.includes("/public-commerce/payment-methods")) return json({ success: true, choice: null });
+    if (url.includes("/public-commerce/payment-methods")) return json(methodsAnswer);
     if (init?.method === "POST" && url.endsWith("/e")) return new Response(null, { status: 202 });
     return new Response("{}", { status: 404 });
   }) as typeof fetch;
@@ -320,6 +323,46 @@ describe("no duplicate requests", () => {
     }
     assert.equal(methodCalls(), 1);
     assert.equal(productCalls(), 1);
+  });
+
+  it("preloads the choice's logos once per URL, without awaiting them", async () => {
+    const logo = (id: string) => ({ id, src: `https://bitsnap.pl/logos/warm-${id}.v1.svg`, alt: id, width: 32, height: 20 });
+    methodsAnswer = {
+      success: true,
+      choice: {
+        methods: ["online", "manual", "cod"],
+        manualAccountTypes: ["blik"],
+        logos: { online: [logo("blik"), logo("visa")], manual: [logo("blik")], cod: [logo("cash")] },
+      },
+    };
+    const loaded: string[] = [];
+    const globals = globalThis as { Image?: unknown };
+    const original = globals.Image;
+    globals.Image = class {
+      decoding = "";
+      set src(value: string) {
+        loaded.push(value);
+      }
+    };
+    try {
+      storeCart(["pa"]);
+      await mount();
+      await runIdle();
+      assert.deepEqual(loaded, [], "the idle warm-up does not ask for the payment options");
+      await React.act(async () => Bitsnap.warmUp());
+      await settle();
+      assert.equal(methodCalls(), 1);
+      assert.deepEqual(loaded, ["blik", "visa", "cash"].map((id) => logo(id).src));
+
+      // Another cart content: asked again, the same logos are not loaded again.
+      storeCart(["pa", "pb"]);
+      await React.act(async () => Bitsnap.warmUp());
+      await settle();
+      assert.equal(methodCalls(), 2);
+      assert.equal(loaded.length, 3);
+    } finally {
+      globals.Image = original;
+    }
   });
 
   it("without a stored country the payment options are not asked (the drawer writes the country on open)", async () => {

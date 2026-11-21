@@ -11,6 +11,7 @@ import {
   cartPaymentMethodsQuery,
   cartProductsQuery,
 } from "./cart-queries";
+import { preloadPaymentLogos, type PaymentMethodChoice } from "./payment-method";
 
 /**
  * Fills the drawer's query cache before the buyer opens it (plan part 1,
@@ -34,7 +35,7 @@ export function registerWarmTarget(next: Target): () => void {
 /**
  * Prefetches what the first open needs for a non-empty cart: the products and
  * the countries, and with `full` also the payment options (a POST, so only on
- * intent). Cached and running queries are not asked again. Does nothing without
+ * intent) and their logos. Cached and running queries are not asked again. Does nothing without
  * a mounted cart (so never on the server) or with an empty cart.
  */
 export function warmCart(full = false): void {
@@ -51,15 +52,21 @@ export function warmCart(full = false): void {
   );
   void client.prefetchQuery(cartCountriesQuery(methods.getAvailableCountries));
   if (country) {
-    void client.prefetchQuery(
-      cartPaymentMethodsQuery(
-        projectID,
-        locale,
-        country,
-        readLocalCartSignature(),
-        methods.getPaymentMethodChoice,
-      ),
+    const query = cartPaymentMethodsQuery(
+      projectID,
+      locale,
+      country,
+      readLocalCartSignature(),
+      methods.getPaymentMethodChoice,
     );
+    // The choice's logos load before the open, so its cards paint them at once.
+    void client
+      .prefetchQuery(query)
+      .then(() =>
+        preloadPaymentLogos(
+          client.getQueryData<PaymentMethodChoice | null>(query.queryKey),
+        ),
+      );
   }
 }
 

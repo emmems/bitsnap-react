@@ -27,6 +27,7 @@ installCheckoutMocks({
   missingProduct: params.get("missing") === "1",
   pendingBuy: params.get("buy") === "pending",
   countriesLatencyMs: Number(params.get("countriesLatency") ?? 0) || undefined,
+  paymentLogos: params.get("logos") === "1",
 });
 
 if (params.get("cart") === "empty") {

@@ -77,6 +77,11 @@ export type CheckoutAppearanceTokens = {
    * drawer only fades, for at most `120ms`.
    */
   motionDuration?: string;
+  /**
+   * Height of the payment logos in the payment-method cards (default `20px`).
+   * Their width follows each logo's aspect ratio.
+   */
+  paymentLogoHeight?: string;
 };
 
 /**
@@ -128,6 +133,10 @@ export const CHECKOUT_SLOT_NAMES = [
   "paymentButtons",
   "paymentMethods",
   "paymentMethodOption",
+  /** The row of logos in a payment method card; only when the server sent logos for it. */
+  "paymentMethodLogos",
+  /** One logo in that row (its `<span>`; `.bsc-method-logo-chip` when drawn for white). */
+  "paymentMethodLogo",
   /** The checkout button only; the retry buttons have `retryButton` since 1.32.0. */
   "checkoutButton",
   /** "Try again" after a failed load. */
@@ -206,6 +215,7 @@ export const CHECKOUT_TOKEN_VARIABLES = {
   panelWidth: "--bitsnap-checkout-panel-width",
   panelMaxHeight: "--bitsnap-checkout-panel-max-height",
   motionDuration: "--bitsnap-checkout-motion-duration",
+  paymentLogoHeight: "--bitsnap-checkout-payment-logo-height",
 } as const;
 
 export type CheckoutTokenName = keyof typeof CHECKOUT_TOKEN_VARIABLES;

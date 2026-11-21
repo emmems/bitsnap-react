@@ -224,7 +224,15 @@ beforeEach(() => {
       ]);
     }
     if (url.includes("/public-commerce/payment-methods")) {
-      return json({ success: true, choice: { methods: ["online", "manual"], manualAccountTypes: ["blik"] } });
+      const logo = (id: string, chip?: boolean) => ({ id, src: `https://bitsnap.pl/l/${id}.svg`, alt: id, width: 32, height: 20, chip });
+      return json({
+        success: true,
+        choice: {
+          methods: ["online", "manual"],
+          manualAccountTypes: ["blik"],
+          logos: { online: [logo("blik"), logo("visa", true)] },
+        },
+      });
     }
     if (url.includes("/public-commerce/buy")) {
       return buyMode === "pending" ? new Promise<Response>(() => {}) : json({ success: false, error: "boom" }, 500);
@@ -348,6 +356,7 @@ describe("cart class graph", () => {
       assert.ok($('[data-bitsnap-express-status="pending"]'), "the polite express status renders");
       assert.ok($("[data-bitsnap-checkout-divider]"), "the or divider renders");
       assert.ok($('[data-bitsnap-checkout-slot="paymentMethods"]'), "the payment choice renders");
+      assert.ok($(".bsc-method-logo-chip img.bsc-method-logo-img"), "its logos render, a chip among them");
       assert.ok($('[data-bitsnap-checkout-slot="countryTrigger"]'), "the country picker renders");
       assert.equal(trigger().closest("[data-bitsnap-checkout]"), null, "the trigger is outside the root");
       collect(`full ${presentation}`);

@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import {
   effectivePaymentMethod,
   manualPaymentTitleKey,
+  MAX_LOGOS_PER_METHOD,
   parsePaymentMethodChoice,
+  paymentLogoUrls,
+  preloadPaymentLogos,
   withoutCod,
 } from "./payment-method.ts";
 
@@ -69,6 +72,119 @@ describe("parsePaymentMethodChoice", () => {
       }),
       { methods: ["online", "manual"], manualAccountTypes: ["blik"] },
     );
+  });
+});
+
+describe("parsePaymentMethodChoice: logos", () => {
+  const logo = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    src: `https://bitsnap.pl/logos/${id}.v1.svg`,
+    alt: id.toUpperCase(),
+    width: 40,
+    height: 20,
+    ...extra,
+  });
+  const parse = (logos: unknown) =>
+    parsePaymentMethodChoice({
+      success: true,
+      choice: { methods: ["online", "manual", "cod"], manualAccountTypes: ["blik"], logos },
+    });
+
+  it("reads the logos per method, in the server's order, with chip only when true", () => {
+    assert.deepEqual(
+      parse({
+        online: [logo("blik"), logo("visa", { chip: true }), logo("mc", { chip: false })],
+        manual: [logo("transfer")],
+        cod: [logo("courier", { chip: "yes" })],
+      })?.logos,
+      {
+        online: [logo("blik"), logo("visa", { chip: true }), logo("mc")],
+        manual: [logo("transfer")],
+        cod: [logo("courier")],
+      },
+    );
+  });
+
+  it("has no logos key for an old server, an empty or a malformed field", () => {
+    for (const logos of [undefined, null, {}, [], "x", { online: [] }, { online: "blik" }, { voucher: [logo("v")] }]) {
+      const choice = parse(logos);
+      assert.ok(choice, JSON.stringify(logos));
+      assert.equal("logos" in choice, false, JSON.stringify(logos));
+    }
+  });
+
+  it("drops bad entries and keeps the good ones", () => {
+    const bad = [
+      null,
+      "https://bitsnap.pl/x.svg",
+      logo("http", { src: "http://bitsnap.pl/x.svg" }),
+      logo("data", { src: "data:image/svg+xml,<svg/>" }),
+      logo("js", { src: "javascript:alert(1)" }),
+      logo("relative", { src: "/logos/x.svg" }),
+      logo("long", { src: `https://bitsnap.pl/${"a".repeat(2100)}` }),
+      logo("zero", { width: 0 }),
+      logo("negative", { height: -20 }),
+      logo("nan", { width: Number.NaN }),
+      logo("inf", { height: Number.POSITIVE_INFINITY }),
+      logo("string", { width: "40" }),
+      logo("noalt", { alt: undefined }),
+      { ...logo("x"), id: 7 },
+      { ...logo("x"), id: "" },
+    ];
+    assert.deepEqual(parse({ online: [...bad, logo("blik")] })?.logos, { online: [logo("blik")] });
+    assert.equal("logos" in parse({ online: bad })!, false);
+  });
+
+  it("accepts http only on localhost, for a local backend", () => {
+    const local = [
+      logo("a", { src: "http://localhost:4321/logos/a.svg" }),
+      logo("b", { src: "http://127.0.0.1/b.svg" }),
+      logo("c", { src: "http://[::1]:5173/c.svg" }),
+    ];
+    assert.deepEqual(parse({ manual: local })?.logos, { manual: local });
+  });
+
+  it("keeps at most six per method and drops repeated ids", () => {
+    const many = ["a", "a", "b", "c", "d", "e", "f", "g"].map((id) => logo(id));
+    const online = parse({ online: many })!.logos!.online!;
+    assert.equal(MAX_LOGOS_PER_METHOD, 6);
+    assert.deepEqual(online.map((item) => item.id), ["a", "b", "c", "d", "e", "f"]);
+  });
+
+  it("keeps logos of a known method the answer does not list, and withoutCod keeps the logos", () => {
+    const choice = parsePaymentMethodChoice({
+      choice: { methods: ["online", "cod"], manualAccountTypes: [], logos: { manual: [logo("t")], cod: [logo("c")] } },
+    })!;
+    assert.deepEqual(Object.keys(choice.logos!), ["manual", "cod"]);
+    assert.deepEqual(withoutCod({ ...choice, methods: ["online", "manual", "cod"] })?.logos, choice.logos);
+  });
+
+  it("lists every logo URL once and preloads each URL once, only where Image exists", () => {
+    const shared = logo("blik");
+    const choice = parse({ online: [shared, logo("visa")], manual: [shared] })!;
+    assert.deepEqual(paymentLogoUrls(choice), [shared.src, logo("visa").src]);
+    assert.deepEqual(paymentLogoUrls(null), []);
+
+    const globals = globalThis as { Image?: unknown };
+    const original = globals.Image;
+    const loaded: string[] = [];
+    try {
+      delete globals.Image;
+      preloadPaymentLogos(choice);
+      globals.Image = class {
+        decoding = "";
+        set src(value: string) {
+          loaded.push(value);
+        }
+      };
+      preloadPaymentLogos(choice);
+      preloadPaymentLogos(choice);
+      preloadPaymentLogos(parse({ cod: [logo("visa"), logo("cash")] }));
+      preloadPaymentLogos(null);
+    } finally {
+      globals.Image = original;
+    }
+    assert.deepEqual(loaded, [shared.src, logo("visa").src, logo("cash").src]);
   });
 });
 
