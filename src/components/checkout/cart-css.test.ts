@@ -311,6 +311,9 @@ describe("cart.css isolation", () => {
       ["background", "none"],
       ["border", "0 solid"],
       ["color", "inherit"],
+      // A host `a { text-decoration: underline }` or `ul { list-style: disc }` (S5).
+      ["text-decoration", "inherit"],
+      ["list-style", "none"],
     ]) {
       assert.equal(reset.declarations.get(property), value, property);
     }
@@ -398,6 +401,18 @@ describe("cart.css grid shell and header", () => {
     assert.equal(base.declarations.get("min-width"), "44px");
     assert.equal(base.declarations.get("min-height"), "44px");
     assert.doesNotMatch(css, /data-bitsnap-checkout-trigger="custom"/, "a merchant trigger gets no SDK rule");
+  });
+
+  it("keeps the trigger's focus ring over a host `button:focus { outline: none }` (0,1,1)", () => {
+    const focus = topLevel.find((rule) =>
+      rule.selectors.some((selector) => selector.includes("data-bitsnap-checkout-trigger") && selector.includes(":focus-visible")),
+    );
+    assert.ok(focus, "no focus rule for the trigger");
+    const [selector] = focus.selectors;
+    assert.equal(selector, '[data-bitsnap-checkout-trigger="default"][data-bitsnap-checkout-trigger]:where(:focus-visible)');
+    assert.ok(compare(specificity(selector), specificity("button:focus")) > 0, "a host button:focus rule wins");
+    assert.deepEqual(specificity(selector), [0, 2, 0], "within the (0,2,0) cap");
+    assert.equal(focus.declarations.get("outline"), "2px solid currentColor");
   });
 });
 
@@ -584,6 +599,21 @@ describe("CartComponent.tsx and CartFrame.tsx", () => {
 });
 
 describe("cart.css lines (step 15)", () => {
+  it("keeps the product-name link's look over a host `a:hover { color; text-decoration }` (0,1,1) (S5)", () => {
+    const host = specificity("a:hover");
+    const base = findTop("[data-bitsnap-checkout] .bsc-line-link");
+    const hover = findTop("[data-bitsnap-checkout] .bsc-line-link:where(:hover)");
+    assert.ok(base && hover, "no product-name link rules");
+    for (const rule of [base, hover]) {
+      assert.deepEqual(specificity(rule.selectors[0]), [0, 2, 0]);
+      assert.ok(compare(specificity(rule.selectors[0]), host) > 0);
+    }
+    assert.equal(base.declarations.get("color"), "inherit");
+    assert.equal(base.declarations.get("text-decoration"), "none");
+    assert.equal(hover.declarations.get("color"), "inherit");
+    assert.equal(hover.declarations.get("text-decoration"), "underline");
+  });
+
   it("lays a line out on a 72 px tile column, the tile filled when the image is missing", () => {
     const line = findTop("[data-bitsnap-checkout] .bsc-line");
     assert.equal(line?.declarations.get("grid-template-columns"), "72px minmax(0, 1fr) auto");

@@ -75,6 +75,19 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.32.0 (unreleased)
+
+- **Merchant classes on cart slots lose to the cart's rules.** The cart's
+  stylesheet is unlayered: its root firewall (`all: initial`, which also
+  covers `appearance.elements.root.className`), its local reset and its
+  `.bsc-*` component rules beat a layered class in `appearance.elements.*.className`
+  (every Tailwind v4 utility) on every property they set, and tie with an
+  unlayered class of the same specificity, so stylesheet order decides. To
+  override, use `appearance.tokens` or `appearance.elements.<slot>.style`, or a
+  selector of at least (0,2,0) on the slot attribute, such as
+  `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"].your-class`.
+  See [Overriding the checkout's own styles](#overriding-the-checkouts-own-styles).
+
 ## 1.31.0 (unreleased)
 
 - **Cart prices follow the cart locale.** Line prices, the struck price and
@@ -529,23 +542,40 @@ strong enough on its own.
 
 ### Overriding the checkout's own styles
 
-The checkout's stylesheet is not in a CSS cascade layer, so a host page's
-generic CSS (a `.w-full` class, a `button { background: transparent }` reset)
-no longer overrides the properties listed in the table below, such as the
-drawer's width and position or the checkout button's background, padding and
-margin. Properties the checkout leaves to its utility classes (the button's
-border radius, border and font size, for example) can still be changed by host
-CSS, as before. The same
-rule means that a class of yours only wins over a property the checkout sets
-if it is more specific. Every checkout rule has a specificity
-of at most (0,2,0): `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="…"]`.
-Its hover, focus, disabled and selected states are not more specific than that.
+The cart's stylesheet (`cart.css`, also appended to `dist/index.css`) is not
+in a CSS cascade layer, so a host page's generic CSS (a `.w-full` class, a
+`button { background: transparent }` reset, `a:hover { color: red }`) does not
+reach the cart. Since 1.32.0 three kinds of rules set the cart's look:
 
-To change a property the checkout sets, use one of these, in this order:
+- **The root firewall**, `[data-bitsnap-checkout="root"] { all: initial }`,
+  specificity (0,1,0). It resets every property of the root element, so it
+  also applies to `appearance.elements.root.className`.
+- **The local reset**, (0,1,0), on `a`, headings, `p`, lists, `hr`, `figure`,
+  `button`, `input`, `select`, `label`, `fieldset`, `legend`, `img` and `svg`
+  inside the cart (express buttons excepted): `margin`, `padding`, `font`,
+  `letter-spacing`, `text-transform`, `background`, `border`, `color`,
+  `text-decoration` and `list-style`.
+- **The component rules**, (0,2,0) at most:
+  `[data-bitsnap-checkout] .bsc-…` or
+  `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="…"]`. Hover, focus,
+  disabled and selected states sit in `:where()` and are not more specific.
+
+What that means for a class passed in `appearance.elements.<slot>.className`:
+
+- **A layered class loses** to all three on every property they set, whatever
+  its specificity. Tailwind v4 emits its utilities in a cascade layer, so
+  `className: "bg-black"` no longer changes a property the cart sets.
+- **An unlayered single class** (0,1,0) loses to the component rules and ties
+  with the firewall and the reset: there, stylesheet order decides, and
+  `dist/index.css` or `cart.css` loaded after your CSS wins.
+- A class works on its own only for a property none of these rules set on that
+  element (see the table below).
+
+To change a property the checkout sets, use one of these:
 
 1. **A token**, or the matching `--bitsnap-checkout-*` CSS variable set on
    `[data-bitsnap-checkout]` in your CSS (see [Tokens](#tokens)). The drawer
-   width on screens from 768 px follows `--bitsnap-checkout-panel-width`.
+   width on wider screens follows `--bitsnap-checkout-panel-width`.
    A token passed in `appearance.tokens`, or a light-preset color under
    `theme: "light"`, is written as an inline style on the checkout root, so the
    same variable set in your CSS has no effect for it; change the token instead.
@@ -553,37 +583,40 @@ To change a property the checkout sets, use one of these, in this order:
    `panelWidth` token.
 2. **Inline `style`** on the slot: `appearance.elements.<slot>.style`. Inline
    styles beat every stylesheet.
-3. **Tailwind's important modifier**, if your site uses Tailwind:
-   `className: "bg-black!"`. Tailwind v4 puts the `!` at the end (`bg-black!`);
-   the leading `!bg-black` is Tailwind v3 syntax and is deprecated in v4. Without
-   the `!`, a Tailwind v4 class loses to the checkout, because Tailwind v4 emits
-   its utilities in a cascade layer, and any unlayered rule beats any layered one.
-4. **The SDK selector plus one class**, as in the example above. It has a
-   specificity of (0,3,0) and wins in every state. A bare `.my-class` or
-   `[data-bitsnap-checkout-slot="…"]` (0,1,0) loses.
+3. **A selector on the slot attribute of at least (0,2,0)**, unlayered. The
+   SDK selector plus one class, as in the example above, is (0,3,0) and wins in
+   every state wherever your CSS loads. Exactly (0,2,0)
+   (`[data-bitsnap-checkout] [data-bitsnap-checkout-slot="…"]`) ties with the
+   component rules and wins only when your stylesheet comes after the cart's.
+   A bare `.my-class` or `[data-bitsnap-checkout-slot="…"]` (0,1,0) loses.
+4. **Tailwind's important modifier**, if your site uses Tailwind:
+   `className: "bg-black!"` (v4 puts the `!` at the end; `!bg-black` is v3
+   syntax). Important declarations beat the cart's, layered or not.
 
-A `className` that sets a property the checkout does not set keeps working as
-before. The checkout sets these properties:
+The checkout sets these properties (besides the firewall on the root and the
+reset on the elements listed above):
 
 | Slot | Properties |
 | ---- | ---------- |
-| root (`[data-bitsnap-checkout]`) | `position`, `z-index`, `font-family`, `font-size`; `animation` and `transition` of the cart's elements when `motionDuration` is zero |
-| `panel` | `position`, `top`, `right`, `bottom`, `width`, `display`, `flex-direction`, `overflow-y`, `z-index`, `background-color`, `color`; `animation` per `data-state` (open, closed) |
-| `overlay` | `position`, `top`, `right`, `bottom`, `left`, `z-index`, `cursor`, `background-color`; `animation` per `data-state` (open, closed) |
-| `productList` | `margin-top` of the list (`ul`); `height`, `margin`, `border-width`, `border-style`, `border-color` of the separators (`hr`) |
-| `product` | `outline-color` when the product is unavailable |
-| `productPrice` | `color` of the struck regular price, the sale price and the Omnibus line (`[data-bitsnap-checkout-price="regular" \| "sale" \| "omnibus"]`) |
-| `checkoutButton` | `margin`, `padding`, `font-weight`, `background-color`, `color`; `background-color` on hover; `opacity` and `cursor` when disabled |
-| `closeButton` | `padding`; `background-color` on hover |
-| `countryLabel` | `margin`, `color` |
-| `countryTrigger` | `padding`, `border-width`, `border-style`, `border-color` (also on keyboard focus), `background-color`; `width`, `max-width`, `height` of the flag |
-| `countryDropdown` | `z-index`, `background-color`, `color`, `border-color`, `border-width`, `border-style`, `border-radius` |
-| `countrySearch` | `background-color`; `color` of the input |
-| `countryOption` | `background-color` on hover, keyboard highlight and when selected |
-| `skeleton` | `background-color` |
-| `paymentMethods` | `margin`, `padding`; `margin-bottom`, `padding`, `color` of the legend |
-| `paymentMethodOption` | `border-color` (also on hover); `background-color` when selected; `outline` on keyboard focus; `cursor` and `opacity` when the choice is disabled; the radio's `appearance`, `width`, `height`, `margin`, `padding`, `border`, `border-radius`, `background-color`; `color` of the description |
-| `error`, `emptyState`, `deliveryText` | `color` |
+| `root` | every property (`all: initial`), then `display`, `position`, `z-index`, `box-sizing`, `font-family`, `font-size`, `line-height`, `color`, `color-scheme`; `animation` and `transition` of the cart's elements when `motionDuration` is zero |
+| `panel` | `position`, `top`, `right`, `bottom`, `z-index`, `width`, `max-width`, `height`, `display`, `grid-template-rows`, `overflow`, `background-color`, `color`, `border-left`, `outline`; `animation` and `pointer-events` per `data-state` (open, closed) |
+| `overlay` | `position`, `inset`, `z-index`, `cursor`, `background-color`; `animation` and `pointer-events` per `data-state` |
+| `header`, `title`, `closeButton` | layout, `padding`, `border-bottom`; the title's `font-size`, `font-weight`, `line-height`; the close button's size, `border-radius`, `color`, `cursor`, `background-color` on hover, `outline` on keyboard focus |
+| `productList` | the list's `list-style`; the separator `background` between lines |
+| `product` | grid layout, `padding`; `outline` and `border-radius` when the product is unavailable |
+| `productImage` | `width`, `height`, `object-fit`, `border-radius`, `background-color`, `color` |
+| `productName` | `font-size`, `font-weight`, `line-height`, line clamp; the link's `color` and `text-decoration` in every state, `outline` on keyboard focus |
+| `productVariant`, `productUnitPrice` | `font-size`, `line-height`, `color` |
+| `productPrice` | layout, `text-align`, `white-space`, `font-variant-numeric`; `color` of the struck regular price, the sale price and the Omnibus line (`[data-bitsnap-checkout-price="regular" \| "sale" \| "omnibus"]`) |
+| `quantityControl`, `quantityInput`, `quantityButton`, `removeButton` | size, `border-radius`, `box-shadow` (the pill), `text-align`, `font-weight`, `color`, `cursor`; `background-color` on hover, `outline` on keyboard focus |
+| `options`, `countryLabel`, `countryTrigger` | layout, `padding`; the label's `font-size`, `font-weight`, `color`; the select's size, `border`, `border-radius`, `background`, `color`, `appearance`, `outline` on keyboard focus, `opacity` when disabled |
+| `paymentMethods`, `paymentMethodOption` | layout, `padding`, `border`, `border-radius`, `opacity`; `border-color` on hover; `border-color` and `box-shadow` when selected; `outline` on keyboard focus; the radio's `appearance`, size, `border`, `border-radius` |
+| `paymentButtons` | `flex`, `min-width`; hidden when empty |
+| `footer`, `summary`, `totalLabel`, `totalValue`, `summaryNote` | layout, `padding`, `border-top`, `background-color`; `font-size`, `font-weight`, `color`, `text-align` of the texts |
+| `checkoutButton` | layout, `width`, `min-height`, `margin`, `padding`, `border-radius`, `background-color`, `color`, `font-size`, `font-weight`, `cursor`; `background-color` on hover, `outline` on keyboard focus, `opacity` and `cursor` when disabled or busy |
+| `retryButton`, `emptyAction` | layout, `min-height`, `padding`, `border`, `border-radius`, `color`, `font-size`, `font-weight`; `background-color` on hover, `outline` on keyboard focus |
+| `emptyState`, `error` | `font-size`, `line-height`, `color`, `text-align` |
+| `skeleton` | layout, `opacity`, `animation` |
 
 ### Tokens
 

@@ -191,7 +191,7 @@ describe(`cart accessibility (${presentation})`, () => {
     assert.equal(dialog(), null);
   });
 
-  it("leaves the drawer's enter animation to checkout.css, not auto-animate on the root", async () => {
+  it("leaves the drawer's enter animation to cart.css, not auto-animate on the root", async () => {
     // auto-animate on the root ran its "add" keyframes on the portalled panel:
     // opacity 0 for the first ~250 ms of every open.
     autoAnimateAttaches = 0;
@@ -200,7 +200,7 @@ describe(`cart accessibility (${presentation})`, () => {
     const panel = dialog()!;
     assert.ok(panel.closest('[data-bitsnap-checkout="root"]'), "the panel renders inside the checkout root");
     assert.equal(autoAnimateAttaches, 1, "auto-animate is attached to something besides the products list");
-    assert.equal(panel.getAttribute("data-state"), "open", "checkout.css keys the enter animation on data-state");
+    assert.equal(panel.getAttribute("data-state"), "open", "cart.css keys the enter animation on data-state");
     for (const property of ["opacity", "transform", "animation"] as const) {
       assert.equal(panel.style[property], "", `the panel has an inline ${property}`);
     }
@@ -287,6 +287,14 @@ describe("cart trigger", () => {
     await mount({ className: "my-cart-button" });
     assert.equal(trigger().getAttribute("data-bitsnap-checkout-trigger"), "custom");
     assert.equal(trigger().className, "bitsnap-react my-cart-button");
+  });
+
+  it("treats className=\"\" as a merchant look: custom, with no default styling (D20, S2)", async () => {
+    // An empty string meant "no default look" before 1.32; it must not fall
+    // back to the default trigger styles.
+    await mount({ className: "" });
+    assert.equal(trigger().getAttribute("data-bitsnap-checkout-trigger"), "custom");
+    assert.equal(trigger().className, "bitsnap-react");
   });
 
   it("counts before the lines load: the title reads the store", async () => {

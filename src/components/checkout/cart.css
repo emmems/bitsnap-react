@@ -80,7 +80,9 @@
 /* ---- Local reset (0,1,0) (R23) --------------------------------------------
  * The elements host stylesheets reset or decorate. The express containers
  * (`paymentButtons` and everything in them) are skipped: Apple Pay, Google Pay,
- * InPost and Revolut inject their own DOM and artwork (R08). */
+ * InPost and Revolut inject their own DOM and artwork (R08). `text-decoration`
+ * inherits (a host `a { text-decoration: underline }` stops here) and lists
+ * lose their markers (a host `ul { list-style: disc }`). */
 [data-bitsnap-checkout] :where(a, h1, h2, h3, h4, p, ul, ol, li, hr, figure, button, input, select, label, fieldset, legend, img, svg):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)) {
     margin: 0;
     padding: 0;
@@ -90,6 +92,8 @@
     background: none;
     border: 0 solid;
     color: inherit;
+    text-decoration: inherit;
+    list-style: none;
 }
 
 [data-bitsnap-checkout] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)),
@@ -375,7 +379,10 @@
     border-radius: 2px;
 }
 
+/* (0,2,0) in every state: a host `a:hover { color; text-decoration }` (0,1,1)
+ * cannot restyle the product name. */
 [data-bitsnap-checkout] .bsc-line-link:where(:hover) {
+    color: inherit;
     text-decoration: underline;
 }
 
@@ -999,7 +1006,9 @@
     background: rgb(127 127 127 / 0.25);
 }
 
-[data-bitsnap-checkout-trigger="default"]:where(:focus-visible) {
+/* (0,2,0): the attribute twice, so a host `button:focus { outline: none }`
+ * (0,1,1) cannot take the keyboard ring away. */
+[data-bitsnap-checkout-trigger="default"][data-bitsnap-checkout-trigger]:where(:focus-visible) {
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }

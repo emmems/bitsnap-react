@@ -135,6 +135,20 @@ for (const presentation of ["drawer", "dialog"] as const) {
       assert.notEqual(doc().activeElement, slot("closeButton"));
     });
 
+    it("closes with Escape and gives the focus back to the trigger", async () => {
+      await mount({ presentation });
+      trigger().focus();
+      await open();
+      assert.equal(doc().activeElement, dialog(), "the panel takes the focus");
+      await React.act(async () => {
+        doc().dispatchEvent(new page.win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+      await settle();
+      assert.equal(dialog(), null, "Escape closes the cart");
+      assert.equal(useCheckoutStore.getState().isCartVisible, false);
+      assert.equal(doc().activeElement, trigger(), "the focus is back on the trigger");
+    });
+
     it("keeps the pointer-down-outside rule: pointer down on the overlay does not close, the click does", async () => {
       await mount({ presentation });
       await open();
