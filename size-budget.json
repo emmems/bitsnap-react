@@ -8,14 +8,14 @@
         "node_modules/hls.js/",
         "node_modules/dompurify/"
       ],
-      "jsGzipKB": 243.4
+      "jsGzipKB": 226.5
     },
     "cart-main-ns": {
       "forbidStatic": [
         "node_modules/hls.js/",
         "node_modules/dompurify/"
       ],
-      "jsGzipKB": 369.2
+      "jsGzipKB": 362.0
     },
     "catalog": {
       "jsGzipKB": 26.5
