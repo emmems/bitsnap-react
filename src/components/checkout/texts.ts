@@ -20,8 +20,10 @@ export type CheckoutTexts = {
   delivery: string;
   /** Country selector placeholder. */
   chooseCountry: string;
-  /** Checkout button label. */
+  /** Checkout button label (plain, no amount: the total row above it carries the number). */
   nextStep: string;
+  /** Divider between the express payment buttons and the country and payment options. */
+  orDivider: string;
   /** Error shown when some products are out of stock. */
   unavailableProducts: string;
   /** On a cart line the shop did not return (also its name when none is known). */
@@ -142,7 +144,8 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     total: "Total:",
     delivery: "+ delivery",
     chooseCountry: "Choose a country",
-    nextStep: "Next step",
+    nextStep: "Go to checkout",
+    orDivider: "or",
     unavailableProducts: "Not all products are available.",
     unavailableProduct: "Unavailable product",
     checkoutFailed: "Something went wrong. Please try again later.",
@@ -220,7 +223,8 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     total: "Suma:",
     delivery: "+ dostawa",
     chooseCountry: "Wybierz kraj",
-    nextStep: "Następny krok",
+    nextStep: "Przejdź do kasy",
+    orDivider: "lub",
     unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
     unavailableProduct: "Produkt niedostępny",
     checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",

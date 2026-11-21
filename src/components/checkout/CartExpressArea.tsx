@@ -1,7 +1,7 @@
-import { cn } from "@/src/lib/utils";
+import { cx } from "./lib/cx";
 import { InPostPayButtonInner } from "../express/InPostPayButton";
 import { RevolutPayButtonInner } from "../express/RevolutPayButton";
-import { useCheckoutSlot } from "./appearance.context";
+import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
 import ApplePayButton from "./ApplePay";
 import type { WalletItem } from "./cart-view";
 import { getProjectID } from "./CartProvider";
@@ -28,17 +28,19 @@ export default function CartExpressArea({
 }) {
   const paymentButtons = useCheckoutSlot("paymentButtons");
   const projectID = getProjectID() ?? "";
+  // White artwork on the dark panel, black on the light one (PLAN §5 item 13).
+  const light = useCheckoutAppearance().theme === "light";
 
   return (
     <>
       {isApplePayAvailable && oneClick && (
         <div
           data-bitsnap-checkout-slot="paymentButtons"
-          className={cn("w-full px-2", paymentButtons.className)}
+          className={cx("bsc-express-btn", paymentButtons.className)}
           style={paymentButtons.style}
         >
           <ApplePayButton
-            colorType="white"
+            colorType={light ? "black" : "white"}
             style={{ width: "100%" }}
             items={items}
           />
@@ -47,12 +49,12 @@ export default function CartExpressArea({
       {oneClick && (
         <div
           data-bitsnap-checkout-slot="paymentButtons"
-          className={cn("w-full px-2", paymentButtons.className)}
+          className={cx("bsc-express-btn", paymentButtons.className)}
           style={paymentButtons.style}
         >
           <GooglePayButton
             buttonSizeMode="fill"
-            buttonColor="white"
+            buttonColor={light ? "black" : "white"}
             style={{ width: "100%" }}
             items={items}
           />
@@ -60,7 +62,7 @@ export default function CartExpressArea({
       )}
       <div
         data-bitsnap-checkout-slot="paymentButtons"
-        className={cn("w-full px-2", paymentButtons.className)}
+        className={cx("bsc-express-btn bsc-express-wide", paymentButtons.className)}
         style={paymentButtons.style}
       >
         <InPostPayButtonInner projectID={projectID} locale={locale} />

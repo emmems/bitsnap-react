@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useRef, useState, type ReactNode } from "react";
-import { cn } from "@/src/lib/utils";
+import { cx } from "./lib/cx";
 import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
 import { useCheckoutText } from "./texts.context";
 import { resolvePresentation, type CartPresentation } from "./presentation";
@@ -55,7 +55,7 @@ export function CartFrame({
       data-bitsnap-checkout-slot="root"
       data-bitsnap-checkout-presentation={shown}
       {...boundaryAttributes}
-      className={cn("bitsnap-react", boundaryClassName, root.className)}
+      className={cx("bitsnap-react", boundaryClassName, root.className)}
       style={{ zIndex: 999999, ...boundaryStyle, ...root.style }}
     >
       {rootElement != null && (
@@ -74,7 +74,7 @@ export function CartFrame({
               aria-hidden="true"
               // Position, stacking and cursor live in the stylesheet, so a host
               // page's utility classes cannot override them.
-              className={cn(overlay.className)}
+              className={cx(overlay.className)}
               style={overlay.style}
               onClick={shouldHide}
             />
@@ -102,7 +102,7 @@ export function CartFrame({
               }}
               // Position, width, layout and scrolling live in the stylesheet: a
               // host page's own `.w-full` or `.fixed` would otherwise win.
-              className={cn(panel.className)}
+              className={cx(panel.className)}
               style={panel.style}
               // The overlay closes the cart on click; a close on pointer down would let the click through.
               onPointerDownOutside={(event) => event.preventDefault()}
@@ -133,13 +133,13 @@ export function CartHeader({ onClose }: { onClose: () => void }) {
   return (
     <div
       data-bitsnap-checkout-slot="header"
-      className={cn("bsc-header", header.className)}
+      className={cx("bsc-header", header.className)}
       style={header.style}
     >
       <Dialog.Title asChild>
         <h1
           data-bitsnap-checkout-slot="title"
-          className={cn("bsc-title", title.className)}
+          className={cx("bsc-title", title.className)}
           style={title.style}
         >
           {cartText}
@@ -149,7 +149,7 @@ export function CartHeader({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         data-bitsnap-checkout-slot="closeButton"
-        className={cn("bsc-icon-btn", closeButton.className)}
+        className={cx("bsc-icon-btn", closeButton.className)}
         style={closeButton.style}
         aria-label={closeText}
         onClick={onClose}

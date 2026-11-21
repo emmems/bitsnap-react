@@ -31,24 +31,12 @@ const EXPECTED_OFFENDERS: Record<string, string> = {
   ...removedBy("step 15", []),
   // Step 16, options and footer: CartCheckout summary, CountrySelector and
   // ui/select (native select, D4), PaymentMethodChoice, the Spinner.
-  ...removedBy("step 16", [
-      "flex-col", "w-full", "text-sm", "opacity-70", "justify-between", "flex-row", "text-lg", "text-xl",
-      "items-end", "ml-3", "data-[placeholder]:text-muted-foreground",
-      "[&_svg:not([class*='text-'])]:text-muted-foreground", "border", "shadow-xs",
-      "transition-[color,box-shadow]", "disabled:cursor-not-allowed", "data-[size=default]:h-9",
-      "data-[size=sm]:h-8", "*:data-[slot=select-value]:line-clamp-1", "*:data-[slot=select-value]:flex",
-      "*:data-[slot=select-value]:items-center", "*:data-[slot=select-value]:gap-2", "truncate", "inline",
-      "mr-2", "h-4", "rounded-sm", "lucide-chevron-down", "size-4", "opacity-50", "px-2", "contents", "mx-2",
-      "mt-4", "mb-2", "min-w-0", "border-0", "p-0", "mb-1", "px-1", "cursor-pointer", "py-2.5",
-      "transition-colors", "mt-0.5", "gap-0.5", "font-semibold", "leading-snug", "text-xs", "my-2",
-      "disabled:opacity-40",
-      // Moved from step 15: still rendered by the summary, the Radix select and the payment cards.
-      "mx-3", "font-medium", "focus-visible:border-ring", "focus-visible:ring-ring/50", "aria-invalid:ring-destructive/20", "dark:aria-invalid:ring-destructive/40", "aria-invalid:border-destructive", "items-center", "gap-2", "whitespace-nowrap", "outline-none", "focus-visible:ring-[3px]", "disabled:opacity-50", "[&_svg]:pointer-events-none", "[&_svg]:shrink-0", "[&_svg:not([class*='size-'])]:size-4", "lucide", "mb-3", "shrink-0",
-  ]),
+  ...removedBy("step 16", []),
   // Step 17, states: skeleton layout, empty state, error with retryButton.
   ...removedBy("step 17", [
       "items-start", "transition", "font-bold", "relative", "gap-4", "h-32", "p-4", "px-3",
-      // Moved from step 15: still rendered by the loading, failed and empty states.
+      // Moved from steps 15 and 16: still rendered by the loading, failed and empty states.
+      "flex-col", "w-full",
       "flex", "gap-3", "py-2", "rounded-md", "justify-center",
   ]),
 };

@@ -3,7 +3,7 @@ import type { CartLineDetails } from "./cart-snapshot";
 import { formatCurrency } from "./lib/round.number";
 import { getLocale } from "./locale";
 import type { ProductPricing } from "./product.details.model";
-import { cn } from "@/src/lib/utils";
+import { cx } from "./lib/cx";
 import { useCheckoutSlot } from "./appearance.context";
 import { AlertIcon, ImageIcon, MinusIcon, PlusIcon, TrashIcon } from "./icons";
 import { ProductPrice, useLinePrice } from "./ProductPrice";
@@ -101,7 +101,7 @@ const SingleProduct = ({
     <div
       data-bitsnap-checkout-slot="product"
       data-bitsnap-checkout-unavailable={isNotAvailable ? "" : undefined}
-      className={cn("bsc-line", product.className)}
+      className={cx("bsc-line", product.className)}
       style={product.style}
     >
       <ProductLink
@@ -114,7 +114,7 @@ const SingleProduct = ({
         {showImage ? (
           <img
             data-bitsnap-checkout-slot="productImage"
-            className={cn("bsc-line-thumb", productImage.className)}
+            className={cx("bsc-line-thumb", productImage.className)}
             style={productImage.style}
             src={imageUrl}
             alt=""
@@ -125,7 +125,7 @@ const SingleProduct = ({
             data-bitsnap-checkout-slot="productImage"
             data-bitsnap-checkout-placeholder=""
             aria-hidden="true"
-            className={cn("bsc-line-thumb bsc-line-thumb-empty", productImage.className)}
+            className={cx("bsc-line-thumb bsc-line-thumb-empty", productImage.className)}
             style={productImage.style}
           >
             <ImageIcon />
@@ -136,7 +136,7 @@ const SingleProduct = ({
       <div className="bsc-line-info">
         <p
           data-bitsnap-checkout-slot="productName"
-          className={cn("bsc-line-name", productName.className)}
+          className={cx("bsc-line-name", productName.className)}
           style={productName.style}
         >
           <ProductLink url={url} className="bsc-line-link">
@@ -146,7 +146,7 @@ const SingleProduct = ({
         {showVariant && (
           <p
             data-bitsnap-checkout-slot="productVariant"
-            className={cn("bsc-line-meta", productVariant.className)}
+            className={cx("bsc-line-meta", productVariant.className)}
             style={productVariant.style}
           >
             {variant}
@@ -155,7 +155,7 @@ const SingleProduct = ({
         {unitPrice != null && quantity > 1 && (
           <p
             data-bitsnap-checkout-slot="productUnitPrice"
-            className={cn("bsc-line-meta bsc-num", productUnitPrice.className)}
+            className={cx("bsc-line-meta bsc-num", productUnitPrice.className)}
             style={productUnitPrice.style}
             suppressHydrationWarning
           >
@@ -172,7 +172,7 @@ const SingleProduct = ({
         data-bitsnap-checkout-state={
           marked ? "price-updated" : refreshing ? "refreshing" : undefined
         }
-        className={cn("bsc-line-price", productPrice.className)}
+        className={cx("bsc-line-price", productPrice.className)}
         style={productPrice.style}
         suppressHydrationWarning
       >
@@ -209,7 +209,7 @@ const SingleProduct = ({
         <button
           data-bitsnap-checkout-slot="removeButton"
           type="button"
-          className={cn("bsc-icon-btn bsc-line-remove", removeButton.className)}
+          className={cx("bsc-icon-btn bsc-line-remove", removeButton.className)}
           style={removeButton.style}
           aria-label={`${removeText}: ${details.name}`}
           title={removeText}
@@ -295,13 +295,13 @@ const QuantityComponent = ({
       data-bitsnap-checkout-slot="quantityControl"
       role="group"
       aria-label={quantityText}
-      className={cn("bsc-stepper", quantityControl.className)}
+      className={cx("bsc-stepper", quantityControl.className)}
       style={quantityControl.style}
     >
       <button
         data-bitsnap-checkout-slot="quantityButton"
         type="button"
-        className={cn("bsc-stepper-btn", quantityButton.className)}
+        className={cx("bsc-stepper-btn", quantityButton.className)}
         style={quantityButton.style}
         aria-label={decreaseText}
         onClick={() => commit(clampQuantity(sent.current - 1))}
@@ -310,7 +310,7 @@ const QuantityComponent = ({
       </button>
       <input
         data-bitsnap-checkout-slot="quantityInput"
-        className={cn("bsc-stepper-input", quantityInput.className)}
+        className={cx("bsc-stepper-input", quantityInput.className)}
         style={quantityInput.style}
         value={quantityString}
         aria-label={quantityText}
@@ -328,7 +328,7 @@ const QuantityComponent = ({
       <button
         data-bitsnap-checkout-slot="quantityButton"
         type="button"
-        className={cn("bsc-stepper-btn", quantityButton.className)}
+        className={cx("bsc-stepper-btn", quantityButton.className)}
         style={quantityButton.style}
         aria-label={increaseText}
         onClick={() => commit(clampQuantity(sent.current + 1))}

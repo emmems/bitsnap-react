@@ -142,6 +142,12 @@
     }
 }
 
+@keyframes bitsnap-cart-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 @keyframes bitsnap-cart-pulse {
     50% {
         opacity: 0.5;
@@ -278,12 +284,6 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-}
-
-/* Interim until the footer step: the total, the options and the button sit at
- * the bottom of a short cart, as the old spacer did. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="summary"] {
-    margin-top: auto;
 }
 
 /* ---- Skeleton -------------------------------------------------------------
@@ -579,6 +579,51 @@
     opacity: 0.4;
 }
 
+/* The plain CTA (D10, R19): 52 px, full width; while the request runs the
+ * spinner sits beside the dimmed label and the width stays (F-02). */
+[data-bitsnap-checkout] .bsc-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 52px;
+    margin: 10px 0 0;
+    padding: 0 16px;
+    border-radius: var(--bsc-radius);
+    background-color: var(--bsc-cta-bg);
+    color: var(--bsc-cta-fg);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-cta:where(:hover:not(:disabled)) {
+    background-color: var(--bsc-cta-hover);
+}
+
+[data-bitsnap-checkout] .bsc-cta:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+[data-bitsnap-checkout] .bsc-cta:where(:disabled) {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+/* Busy beats disabled: the button stays solid, only the label dims. */
+[data-bitsnap-checkout] .bsc-cta:where([aria-busy="true"]) {
+    cursor: progress;
+    opacity: 1;
+}
+
+[data-bitsnap-checkout] :where(.bsc-cta[aria-busy="true"]) .bsc-cta-label {
+    opacity: 0.55;
+}
+
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
     color: var(--bsc-error);
 }
@@ -587,121 +632,275 @@
     color: var(--bsc-muted);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="deliveryText"] {
-    color: var(--bitsnap-checkout-muted-foreground, inherit);
+/* ---- Options (the scroll region, after the lines; D12, R11) ---------------
+ * Express row, the "or" divider, the country, the payment methods. */
+[data-bitsnap-checkout] .bsc-options {
+    display: grid;
+    gap: 16px;
+    padding: 8px 16px 16px;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryLabel"] {
-    margin: 0 0 0 12px;
+[data-bitsnap-checkout] .bsc-express {
+    display: grid;
+    gap: 12px;
+}
+
+/* One-click buttons share a row; InPost and Revolut take the full width. */
+[data-bitsnap-checkout] .bsc-wallets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+[data-bitsnap-checkout] .bsc-express-btn {
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+[data-bitsnap-checkout] .bsc-express-wide {
+    flex-basis: 100%;
+}
+
+[data-bitsnap-checkout] .bsc-express-status {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
     color: var(--bsc-muted);
 }
 
-/* Border width and padding of the old select trigger, so a host `button`
- * reset cannot strip them. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] {
-    padding: 8px 12px;
-    border-width: 1px;
-    border-style: solid;
-    background-color: var(--bsc-bg);
-    border-color: var(--bsc-control-border);
+[data-bitsnap-checkout] .bsc-express-status-alert {
+    color: var(--bsc-error);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"]:where(:focus-visible) {
-    border-color: var(--bsc-ring);
+[data-bitsnap-checkout] .bsc-wallets-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: -4px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--bsc-muted);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] :where(img) {
-    width: auto;
-    max-width: none;
-    height: 16px;
+[data-bitsnap-checkout] .bsc-or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--bsc-muted);
 }
 
-/* The portalled dropdown is its own boundary, outside the root: no aliases
- * there, so each value names its token and the dark default. It stacks above
- * the cart root (999999, earlier in the DOM). */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryDropdown"],
-[data-bitsnap-checkout-slot="countryDropdown"][data-bitsnap-checkout] {
-    z-index: 999999;
-    font-family: var(--bitsnap-checkout-font-family, inherit);
-    background-color: var(--bitsnap-checkout-surface, #262626);
-    color: var(--bitsnap-checkout-foreground, #e5e5e5);
-    border-width: 1px;
-    border-style: solid;
-    border-color: var(--bitsnap-checkout-border, #404040);
-    border-radius: 6px;
+[data-bitsnap-checkout] .bsc-or-line {
+    flex: 1;
+    border-top: 1px solid var(--bsc-border);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] {
-    background-color: var(--bitsnap-checkout-surface, #262626);
+[data-bitsnap-checkout] .bsc-field {
+    display: grid;
+    gap: 6px;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] :where(input) {
-    color: var(--bitsnap-checkout-muted-foreground, #a3a3a3);
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where(:hover, [data-highlighted]) {
-    background-color: var(--bitsnap-checkout-hover-surface, #404040);
-}
-
-/* After `:hover` / `[data-highlighted]`, so the selected option keeps its surface. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where([data-state="checked"]) {
-    background-color: var(--bitsnap-checkout-hover-surface, #404040);
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] {
-    margin: 16px 8px 8px;
-    padding: 0;
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] :where(legend) {
-    margin-bottom: 4px;
-    padding: 0 4px;
+[data-bitsnap-checkout] .bsc-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
     color: var(--bsc-fg);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] {
-    border-color: var(--bsc-control-border);
+[data-bitsnap-checkout] .bsc-legend {
+    margin-bottom: 6px;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:hover) {
-    border-color: var(--bsc-muted);
+/* The native country select (D4): 44 px, a 3:1 control border, own chevron.
+ * A data URI cannot read currentColor, so the chevron is a fixed #8a8a8a
+ * (5.19:1 on the dark panel, 3.45:1 on white). The popup follows color-scheme. */
+[data-bitsnap-checkout] .bsc-select {
+    display: block;
+    width: 100%;
+    height: 44px;
+    padding: 0 40px 0 12px;
+    border: 1px solid var(--bsc-control-border);
+    border-radius: var(--bsc-radius);
+    background: var(--bsc-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 16px 16px;
+    color: var(--bsc-fg);
+    font-size: 15px;
+    text-overflow: ellipsis;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where([data-selected]) {
-    border-color: var(--bsc-fg);
-    background-color: var(--bsc-surface);
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:has(input:focus-visible)) {
+[data-bitsnap-checkout] .bsc-select:where(:focus-visible) {
     outline: 2px solid var(--bsc-ring);
     outline-offset: 2px;
 }
 
-/* Drawn by hand: a native unchecked radio is a white disc on the dark panel. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]) {
-    appearance: none;
-    flex-shrink: 0;
-    width: 16px;
-    height: 16px;
-    margin: 2px 0 0;
-    padding: 0;
-    border-radius: 9999px;
-    border: 1.5px solid var(--bsc-muted);
-    background-color: transparent;
-    outline: none;
+[data-bitsnap-checkout] .bsc-select:where(:disabled) {
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]:checked) {
+[data-bitsnap-checkout] .bsc-contents {
+    display: contents;
+}
+
+/* Payment methods: one 48 px card per option, the whole card is the label. */
+[data-bitsnap-checkout] .bsc-methods {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+[data-bitsnap-checkout] .bsc-method {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px;
+    border: 1px solid var(--bsc-control-border);
+    border-radius: var(--bsc-radius);
+    cursor: pointer;
+    transition: border-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-method:where(:hover) {
+    border-color: var(--bsc-muted);
+}
+
+/* Selected: a 2 px look (border plus an inset ring) without a layout shift. */
+[data-bitsnap-checkout] .bsc-method:where([data-selected]) {
+    border-color: var(--bsc-fg);
+    box-shadow: inset 0 0 0 1px var(--bsc-fg);
+}
+
+[data-bitsnap-checkout] .bsc-method:where(:has(input:focus-visible)) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+[data-bitsnap-checkout] :where(.bsc-methods:disabled) .bsc-method {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Drawn by hand: a native unchecked radio is a white disc on the dark panel. */
+[data-bitsnap-checkout] .bsc-radio {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border: 2px solid var(--bsc-control-border);
+    border-radius: 9999px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+[data-bitsnap-checkout] .bsc-radio:where(:checked) {
     border: 5px solid var(--bsc-fg);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-payment-method-description] {
+[data-bitsnap-checkout] .bsc-method-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+[data-bitsnap-checkout] .bsc-method-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+[data-bitsnap-checkout] .bsc-method-desc {
+    font-size: 13px;
+    line-height: 1.4;
     color: var(--bsc-muted);
 }
 
-[data-bitsnap-checkout] :where([data-bitsnap-checkout-slot="paymentMethods"]:disabled) [data-bitsnap-checkout-slot="paymentMethodOption"] {
-    cursor: not-allowed;
-    opacity: 0.6;
+[data-bitsnap-checkout] .bsc-method-note {
+    display: block;
+    margin-top: 4px;
+    font-weight: 500;
+    color: var(--bsc-fg);
+}
+
+/* ---- Footer (the panel's last grid row, always visible; D7) ---------------
+ * Small "Total" label, large amount (F-07), the note, the plain CTA (D10). */
+[data-bitsnap-checkout] .bsc-footer {
+    display: grid;
+    gap: 4px;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--bsc-border);
+    background-color: var(--bsc-bg);
+}
+
+[data-bitsnap-checkout] .bsc-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 12px;
+}
+
+[data-bitsnap-checkout] .bsc-total-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-total-value {
+    font-size: 20px;
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+[data-bitsnap-checkout] .bsc-note {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--bsc-control-border);
+    border-radius: var(--bsc-radius);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+[data-bitsnap-checkout] .bsc-hint {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-error-text {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+[data-bitsnap-checkout] .bsc-spinner {
+    display: inline-block;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    animation: bitsnap-cart-spin 800ms linear infinite;
 }
 
 /* ---- Cart trigger (D20) ---------------------------------------------------
@@ -759,6 +958,8 @@
 
     [data-bitsnap-checkout] .bsc-icon-btn,
     [data-bitsnap-checkout] .bsc-stepper-btn,
+    [data-bitsnap-checkout] .bsc-method,
+    [data-bitsnap-checkout] .bsc-cta,
     [data-bitsnap-checkout-trigger="default"] {
         transition: none;
     }

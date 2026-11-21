@@ -101,7 +101,7 @@ const doc = () => page.win.document;
 const fieldset = () => doc().querySelector<HTMLFieldSetElement>('[data-bitsnap-checkout-slot="paymentMethods"]');
 const radios = () => [...doc().querySelectorAll<HTMLInputElement>('[data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"]')];
 const optionTitles = () =>
-  [...doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodOption"] span.font-semibold')].map((el) => el.textContent);
+  [...doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodOption"] .bsc-method-title')].map((el) => el.textContent);
 const errorText = () => doc().querySelector('[data-bitsnap-checkout-slot="error"]')?.textContent;
 
 async function openCart(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {

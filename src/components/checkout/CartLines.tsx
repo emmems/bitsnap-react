@@ -1,5 +1,5 @@
 import React from "react";
-import { cn } from "@/src/lib/utils";
+import { cx } from "./lib/cx";
 import { useCartController } from "./cart-controller";
 import { useCheckoutSlot } from "./appearance.context";
 import SingleProduct from "./SingleProduct";
@@ -38,12 +38,12 @@ export function CartLines() {
         <div className={"relative flex w-full justify-center flex-col gap-4"}>
           <Skeleton
             data-bitsnap-checkout-slot="skeleton"
-            className={cn("w-full h-32", skeleton.className)}
+            className={cx("w-full h-32", skeleton.className)}
             style={skeleton.style}
           />
           <Skeleton
             data-bitsnap-checkout-slot="skeleton"
-            className={cn("w-full h-32", skeleton.className)}
+            className={cx("w-full h-32", skeleton.className)}
             style={skeleton.style}
           />
         </div>
@@ -54,7 +54,7 @@ export function CartLines() {
           <p
             role="alert"
             data-bitsnap-checkout-slot="error"
-            className={cn(error.className)}
+            className={cx(error.className)}
             style={error.style}
           >
             {loadFailedText}
@@ -63,7 +63,7 @@ export function CartLines() {
             <p
               role="alert"
               data-bitsnap-checkout-slot="error"
-              className={cn("text-sm", error.className)}
+              className={cx("text-sm", error.className)}
               style={error.style}
             >
               {notice}
@@ -74,7 +74,7 @@ export function CartLines() {
             data-bitsnap-checkout-slot="checkoutButton"
             data-bitsnap-checkout-retry=""
             onClick={retry}
-            className={cn(
+            className={cx(
               "px-3 py-2 rounded-md transition font-bold",
               checkoutButton.className,
             )}
@@ -89,7 +89,7 @@ export function CartLines() {
         <div className={"flex flex-col gap-4 p-4"}>
           <p
             data-bitsnap-checkout-slot="emptyState"
-            className={cn(emptyState.className)}
+            className={cx(emptyState.className)}
             style={emptyState.style}
           >
             {emptyCartText}
@@ -98,7 +98,7 @@ export function CartLines() {
             <p
               role="alert"
               data-bitsnap-checkout-slot="error"
-              className={cn("text-sm", error.className)}
+              className={cx("text-sm", error.className)}
               style={error.style}
             >
               {notice}
@@ -109,7 +109,7 @@ export function CartLines() {
 
       <div
         data-bitsnap-checkout-slot="productList"
-        className={cn(productList.className)}
+        className={cx(productList.className)}
         style={productList.style}
       >
         {status === "ready" && (
@@ -179,7 +179,7 @@ export function CartLines() {
           <p
             role="alert"
             data-bitsnap-checkout-slot="error"
-            className={cn("text-sm", error.className)}
+            className={cx("text-sm", error.className)}
             style={error.style}
           >
             {loadFailedText}
@@ -189,7 +189,7 @@ export function CartLines() {
             data-bitsnap-checkout-slot="checkoutButton"
             data-bitsnap-checkout-retry=""
             onClick={retry}
-            className={cn(
+            className={cx(
               "px-3 py-2 rounded-md transition font-bold",
               checkoutButton.className,
             )}

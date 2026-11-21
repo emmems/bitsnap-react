@@ -245,6 +245,19 @@ describe(`cart accessibility (${presentation})`, () => {
       panel.querySelector('[data-bitsnap-checkout-slot="summaryNote"]')?.textContent,
       "Discounts, shipping and taxes are calculated at the next step",
     );
+    // One structure (D7, N11): header, scroll region, footer, no wrapper.
+    assert.deepEqual(
+      Array.from(panel.children).map((child) => child.getAttribute("data-bitsnap-checkout-slot")),
+      ["header", "lines", "footer"],
+    );
+    const cta = panel.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    assert.equal(cta.textContent, "Go to checkout", "plain CTA, no amount (D10)");
+    assert.equal(cta.closest('[data-bitsnap-checkout-slot="footer"]')?.parentElement, panel);
+    assert.equal(
+      panel.querySelector('[data-bitsnap-checkout-slot="deliveryText"]'),
+      null,
+      "the inline delivery note is gone",
+    );
   });
 });
 

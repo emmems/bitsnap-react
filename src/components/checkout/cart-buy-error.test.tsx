@@ -97,7 +97,7 @@ async function mount(props: Partial<React.ComponentProps<typeof BitsnapCheckout>
 
 const settle = () => React.act(async () => void (await new Promise((r) => setTimeout(r, 30))));
 
-/** Adds a product, opens the cart, clicks "Następny krok" and returns the error text. */
+/** Adds a product, opens the cart, clicks "Przejdź do kasy" and returns the error text. */
 async function failCheckout(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
   await mount(props);
   await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));

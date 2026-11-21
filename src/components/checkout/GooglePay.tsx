@@ -2,7 +2,6 @@ import React from "react";
 import CartProvider, { useCartProvider } from "./CartProvider";
 import { isErr } from "./lib/err";
 import { currentProjectID } from "./project-id";
-import { Spinner } from "@/src/ui/spinner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import {
@@ -179,7 +178,7 @@ function GooglePayButtonComponent({
           }
         }}
       />
-      {isPending ? <Spinner /> : null}
+      {isPending ? <span className="bsc-spinner" aria-hidden="true" /> : null}
     </React.Suspense>
   );
 }

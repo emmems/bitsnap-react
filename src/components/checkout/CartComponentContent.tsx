@@ -1,10 +1,10 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useEffect } from "react";
-import { cn } from "@/src/lib/utils";
 import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
-import { CartCheckout } from "./CartCheckout";
+import { CartFooter, CartOptions } from "./CartCheckout";
 import { CartControllerProvider } from "./cart-controller";
 import { CartLines } from "./CartLines";
+import { cx } from "./lib/cx";
 
 /** `useAutoAnimate`, off while the appearance has motion off (CSS cannot stop it). */
 export function useCartAutoAnimate() {
@@ -23,11 +23,11 @@ export function useCartAutoAnimate() {
 }
 
 /**
- * The body of the cart: the scroll region (the `lines` slot), a direct child
- * of the panel's grid after the header (D7). State and logic live in
+ * The body of the cart: a fragment of the scroll region (the `lines` slot:
+ * lines, then the options) and the footer, both direct children of the
+ * panel's grid after the header (D7, N11). State and logic live in
  * `cart-controller.tsx`; the markup is in `CartLines` and `CartCheckout`, which
- * read the controller from context. Until the footer step splits
- * `CartCheckout`, the total and the button scroll with the lines.
+ * read the controller from context.
  */
 const CartComponentContent = ({
   locale,
@@ -43,13 +43,14 @@ const CartComponentContent = ({
     <CartControllerProvider locale={locale} open={open}>
       <div
         data-bitsnap-checkout-slot="lines"
-        className={cn("bsc-scroll", lines.className)}
+        className={cx("bsc-scroll", lines.className)}
         style={lines.style}
         ref={productsParent}
       >
         <CartLines />
-        <CartCheckout />
+        <CartOptions />
       </div>
+      <CartFooter />
     </CartControllerProvider>
   );
 };

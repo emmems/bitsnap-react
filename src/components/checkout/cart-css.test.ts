@@ -419,13 +419,6 @@ describe("cart.css content rules (1.31.0, in literals until steps 15-17)", () =>
     assert.equal(price("sale")?.declarations.get("color"), "var(--bitsnap-checkout-sale, #f87171)");
   });
 
-  it("keeps the ring-coloured border on the focused country trigger", () => {
-    assert.equal(
-      findTop(`${slot("countryTrigger")}:where(:focus-visible)`)?.declarations.get("border-color"),
-      "var(--bsc-ring)",
-    );
-  });
-
   it("lists every state rule after its base rule, so the state wins at equal specificity", () => {
     const indexOf = (selector: string) => topLevel.findIndex((rule) => rule.selectors.includes(selector));
     let checked = 0;
@@ -441,8 +434,8 @@ describe("cart.css content rules (1.31.0, in literals until steps 15-17)", () =>
     }
     assert.ok(checked >= 10, `only ${checked} state rules checked`);
     const order = (earlier: string, later: string) => assert.ok(indexOf(earlier) < indexOf(later), `${later} after ${earlier}`);
-    order(`${slot("countryOption")}:where(:hover, [data-highlighted])`, `${slot("countryOption")}:where([data-state="checked"])`);
-    order(`${slot("paymentMethodOption")}:where(:hover)`, `${slot("paymentMethodOption")}:where([data-selected])`);
+    order("[data-bitsnap-checkout] .bsc-method:where(:hover)", "[data-bitsnap-checkout] .bsc-method:where([data-selected])");
+    order("[data-bitsnap-checkout] .bsc-cta:where(:disabled)", '[data-bitsnap-checkout] .bsc-cta:where([aria-busy="true"])');
   });
 });
 
@@ -617,6 +610,62 @@ describe("cart.css lines (step 15)", () => {
     for (const file of ["SingleProduct.tsx", "ProductPrice.tsx", "CartLines.tsx", "Skeleton.tsx", "icons.tsx"]) {
       const source = readFileSync(resolve(process.cwd(), "src/components/checkout", file), "utf8");
       assert.doesNotMatch(source, /ui\/button|lucide-react|class-variance-authority/, file);
+    }
+  });
+});
+
+describe("cart.css options and footer (step 16)", () => {
+  it("styles the native country select: 44 px, a 3:1 control border, own chevron, visible focus (D4)", () => {
+    const select = findTop("[data-bitsnap-checkout] .bsc-select");
+    assert.equal(select?.declarations.get("height"), "44px");
+    assert.equal(select?.declarations.get("border"), "1px solid var(--bsc-control-border)");
+    assert.equal(select?.declarations.get("appearance"), "none");
+    assert.match(select?.declarations.get("background") ?? "", /url\("data:image\/svg\+xml,[^"]*%238a8a8a/);
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-select:where(:focus-visible)")?.declarations.has("outline"));
+    assert.doesNotMatch(css, /countryDropdown|countrySearch|countryOption/, "the portalled dropdown rules are gone");
+  });
+
+  it("gives every payment card a 3:1 boundary and a 48 px target", () => {
+    const card = findTop("[data-bitsnap-checkout] .bsc-method");
+    assert.equal(card?.declarations.get("border"), "1px solid var(--bsc-control-border)");
+    assert.equal(card?.declarations.get("min-height"), "48px");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-radio")?.declarations.get("border"), "2px solid var(--bsc-control-border)");
+  });
+
+  it("keeps the footer in its grid row with the safe area, total larger than its label, a 52 px CTA (F-07, D8, D10)", () => {
+    const footer = findTop("[data-bitsnap-checkout] .bsc-footer");
+    assert.equal(footer?.declarations.get("padding"), "12px 16px calc(16px + env(safe-area-inset-bottom))");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-label")?.declarations.get("font-size"), "14px");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-value")?.declarations.get("font-size"), "20px");
+    const cta = findTop("[data-bitsnap-checkout] .bsc-cta");
+    assert.equal(cta?.declarations.get("min-height"), "52px");
+    assert.equal(cta?.declarations.get("width"), "100%");
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-cta:where(:focus-visible)")?.declarations.has("outline"));
+    assert.equal(findTop(slot("summary")), undefined, "the step 14 interim margin-top is gone");
+  });
+});
+
+describe("express components (step 16)", () => {
+  const TAILWIND = /^(w|h|p|m|px|py|mx|my|flex|grid|text|font|bg|border|rounded|gap|fixed|absolute|relative|overflow|z|opacity|size|animate)-?/;
+  it("carry only bsc-* classes, no Tailwind utility and no ui/spinner (plan part 3 §7.3b)", () => {
+    for (const file of [
+      "src/components/express/ExpressStatus.tsx",
+      "src/components/express/InPostPayButton.tsx",
+      "src/components/express/RevolutPayButton.tsx",
+      "src/components/checkout/ApplePay.tsx",
+      "src/components/checkout/GooglePay.tsx",
+      "src/components/checkout/CartExpressArea.tsx",
+      "src/components/checkout/CartCheckout.tsx",
+      "src/components/checkout/CountrySelector.tsx",
+      "src/components/checkout/PaymentMethodChoice.tsx",
+    ]) {
+      const source = readFileSync(resolve(process.cwd(), file), "utf8");
+      assert.doesNotMatch(source, /ui\/spinner|ui\/select|lucide-react|lib\/utils/, file);
+      for (const match of source.matchAll(/(?:className=|cx\()\{?\s*"([^"]*)"/g)) {
+        for (const token of match[1].split(/\s+/).filter(Boolean)) {
+          assert.doesNotMatch(token, TAILWIND, `${file}: "${token}"`);
+        }
+      }
     }
   });
 });

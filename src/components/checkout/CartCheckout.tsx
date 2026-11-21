@@ -1,10 +1,10 @@
 import React from "react";
-import { cn } from "@/src/lib/utils";
-import { Spinner } from "@/src/ui/spinner";
 import { useCheckoutSlot } from "./appearance.context";
 import { useCartController } from "./cart-controller";
 import { catalogUnitPrice } from "./cart-view";
 import CountrySelector from "./CountrySelector";
+import { cx } from "./lib/cx";
+import { AlertIcon } from "./icons";
 import { formatCurrency } from "./lib/round.number";
 import { PaymentMethodChoice } from "./PaymentMethodChoice";
 import { useCheckoutText } from "./texts.context";
@@ -46,46 +46,57 @@ function expressAreaComponent() {
 }
 
 /**
- * Everything under the lines: the total, the country, the express buttons, the
- * payment options and the "Next step" button with its errors. Nothing renders
- * while the cart has no total.
- *
- * The next wave splits this into `CartOptions` and `CartFooter`; that changes the
- * DOM order, so it is not part of the extraction.
+ * Whether the options and the footer show: only for a ready cart with a total.
+ * A line still waiting for its price keeps them (and a mounted wallet sheet)
+ * on screen; only the amount waits. Catalog prices as in 1.29, so a
+ * pay-what-you-want `amount: 0` keeps the button.
  */
-export function CartCheckout() {
-  const {
-    locale,
-    status,
-    lines,
-    unavailable,
-    total,
-    totalComplete,
-    wallets,
-    showReviewPrices,
-    currency,
-    isSomeProductDeliverable,
-    countries,
-    country,
-    isCountryMissing,
-    setCountry,
-    countrySelectorId,
-    countryHintId,
-    isApplePayAvailable,
-    paymentChoice,
-    selectMethod,
-    paymentMethodsRef,
-    checkout,
-    isStartingCheckout,
-    isCheckingOut,
-    canCheckout,
-    error: shownError,
-  } = useCartController();
+function useCheckoutBlock() {
+  const controller = useCartController();
+  const { status, lines, total, totalComplete } = controller;
+  const catalogSum = lines.reduce(
+    (sum, item) =>
+      item.details == null
+        ? sum
+        : sum + catalogUnitPrice(item.details) * item.line.quantity,
+    0,
+  );
+  const shown =
+    status === "ready" && (total > 0 || catalogSum > 0 || !totalComplete);
+  return { controller, shown };
+}
 
-  const [isCountryOpen, setIsCountryOpen] = React.useState(false);
+/**
+ * The options under the lines, in the scroll region (D12, R11): the express
+ * row, the "or" divider (only while an express button takes space), the
+ * delivery country and the payment methods.
+ */
+export function CartOptions() {
+  const {
+    controller: {
+      locale,
+      lines,
+      unavailable,
+      wallets,
+      countries,
+      country,
+      isCountryMissing,
+      setCountry,
+      countrySelectorId,
+      countryHintId,
+      isApplePayAvailable,
+      paymentChoice,
+      selectMethod,
+      paymentMethodsRef,
+      isStartingCheckout,
+    },
+    shown,
+  } = useCheckoutBlock();
+
   // Taken once per mount: the drawer mounts this at each open, so a failed
   // chunk is retried at the next open, not at every render.
   const [CartExpressArea] = React.useState(expressAreaComponent);
+  const hasExpress = useHasHeight();
 
   // The express chunk loads while `/products` is asked, not after it: the
   // buttons mount once the server confirmed the cart (slice 5).
@@ -96,115 +107,33 @@ export function CartCheckout() {
     }
   }, [hasLines]);
 
-  const summary = useCheckoutSlot("summary");
-  const totalLabel = useCheckoutSlot("totalLabel");
-  const totalValue = useCheckoutSlot("totalValue");
-  const deliveryText = useCheckoutSlot("deliveryText");
-  const summaryNote = useCheckoutSlot("summaryNote");
+  const options = useCheckoutSlot("options");
   const countryLabel = useCheckoutSlot("countryLabel");
-  const checkoutButton = useCheckoutSlot("checkoutButton");
-  const error = useCheckoutSlot("error");
-
-  const totalText = useCheckoutText("total");
-  const deliveryCopy = useCheckoutText("delivery");
   const chooseCountryText = useCheckoutText("chooseCountry");
-  const nextStepText = useCheckoutText("nextStep");
-  const countryRequiredText = useCheckoutText("countryRequired");
-  const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
   const walletsUpdatingText = useCheckoutText("walletsUpdating");
-  const reviewPricesText = useCheckoutText("reviewPrices");
+  const orText = useCheckoutText("orDivider");
 
-  // A line still waiting for its price keeps the block (and a mounted wallet
-  // sheet) on screen; only the amount waits. Catalog prices as in 1.29, so a
-  // pay-what-you-want `amount: 0` keeps the button.
-  const catalogSum = lines.reduce(
-    (sum, item) =>
-      item.details == null
-        ? sum
-        : sum + catalogUnitPrice(item.details) * item.line.quantity,
-    0,
-  );
-  if (status !== "ready" || !(total > 0 || catalogSum > 0 || !totalComplete)) {
+  if (!shown) {
     return null;
   }
+  const hasCountries = countries != null && countries.length > 1;
 
   return (
-    <>
-      <div
-        data-bitsnap-checkout-slot="summary"
-        className={cn("mx-3 flex flex-col", summary.className)}
-        style={summary.style}
-      >
-        <div className={"flex flex-row justify-between text-lg"}>
-          <p
-            data-bitsnap-checkout-slot="totalLabel"
-            className={cn("text-xl", totalLabel.className)}
-            style={totalLabel.style}
-          >
-            {totalText}
-          </p>
-          <div className={"flex flex-col items-end"}>
-            <p
-              data-bitsnap-checkout-slot="totalValue"
-              className={cn("font-medium", totalValue.className)}
-              style={totalValue.style}
-            >
-              {totalComplete ? formatCurrency(total, currency, locale) : "…"}
-            </p>
-            {isSomeProductDeliverable && (
-              <p
-                data-bitsnap-checkout-slot="deliveryText"
-                className={cn(
-                  "opacity-70 text-right text-base",
-                  deliveryText.className,
-                )}
-                style={deliveryText.style}
-              >
-                {deliveryCopy}
-              </p>
-            )}
-          </div>
-        </div>
-        <p
-          data-bitsnap-checkout-slot="summaryNote"
-          className={cn("opacity-70 text-sm", summaryNote.className)}
-          style={summaryNote.style}
-        >
-          {extrasCalculatedNextText}
-        </p>
-      </div>
-
-      {countries && countries?.length > 1 && (
-        <div>
-          <h4
-            data-bitsnap-checkout-slot="countryLabel"
-            className={cn("ml-3 text-sm", countryLabel.className)}
-            style={countryLabel.style}
-          >
-            {chooseCountryText}
-          </h4>
-          <CountrySelector
-            id={countrySelectorId}
-            open={isCountryOpen}
-            onToggle={() => {
-              setIsCountryOpen(!isCountryOpen);
-            }}
-            onChange={setCountry}
-            selectedValue={country ?? ""}
-            countries={countries}
-          />
-        </div>
-      )}
-
-      <div className={"mb-3 flex flex-col"}>
-        {wallets.mounted && (
-          // Inert while a line is unconfirmed or price-marked (D12, N1): no
-          // click or key starts a wallet; an open wallet sheet is untouched.
+    <div
+      data-bitsnap-checkout-slot="options"
+      className={cx("bsc-options", options.className)}
+      style={options.style}
+    >
+      {wallets.mounted && (
+        <div className="bsc-express">
+          {/* Inert while a line is unconfirmed or price-marked (D12, N1): no
+              click or key starts a wallet; an open wallet sheet is untouched. */}
           <div
+            ref={hasExpress.ref}
             data-bitsnap-checkout-wallets=""
             aria-disabled={wallets.inert ? "true" : undefined}
             inert={wallets.inert}
-            className={"flex flex-col"}
+            className="bsc-wallets"
             style={
               wallets.inert ? { pointerEvents: "none", opacity: 0.5 } : undefined
             }
@@ -218,64 +147,193 @@ export function CartCheckout() {
               />
             </React.Suspense>
           </div>
-        )}
-        {wallets.mounted && wallets.inert && unavailable.length === 0 && (
-          <p
-            role="status"
-            data-bitsnap-checkout-notice="wallets-updating"
-            className={"text-sm text-center opacity-70"}
-          >
-            {walletsUpdatingText}
-          </p>
-        )}
-        {paymentChoice != null && (
-          <div ref={paymentMethodsRef} className="contents">
-            <PaymentMethodChoice
-              choice={paymentChoice.choice}
-              selected={paymentChoice.selected}
-              onChange={selectMethod}
-              disabled={isStartingCheckout}
-            />
-          </div>
-        )}
-        {showReviewPrices && (
-          <p
-            role="status"
-            data-bitsnap-checkout-notice="review-prices"
-            className={"mx-2 text-sm text-center font-semibold"}
-          >
-            {reviewPricesText}
-          </p>
-        )}
-        <button
-          data-bitsnap-checkout-slot="checkoutButton"
-          onClick={checkout}
-          disabled={!canCheckout}
-          aria-describedby={isCountryMissing ? countryHintId : undefined}
-          className={cn(
-            "px-3 py-2 my-2 mx-2 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition font-bold",
-            checkoutButton.className,
+          {wallets.inert && unavailable.length === 0 && (
+            <p
+              role="status"
+              data-bitsnap-checkout-notice="wallets-updating"
+              className="bsc-wallets-note"
+            >
+              <span className="bsc-spinner" aria-hidden="true" />
+              {walletsUpdatingText}
+            </p>
           )}
-          style={checkoutButton.style}
-        >
-          {isCheckingOut ? <Spinner /> : nextStepText}
-        </button>
-        {isCountryMissing && (
-          <p id={countryHintId} className={"text-sm text-center opacity-70"}>
-            {countryRequiredText}
-          </p>
-        )}
-        {shownError.length > 0 && (
-          <p
-            role="alert"
-            data-bitsnap-checkout-slot="error"
-            className={cn("text-sm text-center", error.className)}
-            style={error.style}
+          {hasExpress.value && (
+            <p className="bsc-or" data-bitsnap-checkout-divider="">
+              <span className="bsc-or-line" aria-hidden="true" />
+              {orText}
+              <span className="bsc-or-line" aria-hidden="true" />
+            </p>
+          )}
+        </div>
+      )}
+
+      {hasCountries && (
+        <div className="bsc-field">
+          <label
+            htmlFor={countrySelectorId}
+            data-bitsnap-checkout-slot="countryLabel"
+            className={cx("bsc-label", countryLabel.className)}
+            style={countryLabel.style}
           >
-            {shownError}
-          </p>
-        )}
+            {chooseCountryText}
+          </label>
+          <CountrySelector
+            id={countrySelectorId}
+            onChange={setCountry}
+            selectedValue={country ?? ""}
+            countries={countries}
+            describedBy={isCountryMissing ? countryHintId : undefined}
+          />
+        </div>
+      )}
+
+      {paymentChoice != null && (
+        <div ref={paymentMethodsRef} className="bsc-contents">
+          <PaymentMethodChoice
+            choice={paymentChoice.choice}
+            selected={paymentChoice.selected}
+            onChange={selectMethod}
+            disabled={isStartingCheckout}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Whether an element takes vertical space: the "or" divider follows the
+ * express buttons, whose availability only their own components know.
+ */
+function useHasHeight() {
+  const [value, setValue] = React.useState(false);
+  const observer = React.useRef<ResizeObserver | null>(null);
+  const ref = React.useCallback((element: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (element == null || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    observer.current = new ResizeObserver((entries) => {
+      setValue(entries.some((entry) => entry.contentRect.height > 0));
+    });
+    observer.current.observe(element);
+  }, []);
+  return { ref, value };
+}
+
+/**
+ * The footer, the panel's last grid row and always visible (D7): the total
+ * (small label, large amount, F-07), the note, the review notice, the plain
+ * "Go to checkout" button (D10) and its hint and error.
+ */
+export function CartFooter() {
+  const {
+    controller: {
+      locale,
+      total,
+      totalComplete,
+      showReviewPrices,
+      currency,
+      isCountryMissing,
+      countryHintId,
+      checkout,
+      isCheckingOut,
+      canCheckout,
+      error: shownError,
+    },
+    shown,
+  } = useCheckoutBlock();
+
+  const footer = useCheckoutSlot("footer");
+  const summary = useCheckoutSlot("summary");
+  const totalLabel = useCheckoutSlot("totalLabel");
+  const totalValue = useCheckoutSlot("totalValue");
+  const summaryNote = useCheckoutSlot("summaryNote");
+  const checkoutButton = useCheckoutSlot("checkoutButton");
+  const error = useCheckoutSlot("error");
+
+  const totalText = useCheckoutText("total");
+  const nextStepText = useCheckoutText("nextStep");
+  const countryRequiredText = useCheckoutText("countryRequired");
+  const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
+  const reviewPricesText = useCheckoutText("reviewPrices");
+
+  if (!shown) {
+    return null;
+  }
+
+  return (
+    <div
+      data-bitsnap-checkout-slot="footer"
+      className={cx("bsc-footer", footer.className)}
+      style={footer.style}
+    >
+      <div
+        data-bitsnap-checkout-slot="summary"
+        className={cx("bsc-summary", summary.className)}
+        style={summary.style}
+      >
+        <p
+          data-bitsnap-checkout-slot="totalLabel"
+          className={cx("bsc-total-label", totalLabel.className)}
+          style={totalLabel.style}
+        >
+          {totalText}
+        </p>
+        <p
+          data-bitsnap-checkout-slot="totalValue"
+          className={cx("bsc-total-value", totalValue.className)}
+          style={totalValue.style}
+        >
+          {totalComplete ? formatCurrency(total, currency, locale) : "…"}
+        </p>
+        <p
+          data-bitsnap-checkout-slot="summaryNote"
+          className={cx("bsc-note", summaryNote.className)}
+          style={summaryNote.style}
+        >
+          {extrasCalculatedNextText}
+        </p>
       </div>
-    </>
+      {showReviewPrices && (
+        <p
+          role="status"
+          data-bitsnap-checkout-notice="review-prices"
+          className="bsc-notice"
+        >
+          <AlertIcon />
+          <span>{reviewPricesText}</span>
+        </p>
+      )}
+      <button
+        type="button"
+        data-bitsnap-checkout-slot="checkoutButton"
+        onClick={checkout}
+        disabled={!canCheckout}
+        aria-busy={isCheckingOut ? "true" : undefined}
+        aria-describedby={isCountryMissing ? countryHintId : undefined}
+        className={cx("bsc-cta", checkoutButton.className)}
+        style={checkoutButton.style}
+      >
+        {isCheckingOut && <span className="bsc-spinner" aria-hidden="true" />}
+        <span className="bsc-cta-label">{nextStepText}</span>
+      </button>
+      {isCountryMissing && (
+        <p id={countryHintId} className="bsc-hint">
+          {countryRequiredText}
+        </p>
+      )}
+      {shownError.length > 0 && (
+        <p
+          role="alert"
+          data-bitsnap-checkout-slot="error"
+          className={cx("bsc-error-text", error.className)}
+          style={error.style}
+        >
+          {shownError}
+        </p>
+      )}
+    </div>
   );
 }

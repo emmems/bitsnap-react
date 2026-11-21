@@ -96,42 +96,6 @@ describe("resolveCheckoutAppearance", () => {
     assert.equal(style["--popover"], "#f9fafb");
     assert.equal(style["--popover-foreground"], "#18181b");
     assert.equal(style["--bitsnap-checkout-surface"], "#f9fafb");
-
-    const dropdownStyle = resolved.dropdownStyle as Record<string, string>;
-
-    assert.equal(dropdownStyle["--popover"], "#f9fafb");
-    assert.equal(dropdownStyle["--popover-foreground"], "#18181b");
-  });
-
-  it("gives the portalled dropdown the dark defaults when no token is set", () => {
-    const resolved = resolveCheckoutAppearance({ theme: "dark" });
-
-    const dropdownStyle = resolved.dropdownStyle as Record<string, string>;
-
-    assert.equal(dropdownStyle["--popover"], "var(--bitsnap-checkout-surface, var(--color-neutral-800))");
-    assert.equal(
-      dropdownStyle["--popover-foreground"],
-      "var(--bitsnap-checkout-foreground, var(--color-neutral-200))",
-    );
-    // A host that sets the checkout variables in its own CSS reaches the
-    // highlighted option too, so its text never keeps the dark default.
-    assert.equal(
-      dropdownStyle["--accent-foreground"],
-      "var(--bitsnap-checkout-foreground, var(--color-neutral-200))",
-    );
-    assert.equal(
-      dropdownStyle["--accent"],
-      "var(--bitsnap-checkout-hover-surface, var(--color-neutral-700))",
-    );
-  });
-
-  it("resolves the light preset for the dropdown", () => {
-    const resolved = resolveCheckoutAppearance({ theme: "light" });
-
-    const dropdownStyle = resolved.dropdownStyle as Record<string, string>;
-
-    assert.equal(dropdownStyle["--popover"], "#f9fafb");
-    assert.equal(dropdownStyle["--popover-foreground"], "#18181b");
   });
 
   it("exposes radius and focus ring through the shared variables", () => {
@@ -221,6 +185,10 @@ describe("checkout slots", () => {
       "quantityInput",
       "quantityButton",
       "removeButton",
+      "options",
+      "footer",
+      "productVariant",
+      "productUnitPrice",
       "summary",
       "totalLabel",
       "totalValue",
