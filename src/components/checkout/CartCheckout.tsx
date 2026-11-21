@@ -183,6 +183,7 @@ export function CartOptions() {
             selectedValue={country ?? ""}
             countries={countries}
             describedBy={isCountryMissing ? countryHintId : undefined}
+            locale={locale}
           />
         </div>
       )}
@@ -204,9 +205,15 @@ export function CartOptions() {
 /**
  * The footer, the panel's last grid row and always visible (D7): the total
  * (small label, large amount, F-07), the note, the review notice, the plain
- * "Go to checkout" button (D10) and its hint and error.
+ * "Go to checkout" button (D10), "Continue shopping" in the dialog, and the
+ * button's hint and error.
  */
-export function CartFooter() {
+export function CartFooter({
+  onContinueShopping,
+}: {
+  /** Renders "Continue shopping" under the checkout button; it closes the cart (the dialog). */
+  onContinueShopping?: () => void;
+} = {}) {
   const {
     controller: {
       status,
@@ -233,8 +240,10 @@ export function CartFooter() {
   const summaryNote = useCheckoutSlot("summaryNote");
   const checkoutButton = useCheckoutSlot("checkoutButton");
   const error = useCheckoutSlot("error");
+  const continueButton = useCheckoutSlot("continueShopping");
 
   const totalText = useCheckoutText("total");
+  const continueShoppingText = useCheckoutText("continueShopping");
   const nextStepText = useCheckoutText("nextStep");
   const countryRequiredText = useCheckoutText("countryRequired");
   const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
@@ -303,6 +312,17 @@ export function CartFooter() {
         {isCheckingOut && <span className="bsc-spinner" aria-hidden="true" />}
         <span className="bsc-cta-label">{nextStepText}</span>
       </button>
+      {onContinueShopping != null && (
+        <button
+          type="button"
+          data-bitsnap-checkout-slot="continueShopping"
+          onClick={onContinueShopping}
+          className={cx("bsc-continue", continueButton.className)}
+          style={continueButton.style}
+        >
+          {continueShoppingText}
+        </button>
+      )}
       {isCountryMissing && (
         <p id={countryHintId} className="bsc-hint">
           {countryRequiredText}

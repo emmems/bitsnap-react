@@ -14,6 +14,9 @@ import { installCheckoutMocks, seedCart } from "./mocks";
 //   ?missing=1 -> the last product is no longer sold (unavailable row)
 //   ?buy=pending -> "Go to checkout" stays busy
 //   ?country=none&countriesLatency=4000 -> no country yet: the hint under the button
+//   ?presentation=dialog -> the centred dialog (a bottom sheet on phones)
+//   ?locale=pl -> the cart's locale (texts and country names)
+//   ?open=1 -> opens the cart after the first render (screenshots)
 const params = new URLSearchParams(window.location.search);
 
 installCheckoutMocks({
@@ -34,6 +37,11 @@ if (params.get("cart") === "empty") {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App initialScenario={(params.get("scenario") as never) ?? "default"} />
+    <App
+      initialScenario={(params.get("scenario") as never) ?? "default"}
+      initialPresentation={params.get("presentation") === "dialog" ? "dialog" : "drawer"}
+      locale={params.get("locale") ?? undefined}
+      openOnLoad={params.get("open") === "1"}
+    />
   </StrictMode>,
 );

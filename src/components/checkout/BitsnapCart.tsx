@@ -66,7 +66,11 @@ export type BitsnapCartProps = {
    * turns it off (the cart then loads when it opens).
    */
   prefetch?: boolean;
-  /** How the cart opens. Omitted means `"drawer"`. */
+  /**
+   * How the cart opens: `"drawer"` (default), a panel on the right, full
+   * screen on phones; or `"dialog"`, a centred dialog that is a bottom sheet
+   * on phones and in landscape. Any other value renders the drawer.
+   */
   presentation?: CartPresentation;
 };
 

@@ -77,6 +77,23 @@ defaults, overridable through `texts`).
 
 ## 1.32.0 (unreleased)
 
+- **New: `presentation="dialog"`.** `BitsnapCheckout` opens as the right drawer
+  (default, unchanged) or as a centred dialog; on phones, also in landscape,
+  the dialog is a bottom sheet. Adding to the cart opens it in the chosen
+  presentation. See [Cart presentation](#cart-presentation).
+- **New token `panelMaxHeight`** caps the dialog's height (default
+  `min(100dvh - 48px, 704px)`); `panelWidth` is the dialog's width in the
+  dialog (default 480 px).
+- **Drawer widths:** full screen below 640 px and on screens up to 500 px
+  high, 380 px from 640 px, 420 px from 1200 px (before: 350 px from 768 px,
+  420 px from 1280 px). Tablets from 640 to 767 px get a side panel.
+- **The consent banner (`bitsnap-react/consent`) hides while the cart is open**
+  and comes back when it closes.
+- **Country names follow the cart's `locale`** ("Polska" in a Polish cart),
+  from `Intl.DisplayNames`; the server's name stays where the browser has none.
+- **An unavailable line can only be removed**: no quantity stepper, and its
+  quantity is not counted in the cart title ("Koszyk (n)"). The trigger's badge
+  still counts every stored line.
 - **Merchant classes on cart slots lose to the cart's rules.** The cart's
   stylesheet is unlayered: its root firewall (`all: initial`, which also
   covers `appearance.elements.root.className`), its local reset and its
@@ -459,6 +476,43 @@ function MyComponent() {
 Fonts are not loaded by the library - load the font file in your application, the
 checkout only applies the family you pass.
 
+### Cart presentation
+
+```tsx
+<BitsnapCheckout projectID="your-project-id" />                        // right drawer (default)
+<BitsnapCheckout projectID="your-project-id" presentation="dialog" />  // centred dialog
+```
+
+`presentation` accepts `"drawer"` (default) and `"dialog"`; any other value
+renders the drawer. Both are the same accessible modal: focus moves to the panel
+when it opens and back to the opener when it closes, Escape, the close button
+and a click on the backdrop close it. Everything that opens the cart
+(`Bitsnap.showCart()`, the trigger, add to cart) opens it in this presentation.
+
+| Screen | `drawer` | `dialog` |
+| --- | --- | --- |
+| Compact: below 640 px wide, or at most 500 px high (phones, also in landscape) | Full screen | Bottom sheet, at most 92 % of the screen high (and `panelMaxHeight`) |
+| 640–1199 px | Right panel, 380 px | Centred, `min(100vw - 32px, 480px)` wide, at most `min(100dvh - 48px, 704px)` high |
+| From 1200 px | Right panel, 420 px | Same as above |
+
+- The dialog is as tall as its content; with many lines the list scrolls and
+  the total and the checkout button stay visible. It has a "Continue shopping"
+  button under the checkout button (slot `continueShopping`).
+- Size it with tokens: `panelWidth` (the drawer's width from 640 px, or the
+  dialog's width) and `panelMaxHeight` (the dialog's height cap; the sheet also
+  stays under it).
+- The root, the backdrop and the panel carry
+  `data-bitsnap-checkout-presentation="drawer|dialog"`, for your own CSS, for
+  example `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"][data-bitsnap-checkout-presentation="dialog"]`.
+- Safe areas: the footer keeps clear of the home indicator, the full-screen
+  drawer's header of the status bar, and the compact panel of a landscape
+  notch. Browsers report these insets only when your page has
+  `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`;
+  without `viewport-fit=cover` they are 0 and nothing is needed.
+- A desktop window at most 500 px high also gets the compact layout.
+- While a cart is open, `<html>` carries `data-bitsnap-cart-open` and the
+  Bitsnap consent banner is hidden; it returns when the cart closes.
+
 ### Light theme
 
 ```tsx
@@ -635,10 +689,11 @@ reset on the elements listed above):
 | `hoverSurface`            | Close button, country options                           |
 | `focusRing`               | Focus rings of the shared controls                      |
 | `error`                   | Error message, unavailable product outline              |
-| `overlay`                 | Drawer backdrop                                         |
+| `overlay`                 | Backdrop of the drawer and the dialog (default: 30 % black, 35 % in the light theme, 45 % behind the dialog) |
 | `radius`                  | Radius of the rounded elements                          |
 | `sale`                    | Sale price of a discounted line (default `#f87171`; `#b91c1c` in the light theme) |
-| `panelWidth`              | Drawer width from 768 px (default 350 px, 420 px from 1280 px); phones stay full width |
+| `panelWidth`              | Drawer width from 640 px (default 380 px, 420 px from 1200 px), or the dialog's width (default 480 px, at most the screen minus 32 px); the compact layout stays full width |
+| `panelMaxHeight`          | Height cap of the dialog (default `min(100dvh - 48px, 704px)`); the bottom sheet also stays under 92 % of the screen. The drawer ignores it |
 | `motionDuration`          | Base duration of the cart's animations, read by the drawer's enter and exit (default `240ms`; at most `120ms`, fade only, under `prefers-reduced-motion`); `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted |
 
 Every token accepts any CSS value and is written as-is, so
@@ -652,8 +707,9 @@ Every token accepts any CSS value and is written as-is, so
   and does not reuse the panel's `setTheme`.
 - Apple Pay and Google Pay keep their native artwork and fonts; only the space
   around them is themed.
-- The drawer is full width on phones, 350 px from 768 px and 420 px from
-  1280 px. To change the width on screens from 768 px, pass the `panelWidth`
+- The drawer is full width in the compact layout (below 640 px, or at most
+  500 px high), 380 px from 640 px and 420 px from 1200 px. To change the
+  width outside the compact layout, pass the `panelWidth`
   token or set `--bitsnap-checkout-panel-width` on `[data-bitsnap-checkout]` in
   your CSS (for example `[data-bitsnap-checkout] { --bitsnap-checkout-panel-width: 480px; }`).
   A width class or a plain width rule on the `panel` slot loses.

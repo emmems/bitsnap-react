@@ -1,5 +1,10 @@
-import { useMemo, useState } from "react";
-import { BitsnapCheckout, type CheckoutAppearance } from "bitsnap-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Bitsnap,
+  BitsnapCheckout,
+  type CartPresentation,
+  type CheckoutAppearance,
+} from "bitsnap-react";
 import { clearCart, seedCart } from "./mocks";
 import "./styles.css";
 
@@ -51,10 +56,23 @@ const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
 
 export default function App({
   initialScenario = "default",
+  initialPresentation = "drawer",
+  locale,
+  openOnLoad = false,
 }: {
   initialScenario?: Scenario;
+  initialPresentation?: CartPresentation;
+  locale?: string;
+  openOnLoad?: boolean;
 }) {
   const [scenario, setScenario] = useState<Scenario>(initialScenario);
+  const [presentation, setPresentation] = useState<CartPresentation>(initialPresentation);
+
+  useEffect(() => {
+    if (openOnLoad) {
+      Bitsnap.showCart();
+    }
+  }, [openOnLoad]);
   const [withProducts, setWithProducts] = useState(true);
   const [appearance, setAppearance] = useState<CheckoutAppearance | undefined>(
     scenarios[initialScenario],
@@ -105,6 +123,21 @@ export default function App({
         ))}
       </fieldset>
 
+      <fieldset style={{ display: "grid", gap: 8, border: 0, padding: 0 }}>
+        <legend>Presentation</legend>
+        {(["drawer", "dialog"] as const).map((key) => (
+          <label key={key} style={{ display: "flex", gap: 8 }}>
+            <input
+              type="radio"
+              name="presentation"
+              checked={presentation === key}
+              onChange={() => setPresentation(key)}
+            />
+            {key}
+          </label>
+        ))}
+      </fieldset>
+
       <label style={{ display: "flex", gap: 8 }}>
         <input
           type="checkbox"
@@ -115,7 +148,12 @@ export default function App({
       </label>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <BitsnapCheckout projectID="example-project" appearance={appearance}>
+        <BitsnapCheckout
+          projectID="example-project"
+          appearance={appearance}
+          presentation={presentation}
+          locale={locale}
+        >
           <span>🛒 Open cart</span>
         </BitsnapCheckout>
         <span>badge shows the seeded cart</span>

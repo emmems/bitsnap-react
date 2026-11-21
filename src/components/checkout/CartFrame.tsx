@@ -1,10 +1,42 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "./lib/cx";
 import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
 import { useCheckoutText } from "./texts.context";
 import { resolvePresentation, type CartPresentation } from "./presentation";
 import { useCheckoutStore } from "./state";
+
+/**
+ * Set on `<html>` while any cart is open (D19). A contract with the consent
+ * module (`src/consent/core/ui.ts`), which hides its banner while it is
+ * present; that module must not import the cart, so the literal is written
+ * in both places.
+ */
+export const CART_OPEN_ATTRIBUTE = "data-bitsnap-cart-open";
+
+/** Open carts on the page: closing one of two open carts keeps the attribute. */
+let openCarts = 0;
+
+/**
+ * Marks `<html>` with `data-bitsnap-cart-open` while `open`. A layout effect,
+ * so the consent banner is hidden before the cart's first frame is painted.
+ */
+function useCartOpenMark(open: boolean) {
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const html = document.documentElement;
+    openCarts += 1;
+    html.setAttribute(CART_OPEN_ATTRIBUTE, "");
+    return () => {
+      openCarts = Math.max(0, openCarts - 1);
+      if (openCarts === 0) {
+        html.removeAttribute(CART_OPEN_ATTRIBUTE);
+      }
+    };
+  }, [open]);
+}
 
 /**
  * The one shell of the cart, for every presentation (PLAN D7): the checkout
@@ -17,7 +49,11 @@ import { useCheckoutStore } from "./state";
  * the cart, only the overlay's click does, so the press cannot reach the page.
  *
  * The panel's direct children are the header and the body's regions; nothing
- * wraps them (D7, N11).
+ * wraps them (D7, N11). In the dialog the panel itself is the centred box
+ * (R06): a wrapper would sit above the overlay and swallow outside clicks.
+ *
+ * While the cart is open, `<html>` carries `data-bitsnap-cart-open`, and the
+ * consent banner hides (D19).
  */
 export function CartFrame({
   isVisible,
@@ -34,6 +70,7 @@ export function CartFrame({
   children: ReactNode;
 }) {
   const shown = resolvePresentation(presentation);
+  useCartOpenMark(isVisible);
   // The drawer renders inside the checkout root: the stylesheet is scoped to `.bitsnap-react`.
   // No auto-animate here: it would run its "add" keyframes (opacity 0 for the
   // first ~250 ms) on the portalled panel. The stylesheet animates the overlay
@@ -128,7 +165,11 @@ export function CartHeader({ onClose }: { onClose: () => void }) {
   const closeButton = useCheckoutSlot("closeButton");
   const cartText = useCheckoutText("cart");
   const closeText = useCheckoutText("close");
-  const count = useCheckoutStore((state) => state.numberOfProductsInCart);
+  // Unavailable lines are out of the total and must be removed, so they are
+  // out of the count too (the trigger's badge counts every stored line).
+  const count = useCheckoutStore(
+    (state) => Math.max(0, state.numberOfProductsInCart - state.unavailableInCart),
+  );
 
   return (
     <div

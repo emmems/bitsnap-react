@@ -6,6 +6,8 @@ interface CheckoutStore {
   notice: string | undefined;
   setNotice: (notice: string | undefined) => void;
   numberOfProductsInCart: number;
+  /** Quantity of the open cart's unavailable lines; the cart header leaves it out of its count. */
+  unavailableInCart: number;
   showCart: () => void;
   hideCart: () => void;
   setNumberOfProductsInCart: (numberOfProductsInCart: number) => void;
@@ -16,6 +18,7 @@ export const useCheckoutStore = create<CheckoutStore>((set) => ({
   notice: undefined,
   setNotice: (notice) => set((state) => ({ ...state, notice })),
   numberOfProductsInCart: 0,
+  unavailableInCart: 0,
   showCart: () => set((state) => ({ ...state, isCartVisible: true })),
   hideCart: () => set((state) => ({ ...state, isCartVisible: false })),
   setNumberOfProductsInCart: (numberOfProductsInCart: number) => set((state) => ({ ...state, numberOfProductsInCart: numberOfProductsInCart })),

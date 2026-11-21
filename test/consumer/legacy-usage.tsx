@@ -9,6 +9,7 @@ import {
   setCustomHost,
   setProjectID,
   setTheme,
+  type CartPresentation,
   type CheckoutAppearance,
   type CheckoutSlotName,
   type CheckoutTheme,
@@ -64,6 +65,22 @@ const appearance: CheckoutAppearance = {
 export function ThemedStore() {
   return (
     <BitsnapCheckout projectID="your-project-id" appearance={appearance} />
+  );
+}
+
+/** The dialog presentation with its size tokens (1.32.0). */
+export function DialogStore() {
+  const presentation: CartPresentation = "dialog";
+  const continueSlot: CheckoutSlotName = "continueShopping";
+  return (
+    <BitsnapCheckout
+      projectID="your-project-id"
+      presentation={presentation}
+      appearance={{
+        tokens: { panelWidth: "520px", panelMaxHeight: "min(80dvh, 640px)" },
+        elements: { [continueSlot]: { className: "store-continue" } },
+      }}
+    />
   );
 }
 

@@ -7,7 +7,7 @@ import CartComponentContent from "./CartComponentContent";
 import { CartFrame } from "./CartFrame";
 import CartProvider, { getLocale } from "./CartProvider";
 import { registerWarmTarget, warmCart, whenIdle } from "./cart-warmup";
-import type { CartPresentation } from "./presentation";
+import { resolvePresentation, type CartPresentation } from "./presentation";
 import { CheckoutTextsProvider } from "./texts.context";
 import type { CheckoutTexts } from "./texts";
 
@@ -53,7 +53,12 @@ function CartComponent({
       panelId={panelId}
       presentation={presentation}
     >
-      <CartComponentContent locale={locale} open={isVisible} onClose={shouldHide} />
+      <CartComponentContent
+        locale={locale}
+        open={isVisible}
+        onClose={shouldHide}
+        continueUnderCheckout={resolvePresentation(presentation) === "dialog"}
+      />
     </CartFrame>
   );
 }

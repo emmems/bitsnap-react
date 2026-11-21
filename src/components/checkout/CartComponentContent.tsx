@@ -33,11 +33,14 @@ const CartComponentContent = ({
   locale,
   open,
   onClose,
+  continueUnderCheckout = false,
 }: {
   locale?: string;
   open?: boolean;
   /** Closes the cart: the empty state's "Continue shopping". */
   onClose?: () => void;
+  /** Also offer "Continue shopping" under the checkout button (the dialog). */
+  continueUnderCheckout?: boolean;
 }) => {
   const productsParent = useCartAutoAnimate();
   const lines = useCheckoutSlot("lines");
@@ -53,7 +56,7 @@ const CartComponentContent = ({
         <CartLines onContinueShopping={onClose} />
         <CartOptions />
       </div>
-      <CartFooter />
+      <CartFooter onContinueShopping={continueUnderCheckout ? onClose : undefined} />
     </CartControllerProvider>
   );
 };

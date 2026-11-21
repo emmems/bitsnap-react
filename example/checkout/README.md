@@ -27,6 +27,9 @@ pnpm dev
 | `?missing=1`                        | Unavailable row                                |
 | `?buy=pending`                      | Busy "Go to checkout"                          |
 | `?country=none&countriesLatency=4000` | Country-missing hint                         |
+| `?presentation=dialog`              | Centred dialog; bottom sheet below 640 px or at most 500 px high |
+| `?locale=pl`                        | Polish texts and country names                 |
+| `?open=1`                           | Opens the cart on load                         |
 
 The radio buttons switch the appearance while the cart is open, which is part of
 the supported behaviour.

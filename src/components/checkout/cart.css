@@ -77,6 +77,13 @@
     --bsc-overlay: rgb(0 0 0 / 0.35);
 }
 
+/* The dialog blocks the page with nothing beside it, so its overlay is
+ * stronger, in both themes. A merchant `overlay` token still wins: nothing
+ * else writes `--bitsnap-checkout-overlay` (the light preset has no overlay). */
+[data-bitsnap-checkout="root"]:where(.dark, .light):where([data-bitsnap-checkout-presentation="dialog"]) {
+    --bsc-overlay: rgb(0 0 0 / 0.45);
+}
+
 /* ---- Local reset (0,1,0) (R23) --------------------------------------------
  * The elements host stylesheets reset or decorate. The express containers
  * (`paymentButtons` and everything in them) are skipped: Apple Pay, Google Pay,
@@ -123,6 +130,34 @@
 @keyframes bitsnap-checkout-panel-fade-in {
     from {
         opacity: 0.25;
+    }
+}
+
+/* Dialog: a small scale and fade; sheet: a slide up from the bottom edge. The
+ * dialog starts at opacity 0.25 too, so its rows read from the first frame. */
+@keyframes bitsnap-checkout-dialog-in {
+    from {
+        opacity: 0.25;
+        transform: scale(0.97);
+    }
+}
+
+@keyframes bitsnap-checkout-dialog-out {
+    to {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+}
+
+@keyframes bitsnap-checkout-sheet-in {
+    from {
+        transform: translateY(100%);
+    }
+}
+
+@keyframes bitsnap-checkout-sheet-out {
+    to {
+        transform: translateY(100%);
     }
 }
 
@@ -197,21 +232,55 @@
     }
 }
 
-/* Compact layout, written after the side widths (same specificity, later wins). */
+/* Dialog (D8, R06): the panel itself is centred, by auto margins on a fixed
+ * box with a width and `height: fit-content`. No wrapper, no translate: the
+ * overlay stays the only surface outside the panel, so its click is the only
+ * outside-click path. Same grid as the drawer; with content shorter than
+ * `max-height` the dialog is as tall as its content. `panelWidth` is the
+ * dialog's width here, `panelMaxHeight` its height cap. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"]) {
+    inset: 0;
+    margin: auto;
+    width: min(100vw - 32px, var(--bitsnap-checkout-panel-width, 480px));
+    height: fit-content;
+    max-height: var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px));
+    border: 1px solid var(--bsc-border);
+    border-radius: calc(var(--bsc-radius) + 4px);
+    box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
+}
+
+/* Compact layout, written after the side widths (same specificity, later
+ * wins). Drawer: full screen. Dialog: a
+ * bottom sheet, at most 92 % of the screen (and `panelMaxHeight`). Both keep
+ * clear of a landscape notch. `env()` is 0 unless the page sets
+ * `viewport-fit=cover`. */
 @media (max-width: 639.98px), (max-height: 500px) {
     [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
         width: 100%;
         border-left: 0;
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"]) {
+        inset: auto 0 0 0;
+        margin: 0;
+        width: 100%;
+        max-height: min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px));
+        border: 0;
+        border-top: 1px solid var(--bsc-border);
+        border-radius: calc(var(--bsc-radius) + 8px) calc(var(--bsc-radius) + 8px) 0 0;
+        box-shadow: 0 -8px 32px rgb(0 0 0 / 0.25);
     }
 }
 
 /* Enter and exit on Radix's `data-state`; Radix `Presence` keeps each element
  * mounted until the exit's `animationend`. Each state has its own keyframes
- * (Presence waits only when the name changes). No fill mode on the enter: a
- * held transform would make the panel the containing block of fixed
- * descendants (N14). */
+ * (Presence waits only when the name changes). Every enter fills `backwards`,
+ * never `forwards` or `both`: a held transform would make the panel the
+ * containing block of fixed descendants (InPost's overlay, N14). */
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="open"]) {
-    animation: bitsnap-checkout-panel-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+    animation: bitsnap-checkout-panel-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out backwards;
 }
 
 /* A closing cart takes no clicks during its exit. Radix writes an inline
@@ -223,12 +292,33 @@
 }
 
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"]) {
-    animation: bitsnap-checkout-fade-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+    animation: bitsnap-checkout-fade-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out backwards;
 }
 
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="closed"]) {
     animation: bitsnap-checkout-fade-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
     pointer-events: none !important;
+}
+
+/* Dialog 0.85x in, 0.65x out; sheet 1.1x in, 0.85x out (D8). After the
+ * drawer's state rules, so they win at the same specificity; the closing
+ * rule above still takes the clicks away. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"][data-state="open"]) {
+    animation: bitsnap-checkout-dialog-in calc(var(--bitsnap-checkout-motion-duration, 240ms) * 0.85) ease-out backwards;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"][data-state="closed"]) {
+    animation: bitsnap-checkout-dialog-out calc(var(--bitsnap-checkout-motion-duration, 240ms) * 0.65) ease-in forwards;
+}
+
+@media (max-width: 639.98px), (max-height: 500px) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"][data-state="open"]) {
+        animation: bitsnap-checkout-sheet-in calc(var(--bitsnap-checkout-motion-duration, 240ms) * 1.1) ease-out backwards;
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-bitsnap-checkout-presentation="dialog"][data-state="closed"]) {
+        animation: bitsnap-checkout-sheet-out calc(var(--bitsnap-checkout-motion-duration, 240ms) * 0.85) ease-in forwards;
+    }
 }
 
 /* ---- Header (56 px, title with count, 44 px close) ------------------------ */
@@ -240,6 +330,15 @@
     min-height: 56px;
     padding: 0 6px 0 16px;
     border-bottom: 1px solid var(--bsc-border);
+}
+
+/* The full-screen drawer's header sits below the status bar (after the base
+ * rule, whose padding shorthand would otherwise win). */
+@media (max-width: 639.98px), (max-height: 500px) {
+    [data-bitsnap-checkout] :where([data-bitsnap-checkout-presentation="drawer"]) .bsc-header {
+        min-height: calc(56px + env(safe-area-inset-top));
+        padding-top: env(safe-area-inset-top);
+    }
 }
 
 [data-bitsnap-checkout] .bsc-title {
@@ -511,6 +610,11 @@
     outline-offset: -2px;
 }
 
+/* Pinned right, also when the stepper is not rendered (an unavailable line). */
+[data-bitsnap-checkout] .bsc-line-remove {
+    margin-left: auto;
+}
+
 [data-bitsnap-checkout] .bsc-icon-sm {
     width: 16px;
     height: 16px;
@@ -609,6 +713,40 @@
 
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
     color: var(--bsc-error);
+}
+
+/* "Continue shopping" under the CTA (dialog, non-empty cart): a quiet text
+ * button with a full 44 px target. */
+[data-bitsnap-checkout] .bsc-continue {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 2px;
+    border-radius: var(--bsc-radius);
+    color: var(--bsc-fg);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-continue:where(:hover) {
+    background-color: var(--bsc-hover);
+}
+
+[data-bitsnap-checkout] .bsc-continue:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+/* A landscape phone's sheet is 359 px high at most: the lines get the room.
+ * The close button, Escape and the backdrop still close the cart. */
+@media (max-height: 500px) {
+    [data-bitsnap-checkout] .bsc-continue {
+        display: none;
+    }
 }
 
 
@@ -1083,6 +1221,7 @@
     [data-bitsnap-checkout] .bsc-method,
     [data-bitsnap-checkout] .bsc-cta,
     [data-bitsnap-checkout] .bsc-btn-secondary,
+    [data-bitsnap-checkout] .bsc-continue,
     [data-bitsnap-checkout-trigger="default"] {
         transition: none;
     }

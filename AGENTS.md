@@ -61,6 +61,7 @@ export default function Checkout({ projectID, products }: {
 
 Fetch products with `BitsnapBackend` on the server and pass only public fields.
 Import the exported CSS. Configure the project before calling cart methods.
+`presentation="dialog"` opens the cart as a centred dialog (bottom sheet on phones).
 For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`.
 
 ## Other components
@@ -259,6 +260,18 @@ Rules:
   hover, with `prefetch={false}`. It must never send a cart event or write the
   cart. Test: `cart-warmup.test.tsx`.
 - Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
+- Presentation (since 1.32.0): `presentation="drawer"` (default) or `"dialog"`;
+  compact layout `(max-width: 639.98px), (max-height: 500px)` makes the drawer
+  full screen and the dialog a bottom sheet. One shell, `CartFrame.tsx`, for
+  both; differences are `cart.css` rules on `data-bitsnap-checkout-presentation`.
+  The dialog panel (`Dialog.Content`) is itself the centred box: no wrapper
+  around it (it would cover the overlay and swallow outside clicks). Keep
+  `onPointerDownOutside` prevented: only the overlay's click closes. Tests
+  loop over both presentations (`cart-a11y.test.tsx`, `cart-presentation.test.tsx`).
+- `data-bitsnap-cart-open` on `<html>` while a cart is open is a contract with
+  the consent module (`src/consent/core/ui.ts` mirrors it and hides its
+  banner); the literal is repeated on both sides because consent must not
+  import the cart.
 
 ## Chat (`ChatThread`, `Channel`, panel "Wiadomości")
 

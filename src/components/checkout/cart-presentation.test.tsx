@@ -201,4 +201,164 @@ for (const presentation of ["drawer", "dialog"] as const) {
   });
 }
 
+const html = () => doc().documentElement;
+const CART_OPEN = "data-bitsnap-cart-open";
+
+/** A stored cart of `var1` × 2 and a product the server no longer returns × 3. */
+function seedWithUnavailable() {
+  page.win.localStorage.setItem(
+    "checkout",
+    JSON.stringify({
+      country: "PL",
+      products: [
+        { id: "line-1", productID: "var1", quantity: 2 },
+        { id: "line-2", productID: "gone", quantity: 3 },
+      ],
+    }),
+  );
+  useCheckoutStore.setState({ numberOfProductsInCart: 5 });
+}
+
+for (const presentation of ["drawer", "dialog"] as const) {
+  describe(`cart open mark for the consent banner (${presentation}, D19)`, () => {
+    it("sets data-bitsnap-cart-open on <html> while open, removes it on close and unmount", async () => {
+      await mount({ presentation });
+      assert.equal(html().hasAttribute(CART_OPEN), false, "closed: no mark");
+      await open();
+      assert.equal(html().getAttribute(CART_OPEN), "");
+      await React.act(async () => slot("closeButton")!.click());
+      await settle();
+      assert.equal(html().hasAttribute(CART_OPEN), false, "closed again");
+      await open();
+      assert.equal(html().hasAttribute(CART_OPEN), true);
+      await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+      assert.equal(html().hasAttribute(CART_OPEN), false, "unmounted while open");
+    });
+  });
+
+  describe(`cart regions (${presentation})`, () => {
+    it("puts the header, the scroll region and the footer directly in the panel", async () => {
+      await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+      await mount({ presentation });
+      await open();
+      const children = Array.from(dialog()!.children);
+      assert.deepEqual(
+        children.map((child) => child.getAttribute("data-bitsnap-checkout-slot")),
+        ["header", "lines", "footer"],
+      );
+    });
+
+    it("offers the empty state's Continue shopping, which closes the cart", async () => {
+      await mount({ presentation });
+      await open();
+      const action = slot("emptyAction");
+      assert.ok(action, "the empty state has its action");
+      assert.equal(slot("continueShopping"), null, "no second one without a checkout button");
+      await React.act(async () => action.click());
+      await settle();
+      assert.equal(dialog(), null);
+    });
+  });
+}
+
+describe("cart open mark with two carts (N16)", () => {
+  it("keeps the mark until the last open cart closes", async () => {
+    await mount();
+    await mount({ presentation: "dialog" });
+    await open(); // the store is shared: both carts open
+    assert.equal(doc().querySelectorAll('[role="dialog"]').length, 2);
+    assert.equal(html().hasAttribute(CART_OPEN), true);
+    const [first] = roots.splice(0, 1);
+    await React.act(async () => first.unmount());
+    assert.equal(html().hasAttribute(CART_OPEN), true, "the other cart is still open");
+    await React.act(async () => useCheckoutStore.getState().hideCart());
+    await settle();
+    assert.equal(html().hasAttribute(CART_OPEN), false);
+  });
+});
+
+describe("Continue shopping under the checkout button", () => {
+  it("renders in the dialog, after the checkout button, and closes the cart", async () => {
+    await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+    await mount({ presentation: "dialog" });
+    await open();
+    const button = slot("continueShopping");
+    assert.ok(button, "the dialog offers it");
+    assert.equal(button.textContent, "Continue shopping");
+    assert.equal(button.parentElement, slot("footer"));
+    const checkout = slot("checkoutButton")!;
+    assert.ok(
+      checkout.compareDocumentPosition(button) & page.win.Node.DOCUMENT_POSITION_FOLLOWING,
+      "under the checkout button",
+    );
+    await React.act(async () => button.click());
+    await settle();
+    assert.equal(dialog(), null);
+    assert.equal(useCheckoutStore.getState().isCartVisible, false);
+  });
+
+  it("is not rendered in the drawer", async () => {
+    await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+    await mount({ presentation: "drawer" });
+    await open();
+    assert.ok(slot("checkoutButton"));
+    assert.equal(slot("continueShopping"), null);
+  });
+});
+
+describe("unavailable line", () => {
+  it("has no quantity stepper, keeps its remove button, and stays out of the header count", async () => {
+    seedWithUnavailable();
+    await mount();
+    await open();
+    await settle();
+    const row = doc().querySelector<HTMLElement>("[data-bitsnap-checkout-unavailable]");
+    assert.ok(row, "the unavailable row renders");
+    assert.equal(row.querySelector('[data-bitsnap-checkout-slot="quantityControl"]'), null, "no stepper");
+    assert.ok(row.querySelector('[data-bitsnap-checkout-slot="removeButton"]'), "the remove button stays");
+    const available = doc().querySelector<HTMLElement>(
+      '[data-bitsnap-checkout-slot="product"]:not([data-bitsnap-checkout-unavailable])',
+    );
+    assert.ok(available?.querySelector('[data-bitsnap-checkout-slot="quantityControl"]'), "an available line keeps it");
+    assert.equal(slot("title")?.textContent, "Cart (2)", "only the available quantity counts");
+    assert.equal(useCheckoutStore.getState().numberOfProductsInCart, 5, "the trigger's badge is unchanged");
+
+    await React.act(async () => slot("closeButton")!.click());
+    await settle();
+    assert.equal(useCheckoutStore.getState().unavailableInCart, 0, "forgotten when the cart closes");
+  });
+});
+
+describe("country names", () => {
+  it("shows the countries in the cart's locale, in the server's order", async () => {
+    const serve = globalThis.fetch;
+    globalThis.fetch = (async (input: string, init?: RequestInit) =>
+      String(input).includes("/public-commerce/countries")
+        ? new Response(
+            JSON.stringify([
+              { name: "Poland", code: "PL" },
+              { name: "Germany", code: "DE" },
+              { name: "Atlantis", code: "XX" },
+            ]),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          )
+        : serve(input, init)) as typeof fetch;
+    await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+    await mount({ locale: "pl-PL" });
+    await open();
+    await settle();
+    const select = slot("countryTrigger") as HTMLSelectElement | null;
+    assert.ok(select, "the country select renders");
+    assert.deepEqual(
+      Array.from(select.options).map((option) => [option.value, option.textContent]),
+      [
+        ["PL", "Polska"],
+        ["DE", "Niemcy"],
+        ["XX", "Atlantis"],
+      ],
+      "an unknown code keeps the server's name",
+    );
+  });
+});
+
 process.on("exit", teardownReactPage);

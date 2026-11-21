@@ -37,6 +37,7 @@ button,input{font:inherit;color:inherit}
 .banner,.overlay{pointer-events:auto}
 @supports (color:color-mix(in srgb,red 50%,blue)){::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}}
 .banner{position:absolute;background:var(--bg);color:var(--fg);max-height:92vh;overflow:auto;outline:none}
+.root[data-cart-open] .banner{visibility:hidden}
 .banner.enter{animation:in .22s ease-out}
 .banner.closing{animation:out .2s ease-in forwards;pointer-events:none}
 .bottom{left:0;right:0;bottom:0;border-top:1px solid var(--border);box-shadow:0 -8px 28px rgba(15,23,42,.08);padding:20px 24px calc(20px + env(safe-area-inset-bottom,0px))}

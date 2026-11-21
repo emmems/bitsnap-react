@@ -485,9 +485,9 @@ describe("cart.css motion", () => {
 
   it("animates the panel and the overlay on Radix's data-state with the motionDuration token", () => {
     const expected: Array<[string, string]> = [
-      [`${panel}:where([data-state="open"])`, `bitsnap-checkout-panel-in ${DURATION} ease-out`],
+      [`${panel}:where([data-state="open"])`, `bitsnap-checkout-panel-in ${DURATION} ease-out backwards`],
       [`${panel}:where([data-state="closed"])`, `bitsnap-checkout-panel-out ${DURATION} ease-in forwards`],
-      [`${overlay}:where([data-state="open"])`, `bitsnap-checkout-fade-in ${DURATION} ease-out`],
+      [`${overlay}:where([data-state="open"])`, `bitsnap-checkout-fade-in ${DURATION} ease-out backwards`],
       [`${overlay}:where([data-state="closed"])`, `bitsnap-checkout-fade-out ${DURATION} ease-in forwards`],
     ];
     for (const [selector, animation] of expected) {
@@ -567,6 +567,110 @@ describe("cart.css motion", () => {
       if (!/bitsnap-(checkout|cart)-/.test(sets)) continue;
       assert.doesNotMatch(sets, /!important/, `${rule.selectors.join(", ")} would beat motion off`);
       assert.ok(topLevel.indexOf(rule) < motionOffIndex, `${rule.selectors.join(", ")} comes after motion off`);
+    }
+  });
+});
+
+describe("cart.css dialog and compact geometry (step 18, D8, R06)", () => {
+  const COMPACT = "@media (max-width: 639.98px), (max-height: 500px)";
+  const DIALOG = `${slot("panel")}:where([data-bitsnap-checkout-presentation="dialog"])`;
+  const DURATION = "var(--bitsnap-checkout-motion-duration, 240ms)";
+  const compact = styleRules.filter((rule) => rule.atRules.length === 1 && rule.atRules[0] === COMPACT);
+  const compactRule = (selector: string) => compact.find((rule) => rule.selectors.includes(selector));
+  const keyframes = (name: string) => rules.filter((rule) => rule.atRules.at(-1) === `@keyframes ${name}`);
+
+  it("centres the panel itself: auto margins on a fixed box, no translate, sized by the tokens", () => {
+    const dialog = findTop(DIALOG);
+    assert.ok(dialog, "no dialog rule");
+    assert.equal(dialog.declarations.get("inset"), "0");
+    assert.equal(dialog.declarations.get("margin"), "auto");
+    assert.equal(dialog.declarations.get("height"), "fit-content");
+    assert.equal(dialog.declarations.get("width"), "min(100vw - 32px, var(--bitsnap-checkout-panel-width, 480px))");
+    assert.equal(
+      dialog.declarations.get("max-height"),
+      "var(--bitsnap-checkout-panel-max-height, min(100dvh - 48px, 704px))",
+    );
+    assert.equal(dialog.declarations.has("transform"), false, "a transform would hold fixed descendants");
+    // After the drawer's side widths, so it wins at the same specificity.
+    const wide = styleRules.findIndex((rule) => rule.atRules[0] === "@media (min-width: 1200px)");
+    assert.ok(styleRules.indexOf(dialog) > wide);
+  });
+
+  it("makes the dialog a bottom sheet and the drawer full screen in the compact layout", () => {
+    const sheet = compactRule(DIALOG);
+    assert.ok(sheet, "no sheet rule");
+    assert.equal(sheet.declarations.get("inset"), "auto 0 0 0");
+    assert.equal(sheet.declarations.get("margin"), "0");
+    assert.equal(sheet.declarations.get("width"), "100%");
+    assert.equal(sheet.declarations.get("max-height"), "min(92dvh, var(--bitsnap-checkout-panel-max-height, 704px))");
+    assert.ok(styleRules.indexOf(sheet) > styleRules.indexOf(findTop(DIALOG)!), "the sheet comes after the dialog");
+    const drawer = compactRule(slot("panel"));
+    assert.equal(drawer?.declarations.get("width"), "100%");
+  });
+
+  it("keeps clear of the safe areas: bottom in the footer, top in the full-screen drawer, sides when compact", () => {
+    assert.equal(
+      findTop("[data-bitsnap-checkout] .bsc-footer")?.declarations.get("padding"),
+      "12px 16px calc(16px + env(safe-area-inset-bottom))",
+    );
+    const drawer = compactRule(slot("panel"));
+    assert.equal(drawer?.declarations.get("padding-left"), "env(safe-area-inset-left)");
+    assert.equal(drawer?.declarations.get("padding-right"), "env(safe-area-inset-right)");
+    const header = '[data-bitsnap-checkout] :where([data-bitsnap-checkout-presentation="drawer"]) .bsc-header';
+    const headerRule = compactRule(header);
+    assert.equal(headerRule?.declarations.get("padding-top"), "env(safe-area-inset-top)");
+    assert.equal(headerRule?.declarations.get("min-height"), "calc(56px + env(safe-area-inset-top))");
+    // After the base header rule, whose padding shorthand would otherwise win.
+    assert.ok(styleRules.indexOf(headerRule!) > styleRules.indexOf(findTop("[data-bitsnap-checkout] .bsc-header")!));
+  });
+
+  it("drops Continue shopping from a sheet at most 500 px high, after its base rule", () => {
+    const short = styleRules.find(
+      (rule) => rule.atRules[0] === "@media (max-height: 500px)" && rule.selectors.includes("[data-bitsnap-checkout] .bsc-continue"),
+    );
+    assert.equal(short?.declarations.get("display"), "none");
+    assert.ok(styleRules.indexOf(short!) > styleRules.indexOf(findTop("[data-bitsnap-checkout] .bsc-continue")!));
+  });
+
+  it("gives the dialog a stronger overlay as a literal, which a merchant overlay token still beats (N01)", () => {
+    const rule = findTop('[data-bitsnap-checkout="root"]:where(.dark, .light):where([data-bitsnap-checkout-presentation="dialog"])');
+    assert.equal(rule?.declarations.get("--bsc-overlay"), "rgb(0 0 0 / 0.45)");
+    for (const theme of ["dark", "light"]) {
+      const block = findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+      assert.ok(topLevel.indexOf(rule!) > topLevel.indexOf(block), `after the ${theme} block`);
+    }
+    assert.equal(findTop(slot("overlay"))?.declarations.get("background-color"), "var(--bitsnap-checkout-overlay, var(--bsc-overlay))");
+  });
+
+  it("animates the dialog and the sheet as multiples of motionDuration, entering with backwards fill (D8, N14)", () => {
+    const open = `${slot("panel")}:where([data-bitsnap-checkout-presentation="dialog"][data-state="open"])`;
+    const closed = `${slot("panel")}:where([data-bitsnap-checkout-presentation="dialog"][data-state="closed"])`;
+    assert.equal(findTop(open)?.declarations.get("animation"), `bitsnap-checkout-dialog-in calc(${DURATION} * 0.85) ease-out backwards`);
+    assert.equal(findTop(closed)?.declarations.get("animation"), `bitsnap-checkout-dialog-out calc(${DURATION} * 0.65) ease-in forwards`);
+    assert.equal(compactRule(open)?.declarations.get("animation"), `bitsnap-checkout-sheet-in calc(${DURATION} * 1.1) ease-out backwards`);
+    assert.equal(compactRule(closed)?.declarations.get("animation"), `bitsnap-checkout-sheet-out calc(${DURATION} * 0.85) ease-in forwards`);
+    assert.ok(Number(keyframes("bitsnap-checkout-dialog-in")[0]?.declarations.get("opacity")) > 0, "readable from the first frame");
+    assert.equal(keyframes("bitsnap-checkout-sheet-in")[0]?.declarations.get("transform"), "translateY(100%)");
+    // The dialog's rules come after the drawer's state rules, and before reduced motion.
+    const drawerOpen = topLevel.indexOf(findTop(`${slot("panel")}:where([data-state="open"])`)!);
+    assert.ok(topLevel.indexOf(findTop(open)!) > drawerOpen);
+  });
+
+  it("enters every animated element with backwards fill, never forwards or both (N14)", () => {
+    for (const rule of styleRules) {
+      const animation = rule.declarations.get("animation") ?? "";
+      if (!/bitsnap-checkout-[\w-]*-in\b/.test(animation)) continue;
+      assert.match(animation, /\bbackwards\b/, rule.selectors.join(", "));
+      assert.doesNotMatch(animation, /\b(forwards|both)\b/, rule.selectors.join(", "));
+    }
+  });
+
+  it("lets reduced motion fade the dialog and the sheet too: its panel rules come last", () => {
+    const reduced = styleRules.findIndex((rule) => rule.atRules[0] === "@media (prefers-reduced-motion: reduce)");
+    for (const rule of styleRules) {
+      if (/dialog-in|dialog-out|sheet-in|sheet-out/.test(rule.declarations.get("animation") ?? "")) {
+        assert.ok(styleRules.indexOf(rule) < reduced, rule.selectors.join(", "));
+      }
     }
   });
 });

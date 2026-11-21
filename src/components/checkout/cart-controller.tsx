@@ -633,6 +633,25 @@ function useCartControllerState(
   const isCheckingOut =
     isContinueToCheckoutLoading || isWaitingForChoice || isCheckingPrices;
 
+  // The header's count leaves out what cannot be bought: lines the server did
+  // not return and lines `/buy` reported missing (both show "unavailable").
+  const unavailableQuantity =
+    unavailable.reduce((sum, { line }) => sum + line.quantity, 0) +
+    lines.reduce(
+      (sum, item) =>
+        missingItemIds.includes(item.line.productID)
+          ? sum + item.line.quantity
+          : sum,
+      0,
+    );
+  React.useEffect(() => {
+    useCheckoutStore.setState({ unavailableInCart: unavailableQuantity });
+  }, [unavailableQuantity]);
+  React.useEffect(
+    () => () => useCheckoutStore.setState({ unavailableInCart: 0 }),
+    [],
+  );
+
   return {
     locale,
     status,

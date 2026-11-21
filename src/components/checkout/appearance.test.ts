@@ -250,6 +250,23 @@ describe("checkout slots", () => {
   });
 });
 
+describe("1.32.0 token: panelMaxHeight (dialog only, R26)", () => {
+  it("maps the token to its variable and passes the value through", () => {
+    assert.equal(CHECKOUT_TOKEN_VARIABLES.panelMaxHeight, "--bitsnap-checkout-panel-max-height");
+    const style = resolveCheckoutAppearance({
+      tokens: { panelMaxHeight: "min(80dvh, 600px)" },
+    }).boundaryStyle as Record<string, string>;
+    assert.equal(style["--bitsnap-checkout-panel-max-height"], "min(80dvh, 600px)");
+  });
+
+  it("is not written when omitted, so cart.css keeps min(100dvh - 48px, 704px)", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const style = resolveCheckoutAppearance({ theme }).boundaryStyle as Record<string, string>;
+      assert.equal(style["--bitsnap-checkout-panel-max-height"], undefined, theme);
+    }
+  });
+});
+
 describe("1.31.0 tokens: sale, panelWidth, motionDuration", () => {
   it("maps the new tokens to their CSS variables", () => {
     assert.equal(CHECKOUT_TOKEN_VARIABLES.sale, "--bitsnap-checkout-sale");

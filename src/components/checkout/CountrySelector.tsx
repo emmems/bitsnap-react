@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useCheckoutSlot } from "./appearance.context";
 import { cx } from "./lib/cx";
 import { useCheckoutText } from "./texts.context";
@@ -10,12 +11,43 @@ export interface CountrySelectorProps {
   countries: { name: string; code: string }[];
   /** Id of the hint shown while no country is chosen. */
   describedBy?: string;
+  /** The cart's locale: country names are shown in it. */
+  locale?: string;
+}
+
+/**
+ * Country names in the cart's locale ("Polska" in a Polish cart), from
+ * `Intl.DisplayNames`. The server's name stays when the runtime has no
+ * `Intl.DisplayNames`, does not know the locale or the code, or the code is
+ * not a region code.
+ */
+export function localCountryNames(
+  countries: { name: string; code: string }[],
+  locale: string | undefined,
+): { name: string; code: string }[] {
+  let names: Intl.DisplayNames;
+  try {
+    names = new Intl.DisplayNames(locale != null ? [locale] : undefined, {
+      type: "region",
+      fallback: "none",
+    });
+  } catch {
+    return countries;
+  }
+  return countries.map((country) => {
+    try {
+      const name = names.of(country.code.toUpperCase());
+      return name != null && name.length > 0 ? { ...country, name } : country;
+    } catch {
+      return country;
+    }
+  });
 }
 
 /**
  * The delivery country as a native `<select>` inside the panel (PLAN D4): no
  * portal, so the dialog's focus trap, scroll lock and Esc keep working, and
- * phones show their own picker. A disabled first option with `chooseCountry`
+ * phones show their own picker. Names follow the cart's locale. A disabled first option with `chooseCountry`
  * stands in while no country (or one the shop does not ship to) is chosen,
  * so the control never shows a wrong country. `countryTrigger` styles the
  * select; `countryDropdown`, `countrySearch` and `countryOption` have no
@@ -28,8 +60,13 @@ function CountrySelector({
   selectedValue,
   countries,
   describedBy,
+  locale,
 }: CountrySelectorProps) {
   const countryTrigger = useCheckoutSlot("countryTrigger");
+  const shownCountries = useMemo(
+    () => localCountryNames(countries, locale),
+    [countries, locale],
+  );
   const chooseCountryText = useCheckoutText("chooseCountry");
   const known = countries.some((country) => country.code === selectedValue);
 
@@ -49,7 +86,7 @@ function CountrySelector({
           {chooseCountryText}
         </option>
       )}
-      {countries.map((country) => (
+      {shownCountries.map((country) => (
         <option key={country.code} value={country.code}>
           {country.name}
         </option>

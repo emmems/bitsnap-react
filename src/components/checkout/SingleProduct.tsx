@@ -213,7 +213,11 @@ const SingleProduct = ({
       )}
 
       <div className="bsc-line-controls">
-        <QuantityComponent name={details.name} quantity={quantity} shouldUpdate={shouldUpdate} />
+        {/* An unavailable line can only be removed: no stepper, so + cannot
+            raise it. The 44 px remove button keeps the row's height. */}
+        {!isNotAvailable && (
+          <QuantityComponent name={details.name} quantity={quantity} shouldUpdate={shouldUpdate} />
+        )}
         <button
           data-bitsnap-checkout-slot="removeButton"
           type="button"

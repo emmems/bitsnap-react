@@ -58,10 +58,18 @@ export type CheckoutAppearanceTokens = {
   /** Sale price of a discounted line. Default `#f87171` (dark), `#b91c1c` (light). */
   sale?: string;
   /**
-   * Drawer width from the `md` breakpoint up (any CSS length, also
-   * `var(--your-variable)`). Phones keep the full screen width.
+   * Width of the cart (any CSS length, also `var(--your-variable)`): the
+   * drawer's from 640 px up (default 380 px, 420 px from 1200 px), or the
+   * dialog's (default 480 px, never wider than the screen minus 32 px). The
+   * compact layout (phones, also in landscape) keeps the full screen width.
    */
   panelWidth?: string;
+  /**
+   * Height cap of `presentation="dialog"` (default
+   * `min(100dvh - 48px, 704px)`). The bottom sheet of the compact layout
+   * also stays under it, and under 92 % of the screen. The drawer ignores it.
+   */
+  panelMaxHeight?: string;
   /**
    * Base duration of the cart's enter and exit animations (default `240ms`):
    * the drawer's fade and slide read it. `"0ms"`, `"0s"` or `"0"` turns the
@@ -127,6 +135,8 @@ export const CHECKOUT_SLOT_NAMES = [
   "emptyState",
   /** "Continue shopping" in the empty cart; closes it. */
   "emptyAction",
+  /** "Continue shopping" under the checkout button of `presentation="dialog"`; closes the cart. */
+  "continueShopping",
   "error",
   "skeleton",
 ] as const;
@@ -194,6 +204,7 @@ export const CHECKOUT_TOKEN_VARIABLES = {
   radius: "--bitsnap-checkout-radius",
   sale: "--bitsnap-checkout-sale",
   panelWidth: "--bitsnap-checkout-panel-width",
+  panelMaxHeight: "--bitsnap-checkout-panel-max-height",
   motionDuration: "--bitsnap-checkout-motion-duration",
 } as const;
 
