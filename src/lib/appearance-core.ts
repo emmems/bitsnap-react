@@ -108,9 +108,15 @@ export function resolveBoundaryStyle<Token extends string>(
     }
   }
 
+  const shadcn = new Map<string, string>();
   for (const { token, variable } of shadcnVariables) {
     const value = tokens[token];
-    if (value != null && !readsVariable(value, variable)) {
+    if (value != null) {
+      shadcn.set(variable, value);
+    }
+  }
+  for (const [variable, value] of shadcn) {
+    if (!inCycle(variable, shadcn)) {
       style[variable] = value;
     }
   }
@@ -119,11 +125,33 @@ export function resolveBoundaryStyle<Token extends string>(
 }
 
 /**
+ * `true` when writing `start` would make it read itself through the other
+ * shadcn writes of the same call: `--background: var(--background)`, or a
+ * crossed pair such as `background: "var(--card)"` with
+ * `surface: "var(--background)"`. A cycle makes every variable in it invalid,
+ * so a token that follows the host's shadcn theme leaves the host's variable
+ * alone instead.
+ */
+function inCycle(start: string, writes: Map<string, string>): boolean {
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length > 0) {
+    const value = writes.get(queue.pop()!)!;
+    for (const variable of writes.keys()) {
+      if (!readsVariable(value, variable)) continue;
+      if (variable === start) return true;
+      if (!seen.has(variable)) {
+        seen.add(variable);
+        queue.push(variable);
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * `true` when `value` reads `variable` (`var(--background)`,
- * `var( --background, #fff)`, inside `color-mix()`...). Writing it to that
- * same variable would be a cycle, which makes the variable invalid: a token
- * `background: "var(--background)"` that follows the host's shadcn theme
- * must leave the host's `--background` alone.
+ * `var( --background, #fff)`, inside `color-mix()`...).
  */
 function readsVariable(value: string, variable: string): boolean {
   // Mapped names are plain `--[a-z-]+`: nothing to escape.

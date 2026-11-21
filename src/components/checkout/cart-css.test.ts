@@ -1296,6 +1296,13 @@ describe("cart.css follows the site's look (step 19a, D22)", () => {
     assert.equal(computed(top(".bsc-cta").declarations.get("border-radius")!, env), "6px");
   });
 
+  it("follows a shadcn host: a token that reads --background resolves to the host's value", () => {
+    const env = envFor({ tokens: { background: "var(--background)" } });
+    assert.equal(env.has("--background"), false, "the cart must not write --background");
+    env.set("--background", "#0a0a0a");
+    assert.equal(computed(root.declarations.get("--bsc-bg")!, env), "#0a0a0a");
+  });
+
   it("sets every font size from the scale: no px size outside the root and the standalone status", () => {
     for (const rule of styleRules) {
       const size = rule.declarations.get("font-size");

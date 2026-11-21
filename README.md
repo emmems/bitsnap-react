@@ -103,6 +103,9 @@ new. Most shops need no change; read **Upgrading from 1.29** first.
   must use `[data-bitsnap-checkout-theme="dark"]`. The cart also stops writing
   shadcn variables (`--background`, `--ring`, ...) on its root: a site's
   `.dark { ... }` rule or class-based `dark:` variant no longer reaches it.
+  Your own shadcn utility classes passed in `appearance.elements`
+  (`bg-background`, `rounded-lg`, `ring-ring`) now read your site's values, not
+  the cart's tokens.
 - **`fontSize`** now scales every text size of the cart (before, most sizes
   were fixed). Check a cart that passes it.
 - **Slots.** The country picker is a native `<select>` without flags or search

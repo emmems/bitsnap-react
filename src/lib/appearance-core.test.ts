@@ -65,6 +65,19 @@ describe("resolveAppearanceCore", () => {
     });
   });
 
+  it("skips shadcn writes that read each other in a cycle, keeps a plain chain", () => {
+    assert.deepEqual(resolve({ tokens: { background: "var(--radius)", radius: "var(--background)" } }).boundaryStyle, {
+      "--acme-background": "var(--radius)",
+      "--acme-radius": "var(--background)",
+    });
+    assert.deepEqual(resolve({ tokens: { background: "var(--radius)", radius: "12px" } }).boundaryStyle, {
+      "--acme-background": "var(--radius)",
+      "--acme-radius": "12px",
+      "--background": "var(--radius)",
+      "--radius": "12px",
+    });
+  });
+
   it("applies presets underneath caller tokens and drops undefined ones", () => {
     const resolved = resolve({
       theme: "dark",

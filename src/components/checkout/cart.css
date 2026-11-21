@@ -1158,6 +1158,7 @@
 [data-bitsnap-checkout-part] .bsc-spinner {
     display: inline-block;
     flex: none;
+    box-sizing: border-box;
     width: 16px;
     height: 16px;
     border: 2px solid currentColor;
