@@ -7,6 +7,7 @@ import { cx } from "./lib/cx";
 import { AlertIcon } from "./icons";
 import { formatCurrency } from "./lib/round.number";
 import { PaymentMethodChoice } from "./PaymentMethodChoice";
+import { FooterSkeleton } from "./Skeleton";
 import { useCheckoutText } from "./texts.context";
 
 type ExpressAreaModule = {
@@ -96,7 +97,7 @@ export function CartOptions() {
   // Taken once per mount: the drawer mounts this at each open, so a failed
   // chunk is retried at the next open, not at every render.
   const [CartExpressArea] = React.useState(expressAreaComponent);
-  const hasExpress = useHasHeight();
+  const hasExpress = useHasExpress();
 
   // The express chunk loads while `/products` is asked, not after it: the
   // buttons mount once the server confirmed the cart (slice 5).
@@ -117,6 +118,7 @@ export function CartOptions() {
     return null;
   }
   const hasCountries = countries != null && countries.length > 1;
+  const showWalletsNote = wallets.inert && unavailable.length === 0;
 
   return (
     <div
@@ -125,7 +127,12 @@ export function CartOptions() {
       style={options.style}
     >
       {wallets.mounted && (
-        <div className="bsc-express">
+        <div
+          className="bsc-express"
+          data-bitsnap-checkout-empty={
+            !hasExpress.value && !showWalletsNote ? "" : undefined
+          }
+        >
           {/* Inert while a line is unconfirmed or price-marked (D12, N1): no
               click or key starts a wallet; an open wallet sheet is untouched. */}
           <div
@@ -147,7 +154,7 @@ export function CartOptions() {
               />
             </React.Suspense>
           </div>
-          {wallets.inert && unavailable.length === 0 && (
+          {showWalletsNote && (
             <p
               role="status"
               data-bitsnap-checkout-notice="wallets-updating"
@@ -202,10 +209,12 @@ export function CartOptions() {
 }
 
 /**
- * Whether an element takes vertical space: the "or" divider follows the
- * express buttons, whose availability only their own components know.
+ * Whether an express button takes space: the "or" divider follows the
+ * express buttons, whose availability only their own components know. The
+ * container resizes whenever a button appears or goes, and each button
+ * wrapper is measured then.
  */
-function useHasHeight() {
+function useHasExpress() {
   const [value, setValue] = React.useState(false);
   const observer = React.useRef<ResizeObserver | null>(null);
   const ref = React.useCallback((element: HTMLElement | null) => {
@@ -214,8 +223,12 @@ function useHasHeight() {
     if (element == null || typeof ResizeObserver === "undefined") {
       return;
     }
-    observer.current = new ResizeObserver((entries) => {
-      setValue(entries.some((entry) => entry.contentRect.height > 0));
+    observer.current = new ResizeObserver(() => {
+      setValue(
+        Array.from(element.children).some(
+          (child) => child.getBoundingClientRect().height > 0,
+        ),
+      );
     });
     observer.current.observe(element);
   }, []);
@@ -230,6 +243,7 @@ function useHasHeight() {
 export function CartFooter() {
   const {
     controller: {
+      status,
       locale,
       total,
       totalComplete,
@@ -246,6 +260,7 @@ export function CartFooter() {
   } = useCheckoutBlock();
 
   const footer = useCheckoutSlot("footer");
+  const skeleton = useCheckoutSlot("skeleton");
   const summary = useCheckoutSlot("summary");
   const totalLabel = useCheckoutSlot("totalLabel");
   const totalValue = useCheckoutSlot("totalValue");
@@ -259,6 +274,9 @@ export function CartFooter() {
   const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
   const reviewPricesText = useCheckoutText("reviewPrices");
 
+  if (status === "loading") {
+    return <FooterSkeleton className={skeleton.className} style={skeleton.style} />;
+  }
   if (!shown) {
     return null;
   }

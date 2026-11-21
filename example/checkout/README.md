@@ -22,6 +22,7 @@ pnpm dev
 | `/?cart=empty`                      | Empty cart                                     |
 | `/?unavailable=1`                   | Unavailable product + checkout error            |
 | `?latency=1500`                     | Loading skeletons                              |
+| `?fail=1`                           | Products cannot be loaded (retry state)        |
 
 The radio buttons switch the appearance while the cart is open, which is part of
 the supported behaviour.

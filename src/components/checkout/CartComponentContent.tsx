@@ -32,9 +32,12 @@ export function useCartAutoAnimate() {
 const CartComponentContent = ({
   locale,
   open,
+  onClose,
 }: {
   locale?: string;
   open?: boolean;
+  /** Closes the cart: the empty state's "Continue shopping". */
+  onClose?: () => void;
 }) => {
   const productsParent = useCartAutoAnimate();
   const lines = useCheckoutSlot("lines");
@@ -47,7 +50,7 @@ const CartComponentContent = ({
         style={lines.style}
         ref={productsParent}
       >
-        <CartLines />
+        <CartLines onContinueShopping={onClose} />
         <CartOptions />
       </div>
       <CartFooter />

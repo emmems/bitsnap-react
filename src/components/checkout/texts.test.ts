@@ -6,6 +6,7 @@ import { getCheckoutText, resolveCheckoutTexts } from "./texts.ts";
 const english = {
   cart: "Cart",
   emptyCart: "Your cart is empty.",
+  continueShopping: "Continue shopping",
   total: "Total:",
   delivery: "+ delivery",
   chooseCountry: "Choose a country",
@@ -86,6 +87,7 @@ const english = {
 const polish = {
   cart: "Koszyk",
   emptyCart: "Brak produktów w koszyku.",
+  continueShopping: "Wróć do zakupów",
   total: "Suma:",
   delivery: "+ dostawa",
   chooseCountry: "Wybierz kraj",

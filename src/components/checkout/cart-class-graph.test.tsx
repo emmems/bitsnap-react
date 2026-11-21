@@ -20,8 +20,8 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
  *
  * `EXPECTED_OFFENDERS` is the shrinking allowlist: Tailwind classes still in
  * the cart, each with the step that removes it. The last test fails on an
- * entry that no longer renders, so every step deletes what it fixed; step 19
- * brings it to zero.
+ * entry that no longer renders, so every step deletes what it fixed. Empty
+ * since step 17: every class the cart renders is ours or the merchant's.
  */
 const EXPECTED_OFFENDERS: Record<string, string> = {
   // A token stays until its last user is rewritten; the label is the step
@@ -33,12 +33,7 @@ const EXPECTED_OFFENDERS: Record<string, string> = {
   // ui/select (native select, D4), PaymentMethodChoice, the Spinner.
   ...removedBy("step 16", []),
   // Step 17, states: skeleton layout, empty state, error with retryButton.
-  ...removedBy("step 17", [
-      "items-start", "transition", "font-bold", "relative", "gap-4", "h-32", "p-4", "px-3",
-      // Moved from steps 15 and 16: still rendered by the loading, failed and empty states.
-      "flex-col", "w-full",
-      "flex", "gap-3", "py-2", "rounded-md", "justify-center",
-  ]),
+  ...removedBy("step 17", []),
 };
 
 function removedBy(step: string, tokens: string[]): Record<string, string> {

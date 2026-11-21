@@ -554,31 +554,7 @@
     border-radius: 9999px;
 }
 
-/* ---- Content (1.31.0 rules, literal values; steps 16-17 replace them) ----- */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
-    margin: 8px;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-weight: 700;
-    cursor: pointer;
-    background-color: var(--bsc-cta-bg);
-    color: var(--bsc-cta-fg);
-}
-
-/* The retry button shares the slot and sits in a padded block without margin. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where([data-bitsnap-checkout-retry]) {
-    margin: 0;
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:hover:not(:disabled)) {
-    background-color: var(--bsc-cta-hover);
-}
-
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:disabled) {
-    cursor: not-allowed;
-    opacity: 0.4;
-}
-
+/* ---- Footer button and errors ------------------------------------------- */
 /* The plain CTA (D10, R19): 52 px, full width; while the request runs the
  * spinner sits beside the dimmed label and the width stays (F-02). */
 [data-bitsnap-checkout] .bsc-cta {
@@ -628,9 +604,6 @@
     color: var(--bsc-error);
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="emptyState"] {
-    color: var(--bsc-muted);
-}
 
 /* ---- Options (the scroll region, after the lines; D12, R11) ---------------
  * Express row, the "or" divider, the country, the payment methods. */
@@ -652,9 +625,19 @@
     gap: 8px;
 }
 
+/* Nothing to show yet (or ever): the block takes no row of the options grid. */
+[data-bitsnap-checkout] .bsc-express:where([data-bitsnap-checkout-empty]) {
+    margin-bottom: -16px;
+}
+
 [data-bitsnap-checkout] .bsc-express-btn {
     flex: 1 1 160px;
     min-width: 0;
+}
+
+/* A wallet that is not available renders nothing: no gap for it. */
+[data-bitsnap-checkout] .bsc-express-btn:where(:empty) {
+    display: none;
 }
 
 [data-bitsnap-checkout] .bsc-express-wide {
@@ -903,6 +886,93 @@
     animation: bitsnap-cart-spin 800ms linear infinite;
 }
 
+/* ---- States (plan part 3 §3.7) --------------------------------------------
+ * Empty and failed load: a centred icon, the message and a secondary button
+ * with its own slot (`emptyAction`, `retryButton`), so a CTA theme never
+ * restyles them (F-15). */
+[data-bitsnap-checkout] .bsc-state {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 12px;
+    padding: 56px 24px;
+    text-align: center;
+}
+
+[data-bitsnap-checkout] .bsc-state-icon {
+    width: 40px;
+    height: 40px;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-state-icon-error {
+    color: var(--bsc-error);
+}
+
+[data-bitsnap-checkout] .bsc-state-text {
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--bsc-fg);
+}
+
+[data-bitsnap-checkout] .bsc-state-notice {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+[data-bitsnap-checkout] .bsc-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid var(--bsc-control-border);
+    border-radius: var(--bsc-radius);
+    color: var(--bsc-fg);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-btn-secondary:where(:hover) {
+    background-color: var(--bsc-hover);
+}
+
+[data-bitsnap-checkout] .bsc-btn-secondary:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+/* Lines from the device are shown, the server could not be asked. */
+[data-bitsnap-checkout] .bsc-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px 8px;
+}
+
+[data-bitsnap-checkout] .bsc-refresh-text {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* The footer while loading: a total bar and the 52 px button block. */
+[data-bitsnap-checkout] .bsc-skeleton-footer {
+    display: grid;
+    gap: 8px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-total {
+    height: 20px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-cta {
+    height: 52px;
+    border-radius: var(--bsc-radius);
+}
+
 /* ---- Cart trigger (D20) ---------------------------------------------------
  * The button lives in the host page, outside the root: the firewall and the
  * reset never reach it. Styled only without a merchant `className`
@@ -960,6 +1030,7 @@
     [data-bitsnap-checkout] .bsc-stepper-btn,
     [data-bitsnap-checkout] .bsc-method,
     [data-bitsnap-checkout] .bsc-cta,
+    [data-bitsnap-checkout] .bsc-btn-secondary,
     [data-bitsnap-checkout-trigger="default"] {
         transition: none;
     }

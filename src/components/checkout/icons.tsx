@@ -63,3 +63,11 @@ export const AlertIcon = ({ className = "bsc-icon bsc-icon-sm" }: { className?: 
     <path d="M12 8v5M12 16.5v.01" />
   </Icon>
 );
+
+/** The empty cart. */
+export const BagIcon = () => (
+  <Icon className="bsc-icon bsc-state-icon" strokeWidth={1.5}>
+    <path d="M5 8h14l-1 12H6L5 8z" />
+    <path d="M9 8a3 3 0 0 1 6 0" />
+  </Icon>
+);

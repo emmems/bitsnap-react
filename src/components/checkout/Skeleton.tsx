@@ -39,4 +39,33 @@ function LineSkeleton({
   );
 }
 
-export { LineSkeleton, Skeleton };
+/**
+ * The footer while the cart loads: a total bar and the 52 px button block, in
+ * the footer's grid row. The whole footer waits the same 150 ms as the lines.
+ */
+function FooterSkeleton({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      data-bitsnap-checkout-slot="footer"
+      aria-hidden="true"
+      className="bsc-footer bsc-skeleton"
+    >
+      <div
+        data-bitsnap-checkout-slot="skeleton"
+        className={className ? `bsc-skeleton-footer ${className}` : "bsc-skeleton-footer"}
+        style={style}
+      >
+        <Skeleton className="bsc-skeleton-total" />
+        <Skeleton className="bsc-skeleton-cta" />
+      </div>
+    </div>
+  );
+}
+
+export { FooterSkeleton, LineSkeleton, Skeleton };

@@ -1,13 +1,22 @@
-import React from "react";
-import { cx } from "./lib/cx";
 import { useCartController } from "./cart-controller";
 import { useCheckoutSlot } from "./appearance.context";
+import { AlertIcon, BagIcon } from "./icons";
+import { cx } from "./lib/cx";
 import SingleProduct from "./SingleProduct";
-import { LineSkeleton, Skeleton } from "./Skeleton";
+import { LineSkeleton } from "./Skeleton";
 import { useCheckoutText } from "./texts.context";
 
-/** The lines of the cart, and the loading, failed and empty states that stand in for them. */
-export function CartLines() {
+/**
+ * The lines of the cart, and the states that stand in for them (plan part 3
+ * §3.7): a skeleton shaped like two lines (shown after 150 ms), the empty cart
+ * with a way back to the shop, and a failed load with its own retry button.
+ */
+export function CartLines({
+  onContinueShopping,
+}: {
+  /** Closes the cart from the empty state. */
+  onContinueShopping?: () => void;
+}) {
   const {
     status,
     lines,
@@ -23,93 +32,94 @@ export function CartLines() {
 
   const productList = useCheckoutSlot("productList");
   const emptyState = useCheckoutSlot("emptyState");
+  const emptyAction = useCheckoutSlot("emptyAction");
   const error = useCheckoutSlot("error");
   const skeleton = useCheckoutSlot("skeleton");
-  const checkoutButton = useCheckoutSlot("checkoutButton");
+  const retryButton = useCheckoutSlot("retryButton");
 
   const emptyCartText = useCheckoutText("emptyCart");
+  const continueShoppingText = useCheckoutText("continueShopping");
   const loadFailedText = useCheckoutText("loadFailed");
   const retryText = useCheckoutText("retry");
   const unavailableText = useCheckoutText("unavailableProduct");
 
+  const noticeAlert = notice != null && notice.length > 0 && (
+    <p
+      role="alert"
+      data-bitsnap-checkout-slot="error"
+      className={cx("bsc-state-notice", error.className)}
+      style={error.style}
+    >
+      {notice}
+    </p>
+  );
+
+  const retryControl = (
+    <button
+      type="button"
+      data-bitsnap-checkout-slot="retryButton"
+      data-bitsnap-checkout-retry=""
+      onClick={retry}
+      className={cx("bsc-btn-secondary", retryButton.className)}
+      style={retryButton.style}
+    >
+      {retryText}
+    </button>
+  );
+
   return (
     <>
       {status === "loading" && (
-        <div className={"relative flex w-full justify-center flex-col gap-4"}>
-          <Skeleton
-            data-bitsnap-checkout-slot="skeleton"
-            className={cx("w-full h-32", skeleton.className)}
-            style={skeleton.style}
-          />
-          <Skeleton
-            data-bitsnap-checkout-slot="skeleton"
-            className={cx("w-full h-32", skeleton.className)}
-            style={skeleton.style}
-          />
-        </div>
+        <>
+          <LineSkeleton className={skeleton.className} style={skeleton.style} />
+          <LineSkeleton className={skeleton.className} style={skeleton.style} />
+        </>
       )}
 
       {status === "error" && (
-        <div className={"flex flex-col items-start gap-3 p-4"}>
+        <div className="bsc-state">
+          <AlertIcon className="bsc-icon bsc-state-icon bsc-state-icon-error" />
           <p
             role="alert"
             data-bitsnap-checkout-slot="error"
-            className={cx(error.className)}
+            className={cx("bsc-state-text", error.className)}
             style={error.style}
           >
             {loadFailedText}
           </p>
-          {notice != null && notice.length > 0 && (
-            <p
-              role="alert"
-              data-bitsnap-checkout-slot="error"
-              className={cx("text-sm", error.className)}
-              style={error.style}
-            >
-              {notice}
-            </p>
-          )}
-          <button
-            type="button"
-            data-bitsnap-checkout-slot="checkoutButton"
-            data-bitsnap-checkout-retry=""
-            onClick={retry}
-            className={cx(
-              "px-3 py-2 rounded-md transition font-bold",
-              checkoutButton.className,
-            )}
-            style={checkoutButton.style}
-          >
-            {retryText}
-          </button>
+          {noticeAlert}
+          {retryControl}
         </div>
       )}
 
       {status === "empty" && (
-        <div className={"flex flex-col gap-4 p-4"}>
+        <div className="bsc-state">
+          <BagIcon />
           <p
             data-bitsnap-checkout-slot="emptyState"
-            className={cx(emptyState.className)}
+            className={cx("bsc-state-text", emptyState.className)}
             style={emptyState.style}
           >
             {emptyCartText}
           </p>
-          {notice != null && notice.length > 0 && (
-            <p
-              role="alert"
-              data-bitsnap-checkout-slot="error"
-              className={cx("text-sm", error.className)}
-              style={error.style}
+          {noticeAlert}
+          {onContinueShopping != null && (
+            <button
+              type="button"
+              data-bitsnap-checkout-slot="emptyAction"
+              onClick={onContinueShopping}
+              className={cx("bsc-btn-secondary", emptyAction.className)}
+              style={emptyAction.style}
             >
-              {notice}
-            </p>
+              {continueShoppingText}
+            </button>
           )}
         </div>
       )}
 
       <div
         data-bitsnap-checkout-slot="productList"
-        className={cx(productList.className)}
+        className={productList.className}
         style={productList.style}
       >
         {status === "ready" && (
@@ -175,28 +185,17 @@ export function CartLines() {
       </div>
 
       {refreshFailed && (
-        <div className={"flex flex-row items-center justify-between gap-3 mx-3"}>
+        // Lines from the device are on screen, the server could not be asked.
+        <div className="bsc-refresh">
           <p
             role="alert"
             data-bitsnap-checkout-slot="error"
-            className={cx("text-sm", error.className)}
+            className={cx("bsc-refresh-text", error.className)}
             style={error.style}
           >
             {loadFailedText}
           </p>
-          <button
-            type="button"
-            data-bitsnap-checkout-slot="checkoutButton"
-            data-bitsnap-checkout-retry=""
-            onClick={retry}
-            className={cx(
-              "px-3 py-2 rounded-md transition font-bold",
-              checkoutButton.className,
-            )}
-            style={checkoutButton.style}
-          >
-            {retryText}
-          </button>
+          {retryControl}
         </div>
       )}
     </>

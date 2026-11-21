@@ -206,6 +206,20 @@ describe(`cart accessibility (${presentation})`, () => {
     }
   });
 
+  it("offers \"Continue shopping\" in the empty cart, which closes it (R15)", async () => {
+    await mount();
+    await openCart();
+    const panel = dialog()!;
+    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="emptyState"]')?.textContent, "Your cart is empty.");
+    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="footer"]'), null, "no footer in the empty cart");
+    const action = panel.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="emptyAction"]')!;
+    assert.equal(action.textContent, "Continue shopping");
+    assert.equal(action.type, "button");
+    await React.act(async () => action.click());
+    await settle();
+    assert.equal(useCheckoutStore.getState().isCartVisible, false, "the cart is closed");
+  });
+
   it("names the badge count and labels the line controls", async () => {
     await mount();
     await React.act(async () => void (await Bitsnap.addProductToCart("var1", 2)));
@@ -353,6 +367,7 @@ describe("cart loading", () => {
 
     productsStatus = 200;
     const retry = Array.from(dialog()!.querySelectorAll("button")).find((el) => el.textContent === "Try again")!;
+    assert.equal(retry.getAttribute("data-bitsnap-checkout-slot"), "retryButton", "not styled by checkoutButton (F-15)");
     await React.act(async () => retry.click());
     await settle();
     assert.equal(dialog()!.querySelector('[role="alert"]'), null);

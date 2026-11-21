@@ -14,6 +14,8 @@ export type CheckoutTexts = {
   cart: string;
   /** Shown when the cart has no products. */
   emptyCart: string;
+  /** Button in the empty cart that closes it. */
+  continueShopping: string;
   /** Label next to the total price. */
   total: string;
   /** Delivery note next to the total price. */
@@ -140,6 +142,7 @@ export type CheckoutTextKey = keyof CheckoutTexts;
 export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
   en: {
     cart: "Cart",
+    continueShopping: "Continue shopping",
     emptyCart: "Your cart is empty.",
     total: "Total:",
     delivery: "+ delivery",
@@ -219,6 +222,7 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
   },
   pl: {
     cart: "Koszyk",
+    continueShopping: "Wróć do zakupów",
     emptyCart: "Brak produktów w koszyku.",
     total: "Suma:",
     delivery: "+ dostawa",

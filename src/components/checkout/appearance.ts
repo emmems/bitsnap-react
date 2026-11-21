@@ -120,8 +120,13 @@ export const CHECKOUT_SLOT_NAMES = [
   "paymentButtons",
   "paymentMethods",
   "paymentMethodOption",
+  /** The checkout button only; the retry buttons have `retryButton` since 1.32.0. */
   "checkoutButton",
+  /** "Try again" after a failed load. */
+  "retryButton",
   "emptyState",
+  /** "Continue shopping" in the empty cart; closes it. */
+  "emptyAction",
   "error",
   "skeleton",
 ] as const;

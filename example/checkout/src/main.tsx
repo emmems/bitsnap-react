@@ -9,11 +9,13 @@ import { installCheckoutMocks, seedCart } from "./mocks";
 //   ?cart=empty  -> empty cart
 //   ?unavailable=1 -> the checkout action answers with item-ids-not-found
 //   ?latency=1500 -> loading state
+//   ?fail=1 -> the products cannot be loaded
 const params = new URLSearchParams(window.location.search);
 
 installCheckoutMocks({
   unavailableProducts: params.get("unavailable") === "1",
   latencyMs: Number(params.get("latency") ?? 0) || undefined,
+  failProducts: params.get("fail") === "1",
 });
 
 if (params.get("cart") === "empty") {

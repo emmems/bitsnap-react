@@ -18,6 +18,7 @@ type Product = {
   image_url: string | null;
   isDeliverable?: boolean;
   availableQuantity?: number;
+  pricing?: unknown;
 };
 
 const image = (color: string, label: string) =>
@@ -45,6 +46,15 @@ const PRODUCTS: Product[] = [
     metadata: {},
     image_url: image("#0ea5e9", "B"),
     isDeliverable: true,
+    // On sale: struck regular price, sale price and the Omnibus line.
+    pricing: {
+      regularPrice: 17900,
+      effectivePrice: 14900,
+      currency: "PLN",
+      discount: { id: "d1", type: "FIXED", value: 3000, status: "ACTIVE" },
+      referencePrice: { amount: 16900, windowDays: 30, asOf: 0, basis: "observed-history", historyAvailable: true },
+      priceVersion: "v1",
+    },
   },
   {
     id: "ebook-1",
@@ -53,7 +63,8 @@ const PRODUCTS: Product[] = [
     price: 4900,
     currency: "PLN",
     metadata: {},
-    image_url: image("#10b981", "C"),
+    // No image: the cart shows its placeholder tile.
+    image_url: null,
   },
 ];
 
@@ -78,6 +89,8 @@ export type MockOptions = {
   unavailableProducts?: boolean;
   /** Delays the mocked responses so the loading state can be inspected. */
   latencyMs?: number;
+  /** Makes `/products` fail, for the "could not load" state. */
+  failProducts?: boolean;
 };
 
 export function installCheckoutMocks(options: MockOptions = {}) {
@@ -99,6 +112,9 @@ export function installCheckoutMocks(options: MockOptions = {}) {
     }
 
     if (url.includes("/public-commerce/products")) {
+      if (options.failProducts === true) {
+        return json({}, 500);
+      }
       return json({
         success: true,
         result: PRODUCTS,
@@ -107,6 +123,10 @@ export function installCheckoutMocks(options: MockOptions = {}) {
 
     if (url.includes("/public-commerce/countries")) {
       return json(COUNTRIES);
+    }
+
+    if (url.includes("/public-commerce/payment-methods")) {
+      return json({ success: true, choice: { methods: ["online", "manual"], manualAccountTypes: ["blik"] } });
     }
 
     if (url.includes("/public-commerce/buy")) {

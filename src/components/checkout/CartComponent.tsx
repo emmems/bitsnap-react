@@ -53,7 +53,7 @@ function CartComponent({
       panelId={panelId}
       presentation={presentation}
     >
-      <CartComponentContent locale={locale} open={isVisible} />
+      <CartComponentContent locale={locale} open={isVisible} onClose={shouldHide} />
     </CartFrame>
   );
 }

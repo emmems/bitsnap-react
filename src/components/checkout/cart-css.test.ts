@@ -401,15 +401,16 @@ describe("cart.css grid shell and header", () => {
   });
 });
 
-describe("cart.css content rules (1.31.0, in literals until steps 15-17)", () => {
-  it("gives the checkout button its surface and spacing; the retry button no margin", () => {
-    const button = findTop(slot("checkoutButton"));
-    assert.ok(button, "no checkoutButton rule");
-    assert.equal(button.declarations.get("background-color"), "var(--bsc-cta-bg)");
-    assert.equal(button.declarations.get("padding"), "8px 12px");
-    assert.equal(button.declarations.get("margin"), "8px");
-    assert.equal(button.declarations.get("font-weight"), "700");
-    assert.equal(findTop(`${slot("checkoutButton")}:where([data-bitsnap-checkout-retry])`)?.declarations.get("margin"), "0");
+describe("cart.css content rules", () => {
+  it("gives the CTA its surface and the retry and empty-state buttons a secondary look of their own (F-15)", () => {
+    const cta = findTop("[data-bitsnap-checkout] .bsc-cta");
+    assert.equal(cta?.declarations.get("background-color"), "var(--bsc-cta-bg)");
+    assert.equal(cta?.declarations.get("color"), "var(--bsc-cta-fg)");
+    assert.equal(findTop(slot("checkoutButton")), undefined, "no slot rule: the retry button is not a checkoutButton");
+    const secondary = findTop("[data-bitsnap-checkout] .bsc-btn-secondary");
+    assert.equal(secondary?.declarations.get("border"), "1px solid var(--bsc-control-border)");
+    assert.equal(secondary?.declarations.get("min-height"), "44px");
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-btn-secondary:where(:focus-visible)")?.declarations.has("outline"));
   });
 
   it("colours the sale line from the tokens with fallbacks that pass 4.5:1 on the dark panel", () => {
@@ -667,5 +668,19 @@ describe("express components (step 16)", () => {
         }
       }
     }
+  });
+});
+
+describe("cart.css states (step 17)", () => {
+  it("shapes the skeleton like the layout: line rows with a 72 px tile and a footer with a 52 px block", () => {
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-skeleton-line")?.declarations.get("grid-template-columns"), "72px minmax(0, 1fr) auto");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-skeleton-thumb")?.declarations.get("height"), "72px");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-skeleton-cta")?.declarations.get("height"), "52px");
+  });
+
+  it("centres the empty and failed states with a 40 px icon", () => {
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-state")?.declarations.get("justify-items"), "center");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-state-icon")?.declarations.get("width"), "40px");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-state-icon-error")?.declarations.get("color"), "var(--bsc-error)");
   });
 });
