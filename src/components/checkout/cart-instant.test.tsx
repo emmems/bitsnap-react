@@ -565,6 +565,35 @@ describe("instant drawer: price gate (D18)", () => {
     assert.equal((buys()[0].body as { items: { priceVersion?: string }[] }).items[0].priceVersion, "va2");
   });
 
+  it("after a reload, a warm-up that rewrites the snapshot while the drawer is open marks the swap too (N15)", async () => {
+    await mount({ prefetch: false });
+    await add("pa");
+    // A page reload: the React tree and the in-memory caches go, localStorage stays.
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    page.win.document.body.innerHTML = "";
+    snapshotModule.resetCartSnapshotState();
+    useCheckoutStore.setState({ isCartVisible: false });
+    setPrice("pa", 3000, "va2");
+    await mount({ prefetch: false });
+    productsMode = "pending";
+    await React.act(async () => Bitsnap.warmUp());
+    await open();
+    assert.equal(linePrices()[0], PLN("25,00"), "the stored price first");
+    productsMode = "ok";
+    await releaseProducts();
+    assert.ok(linePrices()[0]?.startsWith(PLN("30,00")));
+    assert.equal(
+      text(doc().querySelector('[data-bitsnap-checkout-price="updated"]')),
+      "Cena się zmieniła: była 25,00 zł, jest 30,00 zł.",
+    );
+    await clickNext();
+    assert.equal(buys().length, 0);
+    lookAtCart();
+    await clickNext();
+    assert.equal(buys().length, 1);
+    assert.equal((buys()[0].body as { items: { priceVersion?: string }[] }).items[0].priceVersion, "va2");
+  });
+
   it("same price, new version, on screen for a second: the first click buys with the fresh version", async () => {
     await mount();
     await add("pa");

@@ -622,11 +622,16 @@ describe("trackPrices", () => {
     assert.equal(trackPrices(next, view, NOW + 400), next, "a mark is not dropped for carrying the stored version");
   });
 
-  it("a changed price from the snapshot alone does not mark (not a server answer)", () => {
+  it("a price the snapshot changes on screen marks the line too (warm-up or another tab, N15)", () => {
     const first = trackPrices(EMPTY_PRICE_GATE_STATE, buildCartView([line("l1", "a")], snapshotOf(details("a")), undefined, NOW), NOW);
     const next = trackPrices(first, buildCartView([line("l1", "a")], snapshotOf(details("a", { price: 1700, version: "v2" })), undefined, NOW), NOW + 10);
-    assert.equal(next.marks.size, 0);
+    assert.deepEqual(next.marks.get("l1"), { priceVersion: "v2", shownPrice: 1700, markedAt: NOW + 10 });
     assert.equal(next.shown.get("l1")!.price, 1700);
+    // The gate still needs the fresh answer, and a different fresh version marks again.
+    const fresh = viewOf([line("l1", "a")], [details("a", { price: 1700, version: "v3" })]);
+    const gate = runPriceGate(next, fresh, NOW + 5000);
+    assert.equal(gate.result, "marked");
+    assert.equal(gate.state.marks.get("l1")!.priceVersion, "v3");
   });
 
   it("marks a fresh price change even without a priceVersion (N1)", () => {

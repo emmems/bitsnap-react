@@ -325,8 +325,9 @@ function freshVersion(item: CartViewLine): string | undefined {
 
 /**
  * Remembers what each line is showing and marks a line at once when its
- * rendered unit price changes while the drawer is open and the new price is a
- * server answer (N15), whatever the line's stored version is, and also when the
+ * rendered unit price changes while the drawer is open (N15), from a server
+ * answer or from a snapshot rewritten meanwhile (the warm-up, another tab),
+ * whatever the line's stored version is, and also when the
  * answer carries no `priceVersion` (classic products): the mark then has
  * `priceVersion: ""`, because the server does not check such a line and the seen
  * rule is the only protection. The mark carries `markedAt: now`, so it cannot be
@@ -377,8 +378,11 @@ export function trackPrices(
     }
     shown.set(item.line.id, { price, currency: details.currency, since: now });
     changed = true;
-    // A changed amount (another tab) is new to the buyer too (S13).
-    if (previous != null && (amount || item.source === "fresh")) {
+    // Any change on screen is new to the buyer: a server answer, a changed
+    // amount (another tab, S13), or a snapshot the warm-up or another tab
+    // rewrote while the drawer was open (N15). A snapshot version in the mark
+    // is never adopted as is: the gate compares it with the fresh answer.
+    if (previous != null) {
       marks.set(item.line.id, {
         priceVersion: (!amount && freshVersion(item)) || "",
         shownPrice: price,
