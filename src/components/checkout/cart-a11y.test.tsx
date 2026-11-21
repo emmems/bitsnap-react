@@ -103,12 +103,13 @@ afterEach(async () => {
   resetTracker();
 });
 
+const mount = mountCart;
 const settle = () => React.act(async () => void (await new Promise((r) => setTimeout(r, 30))));
 const doc = () => page.win.document;
 const trigger = () => doc().querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
 const dialog = () => doc().querySelector<HTMLElement>('[role="dialog"]');
 
-async function mount(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
+async function mountCart(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
   const container = doc().createElement("div");
   doc().body.appendChild(container);
   const root = createRoot(container);
@@ -123,7 +124,13 @@ async function openCart() {
   await settle();
 }
 
-describe("cart drawer accessibility", () => {
+// One accessibility contract for every presentation (PLAN D7): the same
+// assertions run for the drawer and the dialog.
+for (const presentation of ["drawer", "dialog"] as const) {
+describe(`cart accessibility (${presentation})`, () => {
+  const mount = (props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) =>
+    mountCart({ presentation, ...props });
+
   it("labels the trigger and exposes the drawer as a modal dialog inside the checkout root", async () => {
     await mount();
     assert.equal(trigger().getAttribute("aria-label"), "Open cart");
@@ -136,6 +143,7 @@ describe("cart drawer accessibility", () => {
     assert.equal(panel.getAttribute("aria-modal"), "true");
     assert.equal(panel.getAttribute("data-bitsnap-checkout-slot"), "panel");
     assert.ok(panel.closest(".bitsnap-react"), "it renders inside the scoped root");
+    assert.equal(panel.getAttribute("data-bitsnap-checkout-presentation"), presentation);
     const title = doc().getElementById(panel.getAttribute("aria-labelledby")!)!;
     assert.equal(title.tagName, "H1");
     assert.equal(title.textContent, "Cart");
@@ -154,6 +162,8 @@ describe("cart drawer accessibility", () => {
     trigger().focus();
     await openCart();
     assert.ok(dialog()!.contains(doc().activeElement), "focus moved into the panel");
+    assert.equal(doc().activeElement, dialog(), "the panel itself takes the focus, not the close button (D11)");
+    assert.equal(dialog()!.getAttribute("tabindex"), "-1");
 
     await React.act(async () => {
       doc().dispatchEvent(new page.win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -224,6 +234,8 @@ describe("cart drawer accessibility", () => {
     );
   });
 });
+
+}
 
 describe("cart product links", () => {
   it("links the image and the name to the product page given when adding", async () => {

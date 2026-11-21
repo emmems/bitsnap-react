@@ -15,9 +15,9 @@ import { describe, it } from "node:test";
 
 // Tests run from the package root (`node --test .test-dist/...`).
 const CSS_PATH = resolve(process.cwd(), "src/components/checkout/checkout.css");
-const COMPONENT_PATH = resolve(
-  process.cwd(),
-  "src/components/checkout/CartComponent.tsx",
+/** The cart's shell: the provider wrapper and the one frame of every presentation. */
+const SHELL_PATHS = ["CartComponent.tsx", "CartFrame.tsx"].map((file) =>
+  resolve(process.cwd(), "src/components/checkout", file),
 );
 
 interface StyleRule {
@@ -366,9 +366,9 @@ describe("checkout.css", () => {
   });
 });
 
-describe("CartComponent.tsx", () => {
+describe("CartComponent.tsx and CartFrame.tsx", () => {
   it("keeps auto-animate off the drawer root and off the list with motion off (S8)", () => {
-    const drawer = readFileSync(COMPONENT_PATH, "utf8");
+    const drawer = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
     const content = readFileSync(
       resolve(process.cwd(), "src/components/checkout/CartComponentContent.tsx"),
       "utf8",
@@ -387,7 +387,7 @@ describe("CartComponent.tsx", () => {
   });
 
   it("leaves the drawer geometry to the stylesheet", () => {
-    const source = readFileSync(COMPONENT_PATH, "utf8");
+    const source = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
     // A host page that defines `.w-full` or `.fixed` unlayered would win over
     // these classes (F-01); checkout.css sets the values instead.
     for (const utility of ["w-full", "md:w-[", "xl:w-[", "fixed", "z-10", "z-20"]) {

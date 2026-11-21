@@ -16,6 +16,7 @@ export {
   type CheckoutTheme,
 } from "./checkout/appearance";
 export { type CheckoutTexts } from "./checkout/texts";
+export { type CartPresentation } from "./checkout/presentation";
 export * from "./products";
 export { BitsnapReturns, type BitsnapReturnsProps } from "./returns/BitsnapReturns";
 export {

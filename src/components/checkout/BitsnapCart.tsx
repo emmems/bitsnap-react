@@ -10,6 +10,7 @@ import type { CheckoutAppearance } from "./appearance";
 import type { CheckoutTexts } from "./texts";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
+import type { CartPresentation } from "./presentation";
 import { warmCart } from "./cart-warmup";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
@@ -65,6 +66,8 @@ export type BitsnapCartProps = {
    * turns it off (the cart then loads when it opens).
    */
   prefetch?: boolean;
+  /** How the cart opens. Omitted means `"drawer"`. */
+  presentation?: CartPresentation;
 };
 
 const visuallyHidden: React.CSSProperties = {
@@ -90,6 +93,7 @@ function BitsnapCart({
   texts,
   analytics,
   prefetch,
+  presentation,
 }: BitsnapCartProps) {
   const instrument = useInstrument(projectID, analytics, "cart");
   // Cart changes made outside of components (`Bitsnap.addProductToCart`) are reported here.
@@ -364,6 +368,7 @@ function BitsnapCart({
           appearance={appearance}
           texts={texts}
           prefetch={prefetch}
+          presentation={presentation}
           panelId={panelId}
           shouldHide={() => {
             hideCart();
