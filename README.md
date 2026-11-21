@@ -92,9 +92,12 @@ defaults, overridable through `texts`).
   [Tokens](#tokens)). Like every token they accept any CSS value, so
   `var(--your-variable)` works. `motionDuration: "0ms"` (or `"0s"`, `"0"`)
   turns the cart's own animations and transitions off; Apple Pay, Google Pay
-  and the other express buttons keep theirs. Other `motionDuration` values are
-  accepted but not used yet: the cart's own keyframes that read it arrive in
-  1.32.0.
+  and the other express buttons keep theirs. Other values set the duration of
+  the drawer's enter and exit (default `240ms`).
+- **Drawer animation.** The drawer fades in with a short slide from the right
+  and is readable from the first frame; before, auto-animate kept it fully
+  transparent for about 250 ms on every open. Under
+  `prefers-reduced-motion: reduce` it only fades, for at most `120ms`.
 - **Light look from tokens.** The new muted and sale defaults are tuned for the
   dark panel. A light look built from tokens without `theme: "light"` should
   also set `mutedForeground` and `sale`, or the struck price, Omnibus line and
@@ -555,8 +558,8 @@ before. The checkout sets these properties:
 | Slot | Properties |
 | ---- | ---------- |
 | root (`[data-bitsnap-checkout]`) | `position`, `z-index`, `font-family`, `font-size`; `animation` and `transition` of the cart's elements when `motionDuration` is zero |
-| `panel` | `position`, `top`, `right`, `bottom`, `width`, `display`, `flex-direction`, `overflow-y`, `z-index`, `background-color`, `color` |
-| `overlay` | `position`, `top`, `right`, `bottom`, `left`, `z-index`, `cursor`, `background-color` |
+| `panel` | `position`, `top`, `right`, `bottom`, `width`, `display`, `flex-direction`, `overflow-y`, `z-index`, `background-color`, `color`; `animation` per `data-state` (open, closed) |
+| `overlay` | `position`, `top`, `right`, `bottom`, `left`, `z-index`, `cursor`, `background-color`; `animation` per `data-state` (open, closed) |
 | `productList` | `margin-top` of the list (`ul`); `height`, `margin`, `border-width`, `border-style`, `border-color` of the separators (`hr`) |
 | `product` | `outline-color` when the product is unavailable |
 | `productPrice` | `color` of the struck regular price, the sale price and the Omnibus line (`[data-bitsnap-checkout-price="regular" \| "sale" \| "omnibus"]`) |
@@ -593,7 +596,7 @@ before. The checkout sets these properties:
 | `radius`                  | Radius of the rounded elements                          |
 | `sale`                    | Sale price of a discounted line (default `#f87171`; `#b91c1c` in the light theme) |
 | `panelWidth`              | Drawer width from 768 px (default 350 px, 420 px from 1280 px); phones stay full width |
-| `motionDuration`          | Base duration of the cart's animations; `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted. Other values take effect from 1.32.0 (default `240ms`) |
+| `motionDuration`          | Base duration of the cart's animations, read by the drawer's enter and exit (default `240ms`; at most `120ms`, fade only, under `prefers-reduced-motion`); `"0ms"`, `"0s"` or `"0"` turns them off, express buttons excepted |
 
 Every token accepts any CSS value and is written as-is, so
 `tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site.

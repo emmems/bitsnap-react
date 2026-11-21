@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/src/lib/utils";
 import {
@@ -9,7 +9,7 @@ import {
   useCheckoutSlot,
 } from "./appearance.context";
 import type { CheckoutAppearance } from "./appearance";
-import CartComponentContent, { useCartAutoAnimate } from "./CartComponentContent";
+import CartComponentContent from "./CartComponentContent";
 import CartProvider, { getLocale } from "./CartProvider";
 import { registerWarmTarget, warmCart, whenIdle } from "./cart-warmup";
 import { CheckoutTextsProvider, useCheckoutText } from "./texts.context";
@@ -47,16 +47,11 @@ function CartComponent({
       forget();
     };
   }, [queryClient, locale, prefetch]);
-  const parent = useCartAutoAnimate();
   // The drawer renders inside the checkout root: the stylesheet is scoped to `.bitsnap-react`.
+  // No auto-animate here: it would run its "add" keyframes (opacity 0 for the
+  // first ~250 ms) on the portalled panel. checkout.css animates the overlay
+  // and the panel on Radix's `data-state` instead.
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
-  const rootRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      parent(element);
-      setRootElement(element);
-    },
-    [parent],
-  );
   // The trigger lives outside of the dialog, so Radix does not know which element to give the focus back to.
   const returnFocusTo = useRef<HTMLElement | null>(null);
   const { boundaryClassName, boundaryStyle, boundaryAttributes } =
@@ -72,7 +67,7 @@ function CartComponent({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootElement}
       data-bitsnap-checkout="root"
       data-bitsnap-checkout-slot="root"
       {...boundaryAttributes}

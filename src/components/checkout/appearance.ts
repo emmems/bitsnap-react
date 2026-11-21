@@ -63,10 +63,10 @@ export type CheckoutAppearanceTokens = {
    */
   panelWidth?: string;
   /**
-   * Base duration of the cart's enter and exit animations (default `240ms`).
-   * `"0ms"`, `"0s"` or `"0"` turns the cart's own animations off. Other
-   * values are accepted but take effect only from 1.32.0, when the cart's own
-   * keyframes read the variable.
+   * Base duration of the cart's enter and exit animations (default `240ms`):
+   * the drawer's fade and slide read it. `"0ms"`, `"0s"` or `"0"` turns the
+   * cart's own animations off. Under `prefers-reduced-motion: reduce` the
+   * drawer only fades, for at most `120ms`.
    */
   motionDuration?: string;
 };

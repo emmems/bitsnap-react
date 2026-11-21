@@ -39,8 +39,7 @@
  */
 
 /* The root carries an inline `z-index`, which only works on a positioned
- * element. `useAutoAnimate` happens to set `position: relative` on it, but not
- * under `prefers-reduced-motion`, so the stacking is set here explicitly. */
+ * element, so the stacking is set here explicitly. */
 [data-bitsnap-checkout="root"] {
     position: relative;
     z-index: 999999;
@@ -103,6 +102,83 @@
 @media (min-width: 80rem) {
     [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
         width: var(--bitsnap-checkout-panel-width, 420px);
+    }
+}
+
+/* Enter and exit of the drawer. Radix sets `data-state` on the overlay and the
+ * panel and keeps each mounted until the exit animation's `animationend`
+ * (`Presence`), so the close plays too. Each state uses its own keyframes:
+ * Presence waits only when the animation name changes, and with motion off
+ * (`animation: none`, below) it unmounts at once.
+ *
+ * The panel starts at opacity 0.25, never at 0: its rows are readable from the
+ * first frame of the open (perf gate A1). No `fill-mode` on the enter: a held
+ * `transform` would make the panel the containing block of fixed descendants.
+ * The exit holds its last frame (`forwards`) until Presence unmounts it.
+ * The duration follows the `motionDuration` token; phones (full-width panel)
+ * get the same slide. */
+@keyframes bitsnap-checkout-panel-in {
+    from {
+        opacity: 0.25;
+        transform: translateX(1.5rem);
+    }
+}
+
+@keyframes bitsnap-checkout-panel-out {
+    to {
+        opacity: 0;
+        transform: translateX(1.5rem);
+    }
+}
+
+@keyframes bitsnap-checkout-panel-fade-in {
+    from {
+        opacity: 0.25;
+    }
+}
+
+@keyframes bitsnap-checkout-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes bitsnap-checkout-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="open"]) {
+    animation: bitsnap-checkout-panel-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="closed"]) {
+    animation: bitsnap-checkout-panel-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"]) {
+    animation: bitsnap-checkout-fade-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="closed"]) {
+    animation: bitsnap-checkout-fade-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+}
+
+/* Reduced motion: no slide, a fade of at most 120 ms. */
+@media (prefers-reduced-motion: reduce) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="open"]) {
+        animation-name: bitsnap-checkout-panel-fade-in;
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="closed"]) {
+        animation-name: bitsnap-checkout-fade-out;
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"], [data-state="closed"]) {
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
     }
 }
 

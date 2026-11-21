@@ -367,15 +367,17 @@ describe("checkout.css", () => {
 });
 
 describe("CartComponent.tsx", () => {
-  it("turns both auto-animate instances off with motion off (S8)", () => {
+  it("keeps auto-animate off the drawer root and off the list with motion off (S8)", () => {
     const drawer = readFileSync(COMPONENT_PATH, "utf8");
     const content = readFileSync(
       resolve(process.cwd(), "src/components/checkout/CartComponentContent.tsx"),
       "utf8",
     );
-    // CSS cannot stop the animations auto-animate starts from script.
+    // On the root, auto-animate ran its "add" keyframes on the portalled panel
+    // (opacity 0 for ~250 ms); checkout.css animates the drawer instead.
     assert.equal(drawer.includes("useAutoAnimate("), false, "the drawer root calls useAutoAnimate directly");
-    assert.match(drawer, /const parent = useCartAutoAnimate\(\)/);
+    assert.equal(drawer.includes("useCartAutoAnimate"), false, "the drawer root uses auto-animate again");
+    // CSS cannot stop the animations auto-animate starts from script.
     assert.equal(content.match(/useAutoAnimate\(/g)?.length, 1, "only inside useCartAutoAnimate");
     assert.match(content, /const productsParent = useCartAutoAnimate\(\)/);
     assert.match(
@@ -432,5 +434,117 @@ describe("checkout.css 1.31.0 tokens", () => {
       /<Skeleton\s+data-bitsnap-checkout-slot="skeleton"/,
     );
     // The skeleton's delayed show (1.32.0) must never be stopped by motion off.
+  });
+});
+
+describe("checkout.css drawer enter and exit", () => {
+  const panel = '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]';
+  const overlay = '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]';
+  const keyframes = (name: string) =>
+    rules.filter((rule) => rule.atRules.at(-1) === `@keyframes ${name}`);
+  const topLevel = (selector: string) =>
+    styleRules.find((rule) => rule.atRules.length === 0 && rule.selectors.includes(selector));
+  const reduced = (selector: string) =>
+    styleRules.find(
+      (rule) =>
+        rule.atRules.length === 1 &&
+        rule.atRules[0] === "@media (prefers-reduced-motion: reduce)" &&
+        rule.selectors.includes(selector),
+    );
+  const DURATION = "var(--bitsnap-checkout-motion-duration, 240ms)";
+
+  it("defines the drawer keyframes, the panel never starting at opacity 0", () => {
+    const panelIn = keyframes("bitsnap-checkout-panel-in");
+    assert.equal(panelIn.length, 1, "no bitsnap-checkout-panel-in keyframes");
+    assert.deepEqual(panelIn[0].selectors, ["from"]);
+    assert.equal(panelIn[0].declarations.get("transform"), "translateX(1.5rem)");
+    // A1 counts the rows once their effective opacity is above 0: the enter
+    // must not hold the panel at 0, as auto-animate's "add" did.
+    const startOpacity = Number(panelIn[0].declarations.get("opacity"));
+    assert.ok(startOpacity > 0 && startOpacity < 1, `panel enter starts at opacity ${startOpacity}`);
+
+    const panelFadeIn = keyframes("bitsnap-checkout-panel-fade-in");
+    assert.equal(panelFadeIn.length, 1, "no bitsnap-checkout-panel-fade-in keyframes");
+    assert.ok(Number(panelFadeIn[0].declarations.get("opacity")) > 0, "reduced-motion panel enter starts at 0");
+    assert.equal(panelFadeIn[0].declarations.has("transform"), false, "reduced motion slides");
+
+    const panelOut = keyframes("bitsnap-checkout-panel-out");
+    assert.equal(panelOut.length, 1, "no bitsnap-checkout-panel-out keyframes");
+    assert.deepEqual(panelOut[0].selectors, ["to"]);
+    assert.equal(panelOut[0].declarations.get("opacity"), "0");
+    assert.equal(panelOut[0].declarations.get("transform"), "translateX(1.5rem)");
+
+    assert.equal(keyframes("bitsnap-checkout-fade-in")[0]?.declarations.get("opacity"), "0");
+    assert.equal(keyframes("bitsnap-checkout-fade-out")[0]?.declarations.get("opacity"), "0");
+  });
+
+  it("animates the panel and the overlay on Radix's data-state with the motionDuration token", () => {
+    const expected: Array<[string, string]> = [
+      [`${panel}:where([data-state="open"])`, `bitsnap-checkout-panel-in ${DURATION} ease-out`],
+      [`${panel}:where([data-state="closed"])`, `bitsnap-checkout-panel-out ${DURATION} ease-in forwards`],
+      [`${overlay}:where([data-state="open"])`, `bitsnap-checkout-fade-in ${DURATION} ease-out`],
+      [`${overlay}:where([data-state="closed"])`, `bitsnap-checkout-fade-out ${DURATION} ease-in forwards`],
+    ];
+    for (const [selector, animation] of expected) {
+      const rule = topLevel(selector);
+      assert.ok(rule, `no rule ${selector}`);
+      assert.equal(rule.declarations.get("animation"), animation);
+      assert.equal(rule.declarations.get("animation-fill-mode"), undefined);
+    }
+    // Radix Presence waits for an exit only when the animation name changes.
+    assert.notEqual(expected[0][1].split(" ")[0], expected[1][1].split(" ")[0]);
+    assert.notEqual(expected[2][1].split(" ")[0], expected[3][1].split(" ")[0]);
+    // The enter keeps no fill: a held transform would make the panel the
+    // containing block of fixed descendants.
+    assert.doesNotMatch(expected[0][1], /\b(forwards|both)\b/);
+  });
+
+  it("drops the slide and shortens the fade under prefers-reduced-motion", () => {
+    const short = `min(${DURATION}, 120ms)`;
+    const open = reduced(`${panel}:where([data-state="open"])`);
+    const closed = reduced(`${panel}:where([data-state="closed"])`);
+    const overlays = reduced(`${overlay}:where([data-state="open"], [data-state="closed"])`);
+    assert.ok(open && closed && overlays, "missing a reduced-motion rule");
+    assert.equal(open.declarations.get("animation-name"), "bitsnap-checkout-panel-fade-in");
+    assert.equal(closed.declarations.get("animation-name"), "bitsnap-checkout-fade-out");
+    for (const rule of [open, closed, overlays]) {
+      assert.equal(rule.declarations.get("animation-duration"), short);
+    }
+  });
+
+  it("is stopped by the motion-off rule, which comes later and is !important", () => {
+    const all = styleRules.filter((rule) => rule.atRules.length === 0);
+    const motionOff = all.findIndex((rule) =>
+      rule.selectors.some((selector) =>
+        selector.startsWith('[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"]'),
+      ),
+    );
+    assert.ok(motionOff !== -1, "no motion-off rule");
+    assert.equal(all[motionOff].declarations.get("animation"), "none !important");
+    // `:where(*)` matches the overlay and the panel (neither is excluded), so
+    // `animation: none` reaches them and Radix Presence unmounts at once.
+    const selector = all[motionOff].selectors.join(",");
+    assert.doesNotMatch(selector, /slot="(panel|overlay)"/);
+    for (const rule of styleRules) {
+      const sets = rule.declarations.get("animation") ?? rule.declarations.get("animation-name") ?? "";
+      if (!/bitsnap-checkout-(panel|fade)-/.test(sets)) continue;
+      assert.doesNotMatch(sets, /!important/, `${rule.selectors.join(", ")} would beat motion off`);
+      assert.ok(
+        styleRules.indexOf(rule) < styleRules.indexOf(all[motionOff]),
+        `${rule.selectors.join(", ")} comes after the motion-off rule`,
+      );
+    }
+  });
+
+  it("keeps every drawer animation rule within the (0,2,0) cap", () => {
+    const animated = styleRules.filter(
+      (rule) => rule.declarations.has("animation") || rule.declarations.has("animation-name"),
+    );
+    assert.ok(animated.length >= 7, `only ${animated.length} animation rules`);
+    for (const rule of animated) {
+      for (const selector of rule.selectors) {
+        assert.ok(compare(specificity(selector), [0, 2, 0]) <= 0, `${selector} is above (0,2,0)`);
+      }
+    }
   });
 });

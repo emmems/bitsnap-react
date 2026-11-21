@@ -5,6 +5,33 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
 
 const page = setupReactPage();
 
+// auto-animate initialises only when `window` has a `ResizeObserver`, then asks
+// `matchMedia` about reduced motion once for every parent it is attached to.
+// Answering "reduce" keeps it from animating (jsdom has no Web Animations) and
+// makes every attach countable. Set before the cart's modules load.
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+let autoAnimateAttaches = 0;
+Object.assign(page.win, {
+  ResizeObserver: class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+  matchMedia: (query: string) => {
+    if (query === REDUCED_MOTION) autoAnimateAttaches += 1;
+    return {
+      matches: query === REDUCED_MOTION,
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    };
+  },
+});
+
 // "Next step" goes on only after every price was on screen for a second (the
 // price gate, D18): the tests move this clock instead of waiting.
 const realNow = Date.now;
@@ -152,6 +179,21 @@ describe("cart drawer accessibility", () => {
     );
     await settle();
     assert.equal(dialog(), null);
+  });
+
+  it("leaves the drawer's enter animation to checkout.css, not auto-animate on the root", async () => {
+    // auto-animate on the root ran its "add" keyframes on the portalled panel:
+    // opacity 0 for the first ~250 ms of every open.
+    autoAnimateAttaches = 0;
+    await mount();
+    await openCart();
+    const panel = dialog()!;
+    assert.ok(panel.closest('[data-bitsnap-checkout="root"]'), "the panel renders inside the checkout root");
+    assert.equal(autoAnimateAttaches, 1, "auto-animate is attached to something besides the products list");
+    assert.equal(panel.getAttribute("data-state"), "open", "checkout.css keys the enter animation on data-state");
+    for (const property of ["opacity", "transform", "animation"] as const) {
+      assert.equal(panel.style[property], "", `the panel has an inline ${property}`);
+    }
   });
 
   it("names the badge count and labels the line controls", async () => {
