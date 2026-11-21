@@ -19,3 +19,112 @@
 .external-country-option:hover {
   outline: 2px solid #dc2626;
 }
+
+/* `?theme=host`: a site with its own design-system variables and a dark mode
+   switched by a class on <html>. The cart reads every value through tokens
+   (`host` in App.tsx), so the class switch reaches it with no JS. The body's
+   inline style (index.html) needs !important here. */
+html.host-site {
+  --site-font: Georgia, "Times New Roman", serif;
+  --site-bg: #fbfaf7;
+  --site-surface: #f1efe9;
+  --site-fg: #1f2328;
+  --site-muted: #5f6670;
+  --site-border: #e3e0d8;
+  --site-input: #8b8578;
+  --site-hover: #ebe8e1;
+  --site-brand: #0f766e;
+  --site-brand-fg: #ffffff;
+  --site-brand-hover: #115e59;
+  --site-ring: #0f766e;
+  --site-skeleton: #dcd8ce;
+  --site-sale: #b42318;
+  --site-error: #b42318;
+  --site-radius: 6px;
+  --site-scheme: light;
+  color-scheme: var(--site-scheme);
+}
+
+html.host-site.dark {
+  --site-bg: #14171a;
+  --site-surface: #1d2125;
+  --site-fg: #e8eaed;
+  --site-muted: #9aa3ad;
+  --site-border: #2c3238;
+  --site-input: #6b7580;
+  --site-hover: #2a3036;
+  --site-brand: #2dd4bf;
+  --site-brand-fg: #042f2e;
+  --site-brand-hover: #5eead4;
+  --site-ring: #5eead4;
+  --site-skeleton: #343a40;
+  --site-sale: #f97066;
+  --site-error: #f97066;
+  --site-scheme: dark;
+}
+
+html.host-site body {
+  background: var(--site-bg) !important;
+  color: var(--site-fg) !important;
+  font-family: var(--site-font) !important;
+}
+
+.host-toggle {
+  justify-self: start;
+  padding: 8px 14px;
+  border: 1px solid var(--site-input);
+  border-radius: var(--site-radius);
+  background: var(--site-surface);
+  color: var(--site-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* `?theme=shadcn`: a shadcn/ui site. `.shadcn-site .dark` stands for
+   shadcn's bare `.dark` rule: it would match a `dark` class on the cart root,
+   which is why the cart's theme is an attribute. */
+html.shadcn-site {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #f5f5f5;
+  --muted: #e5e5e5;
+  --muted-foreground: #525252;
+  --accent: #f0f0f0;
+  --border: #e5e5e5;
+  --input: #8a8a8a;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --ring: #4f46e5;
+  --destructive: #b91c1c;
+  --radius: 10px;
+  --scheme: light;
+}
+
+html.shadcn-site.dark,
+.shadcn-site .dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --muted: #2a2a2a;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --border: #262626;
+  --input: #737373;
+  --primary: #a5b4fc;
+  --primary-foreground: #1e1b4b;
+  --ring: #a5b4fc;
+  --destructive: #f87171;
+  --scheme: dark;
+}
+
+html.shadcn-site body {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+/* `?font=latin`: the host font has no Polish letters (main.tsx loads only its
+   ASCII glyphs); the cart inherits the font, the browser takes "ą", "ż" ...
+   from the next family. */
+html.latin-font body {
+  font-family: "Space Grotesk", Georgia, serif !important;
+}

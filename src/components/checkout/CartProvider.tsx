@@ -1,4 +1,4 @@
-import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel";
+import { setAllowedReturnOrigins, setPanelConfig } from "@/src/panel/config";
 import { create } from "@bufbuild/protobuf";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useState } from "react";
@@ -12,7 +12,6 @@ import {
   PreOrderItemSchema,
 } from "src/gen/proto/public/v1/public_api_pb";
 import { PublicApiClient } from "src/public.api.client";
-import zod from "zod";
 import { getCartInstrument, type Instrument } from "@/src/analytics/instrument";
 import type { ExpressCartUpload } from "@/src/express/contracts";
 import { withClientParam } from "@/src/lib/client-header";
@@ -27,16 +26,29 @@ import {
   findProductForCartItem,
 } from "./cart-items";
 import { round } from "./lib/round.number";
-import { LinkRequest } from "./link.request.schema";
+import type { LinkRequest } from "./link.request";
 import {
   createPaymentURL,
   getPaymentMethodChoice,
   getReferenceIfPossible,
   injectReferenceToRequestIfNeeded,
 } from "./methods";
-import { SingleProduct } from "./product.details.model";
+import type { SingleProduct, SingleProductVariant } from "./product.details.model";
 import { useCheckoutStore } from "./state";
-import { getLocale } from "./locale";
+import {
+  parseCountryList,
+  parseStoredCheckout,
+  type Checkout,
+  type CheckoutProduct,
+  type GooglePayConfig,
+} from "./validate";
+import { getLocale, normalizeLocale } from "./locale";
+import {
+  toLineDetails,
+  writeSnapshot as writeCartSnapshot,
+  type CartLineDetails,
+  type SnapshotAnswer,
+} from "./cart-snapshot";
 import { useCheckoutTextsConfig } from "./texts.context";
 import { getCheckoutText, type CheckoutTexts } from "./texts";
 import {
@@ -48,6 +60,7 @@ import {
   type PendingOrderOutcome,
 } from "./pending-order";
 import type { PaymentMethod, PaymentMethodChoice } from "./payment-method";
+import { createWalletAvailability } from "./wallet-availability";
 
 export const MARKETING_AGREEMENT_ID = "__m_a";
 
@@ -124,9 +137,14 @@ export interface CartMethods {
 
   /**
    * Creates the order of the cart (`/buy`). `paymentMethod` is sent only when
-   * given, that is when the buyer was offered the choice.
+   * given, that is when the buyer was offered the choice. `shownAmounts`: internal.
    */
-  redirectToNextStep: (args?: { paymentMethod?: PaymentMethod }) => Promise<
+  redirectToNextStep: (args?: {
+    paymentMethod?: PaymentMethod;
+    shownAmounts?: Record<string, number>;
+    /** Internal: the stored lines `/buy` is built from; `false` sends nothing (`cart-changed`). */
+    accept?: (lines: LocalCartLine[]) => boolean;
+  }) => Promise<
     Err | { url: string; orderId?: string; projectId?: string }
   >;
 
@@ -228,6 +246,9 @@ const CartProvider = ({
 
   useEffect(() => {
     updateNumberOfProductsInCart();
+    // Keeps the `storage` listener on while the drawer is closed, so the badge
+    // follows a cart changed in another tab.
+    return subscribeToLocalCart(() => {});
   }, []);
 
   const projectID = getProjectID();
@@ -241,7 +262,7 @@ const CartProvider = ({
       void reconcileOrderOfLastPayment(projectID).then((outcome) => {
         // An open drawer refetches on focus before the order answers.
         if (outcome === "paid") {
-          void queryClient.invalidateQueries({ queryKey: ["cart"] });
+          void queryClient.invalidateQueries({ queryKey: ["cart-products"] });
         }
       });
     };
@@ -333,10 +354,25 @@ export function reconcileOrderOfLastPayment(
   return reconciling;
 }
 
+/**
+ * Internal options of the `/products` read (not part of `CartMethods`):
+ * - `writeSnapshot` (default `true`): remember the answer in the local cart
+ *   snapshot. The add price check passes `false`: the add writes it itself
+ *   after the line is saved (plan P6, N4).
+ * - `revalidate`: bypass the HTTP cache (`cache: "no-cache"`, no extra header,
+ *   so no preflight), for the price gate (D18, N3).
+ */
+type GetProductsArgs = {
+  items?: CheckoutProduct[];
+  locale?: string;
+  writeSnapshot?: boolean;
+  revalidate?: boolean;
+};
+
 // @ts-ignore
 const getProducts: (
   projectID: string,
-  args?: { items?: CheckoutProduct[]; locale?: string },
+  args?: GetProductsArgs,
 ) => Promise<
   | Err
   | {
@@ -349,10 +385,7 @@ const getProducts: (
       /** The catalog product, when `productID` is one of its variants. */
       catalogProductID?: string;
     }[]
-> = async (
-  projectID: string,
-  args?: { items?: CheckoutProduct[]; locale?: string },
-) => {
+> = async (projectID: string, args?: GetProductsArgs) => {
   let products: CheckoutProduct[] = [];
 
   if (args?.items != null && args.items.length > 0) {
@@ -371,7 +404,9 @@ const getProducts: (
 
   const params = new URLSearchParams();
   params.set("ids", productIds.join(","));
-  params.set("locale", args?.locale ?? getLocale());
+  // One spelling for the drawer, the add and the wallets (N16).
+  const locale = normalizeLocale(args?.locale) ?? getLocale();
+  params.set("locale", locale);
 
   let payload: {
     success: boolean;
@@ -381,9 +416,9 @@ const getProducts: (
   try {
     const result = await fetch(
       withClientParam(buildURL(projectID, `/products?${params.toString()}`)),
-      {
-        method: "GET",
-      },
+      args?.revalidate === true
+        ? { method: "GET", cache: "no-cache" }
+        : { method: "GET" },
     );
 
     // A backend failure is not an empty cart.
@@ -398,7 +433,7 @@ const getProducts: (
   }
 
   // Items the backend does not know (removed product, wrong id) are dropped.
-  return products.flatMap((product) => {
+  const resolved = products.flatMap((product) => {
     const details = findProductForCartItem(product.productID, payload.result);
     if (details == null) {
       return [];
@@ -414,7 +449,127 @@ const getProducts: (
       },
     ];
   });
+  if (args?.writeSnapshot !== false) {
+    rememberProducts(projectID, locale, resolved, products);
+  }
+  return resolved;
 };
+
+/**
+ * Writes `/products` details into the local snapshot (the one write path,
+ * `cart-snapshot.ts`, never throws). Entries are kept for the products of the
+ * local cart and of `extra` (the items of the call).
+ */
+function rememberProducts(
+  projectID: string,
+  locale: string,
+  resolved: {
+    productID: string;
+    details?: SingleProduct;
+    catalogProductID?: string;
+  }[],
+  extra: { productID: string }[] = [],
+): void {
+  try {
+    const answers: SnapshotAnswer[] = resolved.flatMap((line) =>
+      line.details == null
+        ? []
+        : [
+            {
+              productID: line.productID,
+              details: toLineDetails(line.details),
+              ...(line.catalogProductID != null
+                ? { catalogProductID: line.catalogProductID }
+                : {}),
+            },
+          ],
+    );
+    const referenced = new Set<string>(extra.map((line) => line.productID));
+    for (const line of readLocalCartLines()) {
+      referenced.add(line.productID);
+    }
+    writeCartSnapshot(locale, answers, referenced, { projectID });
+  } catch {
+    // a cache must never break the cart
+  }
+}
+
+/** Writes a drawer answer into the local snapshot (never throws). */
+export function rememberCartAnswer(
+  projectID: string,
+  locale: string | undefined,
+  answer: CartProductsAnswer,
+): void {
+  try {
+    const referenced = new Set(readLocalCartLines().map((line) => line.productID));
+    writeCartSnapshot(
+      normalizeLocale(locale) ?? getLocale(),
+      answer.entries,
+      referenced,
+      { projectID },
+    );
+  } catch {
+    // a cache must never break the cart
+  }
+}
+
+/** One server answer for the drawer: the details of each product it knows. */
+export type CartProductsAnswer = {
+  /** Every product id that was asked for. */
+  requested: string[];
+  /** The products the server knows; a requested id missing here is unknown to it. */
+  entries: { productID: string; details: CartLineDetails; catalogProductID?: string }[];
+  /** `Date.now()` when the request started. */
+  startedAt: number;
+  /** The request bypassed the HTTP cache. */
+  noCache: boolean;
+};
+
+/**
+ * `/products` for the local cart, for the drawer's revalidation query. Writes
+ * the snapshot unless `writeSnapshot: false` (the open drawer takes the answer
+ * first and writes it with `rememberCartAnswer`, so its own answer never
+ * reaches the screen as a snapshot price); throws on a failed request.
+ */
+export async function fetchCartProducts(
+  projectID: string,
+  locale: string | undefined,
+  options: { revalidate?: boolean; writeSnapshot?: boolean } = {},
+): Promise<CartProductsAnswer> {
+  const startedAt = Date.now();
+  const requested = Array.from(
+    new Set(readLocalCartLines().map((line) => line.productID)),
+  );
+  const result = await getProducts(projectID, {
+    locale,
+    revalidate: options.revalidate === true,
+    writeSnapshot: options.writeSnapshot,
+  });
+  if (isErr(result)) {
+    throw new Error(`cannot load the products of the cart: ${result.error}`);
+  }
+  const entries: CartProductsAnswer["entries"] = [];
+  const seen = new Set<string>();
+  for (const line of result) {
+    if (line.details == null || seen.has(line.productID)) {
+      continue;
+    }
+    seen.add(line.productID);
+    entries.push({
+      productID: line.productID,
+      details: toLineDetails(line.details),
+      ...(line.catalogProductID != null
+        ? { catalogProductID: line.catalogProductID }
+        : {}),
+    });
+  }
+  return {
+    requested,
+    entries,
+    startedAt,
+    noCache: options.revalidate === true,
+  };
+}
 
 export const useCartProvider = () => {
   const context = useContext(CartProviderContext);
@@ -428,33 +583,8 @@ export const useCartProvider = () => {
 
 export default CartProvider;
 
-const googlePayConfigSchema = zod.object({
-  isAvailable: zod.boolean(),
-  merchantId: zod.string(),
-  merchantName: zod.string(),
-  gateway: zod.string(),
-  gatewayId: zod.string(),
-});
-const checkoutProduct = zod.object({
-  id: zod.string(),
-  productID: zod.string(),
-  quantity: zod.number(),
-  priceVersion: zod.string().optional(),
-  amount: zod.number().int().nonnegative().optional(),
-  metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-  url: zod.string().optional(),
-});
-type CheckoutProduct = zod.infer<typeof checkoutProduct>;
-const checkoutSchema = zod.object({
-  country: zod.string().optional(),
-  couponCode: zod.string().optional(),
-  selectedDeliveryMethod: zod.string().optional(),
-  postalCode: zod.string().optional(),
-  email: zod.string().optional(),
-  products: zod.array(checkoutProduct).optional(),
-  googlePayConfig: googlePayConfigSchema.optional(),
-});
-export type GooglePayConfig = zod.infer<typeof googlePayConfigSchema>;
+export type { Checkout, GooglePayConfig };
+
 const emptyCheckout: Checkout = {
   country: undefined,
   couponCode: undefined,
@@ -464,7 +594,6 @@ const emptyCheckout: Checkout = {
   products: [],
   googlePayConfig: undefined,
 };
-export type Checkout = zod.infer<typeof checkoutSchema>;
 
 const checkoutKey = "checkout";
 
@@ -482,6 +611,19 @@ export type LocalCartLine = {
   url?: string;
 };
 
+/**
+ * Writes a server-confirmed `priceVersion` into one local line: the buyer has
+ * seen the price it stands for (price gate, D18). Throws when the storage
+ * refuses the write.
+ */
+export function adoptPriceVersion(lineId: string, priceVersion: string): void {
+  const checkout = getCheckout();
+  const products = (checkout.products ?? []).map((line) =>
+    line.id === lineId ? { ...line, priceVersion } : line,
+  );
+  saveCheckout({ ...checkout, products });
+}
+
 /** The local cart lines (empty on the server or with a broken cart). */
 export function readLocalCartLines(): LocalCartLine[] {
   if (typeof localStorage == "undefined") {
@@ -490,12 +632,24 @@ export function readLocalCartLines(): LocalCartLine[] {
   return (getCheckout().products ?? []).map((line) => ({ ...line }));
 }
 
-/** Stable signature of the local cart content: one `productID:quantity` per line, sorted. */
-export function readLocalCartSignature(): string {
-  return readLocalCartLines()
-    .map((line) => `${line.productID}:${line.quantity}`)
+/** The country stored with the cart, `undefined` when none (reads only, writes nothing). */
+export function readCheckoutCountry(): string | undefined {
+  return getCheckout().country;
+}
+
+/** One `productID:quantity:priceVersion:amount` per line, sorted (the `/payment-methods` key). */
+export function cartLinesSignature(lines: readonly LocalCartLine[]): string {
+  return lines
+    .map(
+      (line) =>
+        `${line.productID}:${line.quantity}:${line.priceVersion ?? ""}:${line.amount ?? ""}`,
+    )
     .sort()
     .join(",");
+}
+
+export function readLocalCartSignature(): string {
+  return cartLinesSignature(readLocalCartLines());
 }
 
 /**
@@ -604,18 +758,22 @@ export function appendLocalCartLines(
 function getCheckout(): Checkout {
   try {
     const value = localStorage.getItem(checkoutKey);
+    // A copy: callers push lines into the result, which must never reach the
+    // shared default.
     if (value == null) {
-      return emptyCheckout;
+      return { ...emptyCheckout, products: [] };
     }
-    return checkoutSchema.parse(JSON.parse(value));
+    return parseStoredCheckout(JSON.parse(value));
   } catch (e) {
-    return emptyCheckout;
+    return { ...emptyCheckout, products: [] };
   }
 }
 
 async function addProducts(projectID: string, products: CartProduct[]) {
+  // Nothing is written to the snapshot before the line is saved (P6, N4).
   const latestProducts = await getProducts(projectID, {
     items: products.map((item, index) => ({ ...item, id: `price-check-${index}` })),
+    writeSnapshot: false,
   });
   if (isErr(latestProducts)) return latestProducts;
   const missingIDs = findMissingProductIDs(
@@ -657,6 +815,9 @@ async function addProducts(projectID: string, products: CartProduct[]) {
     })),
   });
   saveCheckout(checkout);
+  // Same task, no `await` in between: the drawer never shows the new line
+  // without its details. A failed snapshot write never fails the add.
+  rememberProducts(projectID, getLocale(), latestProducts);
   updateNumberOfProductsInCart();
   return undefined;
 }
@@ -722,6 +883,8 @@ let storageListenerAttached = false;
 function handleLocalCartStorage(event: StorageEvent): void {
   if (event.key === checkoutKey) {
     notifyLocalCartChanged();
+    // The trigger badge follows a change made in another tab.
+    updateNumberOfProductsInCart();
   }
 }
 
@@ -755,10 +918,14 @@ function notifyLocalCartChanged(): void {
   }
 }
 
-/** The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when it is empty. */
+/**
+ * The `/buy` body of the cart (also sent to `payment-methods`); `undefined` when
+ * it is empty. `shownAmounts`: see `suggestedAmounts`.
+ */
 export function cartLinkRequest(
   checkout: Checkout,
   locale: string,
+  shownAmounts?: Readonly<Record<string, number>>,
 ): LinkRequest | undefined {
   if (checkout.products == null || checkout.products.length == 0) {
     return undefined;
@@ -785,7 +952,11 @@ export function cartLinkRequest(
         quantity: el.quantity,
         priceVersion: el.priceVersion,
         // The buyer's pay-what-you-want amount, in minor units per item.
-        ...(el.amount != null ? { amount: el.amount } : {}),
+        ...(el.amount != null
+          ? { amount: el.amount }
+          : shownAmounts?.[el.id] != null
+            ? { amount: shownAmounts[el.id] }
+            : {}),
       };
     }),
     askForNote: true,
@@ -814,13 +985,7 @@ export const getCheckoutMethods: (
       }
 
       try {
-        const result = await PublicApiClient.get(
-          HOST,
-        ).isOneClickPaymentAvailable({
-          projectId: projectID,
-        });
-
-        return result.applePay;
+        return await walletAvailability.applePay(projectID);
       } catch (e) {
         console.error("Error checking if Apple Pay is available", e);
         return false;
@@ -923,7 +1088,7 @@ export const getCheckoutMethods: (
       }
     },
     async clearCart(): Promise<Err | void> {
-      const empty = structuredClone(emptyCheckout);
+      const empty = { ...emptyCheckout, products: [] };
       empty.country = getCheckout()?.country;
       saveCheckout(empty);
       updateNumberOfProductsInCart();
@@ -944,14 +1109,7 @@ export const getCheckoutMethods: (
       }
 
       try {
-        return zod
-          .array(
-            zod.object({
-              name: zod.string(),
-              code: zod.string(),
-            }),
-          )
-          .parse(await result.json());
+        return parseCountryList(await result.json());
       } catch (e) {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error
@@ -1056,8 +1214,15 @@ export const getCheckoutMethods: (
 
     async redirectToNextStep(args?: {
       paymentMethod?: PaymentMethod;
+      shownAmounts?: Record<string, number>;
+      accept?: (lines: LocalCartLine[]) => boolean;
     }): Promise<Err | { url: string; orderId?: string; projectId?: string }> {
-      const payload = cartLinkRequest(getCheckout(), locale);
+      // One read: what is checked is what is sent (S12).
+      const checkout = getCheckout();
+      if (args?.accept?.(checkout.products ?? []) === false) {
+        return Err("cart-changed", "badInput");
+      }
+      const payload = cartLinkRequest(checkout, locale, args?.shownAmounts);
       if (payload == null) {
         return Err("cart-is-empty", "badInput");
       }
@@ -1482,32 +1647,38 @@ export const getCheckoutMethods: (
   };
 };
 
-async function resolveGooglePayConfiguration(projectID: string) {
-  const checkout = getCheckout();
-  if (checkout.googlePayConfig?.isAvailable != true) {
-    const result = await PublicApiClient.get(HOST).isOneClickPaymentAvailable({
-      projectId: projectID,
-    });
-    if (result.googlePay == true && result.googlePayConfig != null) {
-      checkout.googlePayConfig = {
-        isAvailable: true,
-        gateway: result.googlePayConfig.gateway,
-        gatewayId: result.googlePayConfig.gatewayMerchantId,
-        merchantName: result.googlePayConfig.merchantName,
-        merchantId: result.googlePayConfig.merchantId,
-      };
-    } else {
-      checkout.googlePayConfig = {
-        isAvailable: false,
-        gateway: "",
-        gatewayId: "",
-        merchantName: "",
-        merchantId: "",
-      };
-    }
+/**
+ * The one `isOneClickPaymentAvailable` answer of the page (slice 5): shared by
+ * the drawer and the Apple Pay and Google Pay buttons, reused for 10 minutes;
+ * Google Pay's answer is kept in the stored cart.
+ */
+export const walletAvailability = createWalletAvailability({
+  ask: (host, projectID) =>
+    PublicApiClient.get(host).isOneClickPaymentAvailable({ projectId: projectID }),
+  host: () => HOST,
+  readStored: () => getCheckout().googlePayConfig,
+  writeStored: (config) => {
+    // Read again at write time: the lines may have changed during the
+    // request. Not a cart change, so no listener is told (an express button
+    // would ask its availability again for nothing).
+    const checkout = getCheckout();
+    localStorage.setItem(
+      checkoutKey,
+      JSON.stringify({ ...checkout, googlePayConfig: config }),
+    );
+  },
+});
+
+/** Starts the wallet check for the drawer at the open, next to `/products` (slice 5). */
+export function warmWalletAvailability(projectID: string): void {
+  if (typeof window == "undefined") {
+    return;
   }
-  saveCheckout(checkout);
-  return checkout.googlePayConfig;
+  walletAvailability.googlePay(projectID).catch(() => {});
+}
+
+function resolveGooglePayConfiguration(projectID: string) {
+  return walletAvailability.googlePay(projectID);
 }
 
 function resolveProductDetailsFromSingleProduct(
@@ -1529,6 +1700,7 @@ function resolveProductDetailsFromSingleProduct(
         price: variant.price,
         currency: variant.currency,
         pricing: variant.pricing,
+        priceType: variantPriceType(variant) ?? product.priceType,
       };
     }
     return product;
@@ -1552,7 +1724,14 @@ function resolveProductDetailsFromSingleProduct(
     availableQuantity: variant.availableQuantity,
     isDeliverable: variant.isDeliverable,
     images: variant.images ?? product.images,
+    priceType: variantPriceType(variant) ?? product.priceType,
   };
+}
+
+/** The backend sends `priceType` per variant too; the pay-what-you-want rule needs the variant's own. */
+function variantPriceType(variant: SingleProductVariant): string | undefined {
+  const value = (variant as { priceType?: unknown }).priceType;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 type ApplePaySessionArgs = {

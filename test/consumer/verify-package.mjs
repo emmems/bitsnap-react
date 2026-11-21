@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
 
 /**
@@ -47,6 +48,7 @@ const requiredFiles = [
   "index.d.ts",
   "index.d.mts",
   "index.css",
+  "cart.css",
   "models.d.ts",
   "internal.d.ts",
   "errors.d.ts",
@@ -54,6 +56,10 @@ const requiredFiles = [
   "catalog.mjs",
   "catalog.d.ts",
   "catalog.d.mts",
+  "cart.js",
+  "cart.mjs",
+  "cart.d.ts",
+  "cart.d.mts",
   "course.js",
   "course.mjs",
   "course.d.ts",
@@ -193,6 +199,131 @@ assert.ok(
   !/from"\.\/(CartProvider|methods)-/.test(catalogEsm),
   "dist/catalog.mjs imports the checkout statically",
 );
+
+// `bitsnap-react/cart` (1.32.0): the cart without the rest of the SDK. Its
+// runtime names are listed once, in scripts/cart-exports.mjs (the CommonJS
+// shim is built from the same list).
+{
+  const { CART_EXPORTS } = await import(
+    pathToFileURL(join(packageRoot, "scripts", "cart-exports.mjs")).href
+  );
+  const require = createRequire(import.meta.url);
+  const esmCart = await import(join(dist, "cart.mjs"));
+  const cjsCart = require(join(dist, "cart.js"));
+  const cjsIndex = require(join(dist, "index.js"));
+  const names = (entry) => Object.keys(entry).filter((key) => key !== "__esModule").sort();
+  const expected = [...CART_EXPORTS].sort();
+
+  assert.deepEqual(names(esmCart), expected, "dist/cart.mjs exports differ from scripts/cart-exports.mjs");
+  assert.deepEqual(names(cjsCart), expected, "dist/cart.js exports differ from scripts/cart-exports.mjs");
+  for (const name of expected) {
+    // Same values as the main entry, so an app that mixes `.` and `/cart` has one cart.
+    assert.strictEqual(esmCart[name], built[name], `dist/cart.mjs ${name} is not the one dist/index.mjs exports`);
+    assert.strictEqual(cjsCart[name], cjsIndex[name], `dist/cart.js ${name} is not the one dist/index.js exports`);
+  }
+  assert.equal(typeof esmCart.BitsnapCheckout, "function");
+  assert.equal(typeof cjsCart.BitsnapCheckout, "function");
+  for (const method of ["addProductToCart", "showCart", "hideCart", "warmUp"]) {
+    assert.equal(typeof esmCart.Bitsnap[method], "function", `missing Bitsnap.${method} in dist/cart.mjs`);
+  }
+  assert.ok(
+    readFileSync(join(dist, "cart.js"), "utf8").length < 2000,
+    "dist/cart.js must only re-export the shared chunks",
+  );
+
+  // Resolution through the exports map: both import conditions, the types, and the stylesheet.
+  const exportsMap = packageJSON.exports;
+  assert.equal(exportsMap["./cart"].import.default, "./dist/cart.mjs");
+  assert.equal(exportsMap["./cart"].require.default, "./dist/cart.js");
+  assert.equal(exportsMap["./cart"].import.types, "./dist/cart.d.mts");
+  assert.equal(exportsMap["./cart"].require.types, "./dist/cart.d.ts");
+  assert.deepEqual(packageJSON.typesVersions["*"].cart, ["./dist/cart.d.ts"]);
+  for (const subpath of ["./cart/cart.css", "./dist/cart.css"]) {
+    assert.equal(exportsMap[subpath].import, "./dist/cart.css", `${subpath} must point at dist/cart.css`);
+    assert.equal(exportsMap[subpath].require, "./dist/cart.css", `${subpath} must point at dist/cart.css`);
+  }
+  const resolved = createRequire(join(packageRoot, "package.json"));
+  assert.equal(resolved.resolve("bitsnap-react/cart"), join(dist, "cart.js"));
+  assert.equal(resolved.resolve("bitsnap-react/cart/cart.css"), join(dist, "cart.css"));
+
+  // The declarations do not pull zod in, and say what the entry exports.
+  const cartDeclaration = readFileSync(join(dist, "cart.d.mts"), "utf8");
+  for (const name of ["BitsnapCartProps", "LinkRequest", "CheckoutAppearance", "BuyErrorData"]) {
+    assert.match(cartDeclaration, new RegExp(name), `dist/cart.d.mts lacks ${name}`);
+  }
+  // No declaration `cart` reaches (itself plus the shared `.d.ts` files it imports) needs zod
+  // or the `models` entry, which is where zod's types live.
+  for (const entry of ["cart.d.mts", "cart.d.ts"]) {
+    const seen = new Set();
+    const queue = [entry];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const text = readFileSync(join(dist, current), "utf8");
+      assert.doesNotMatch(text, /^\s*(?:import|export)\b[^\n;]*['"]zod['"]/m, `dist/${current} imports zod`);
+      for (const match of text.matchAll(/^\s*(?:import|export)\b[^\n;]*?['"](\.\/[^'"]+)['"]/gm)) {
+        const target = match[1].replace(/\.mjs$/, ".d.mts").replace(/\.js$/, ".d.ts");
+        assert.ok(!/(^|\/)models\.d\.m?ts$/.test(target), `dist/${current} imports the models entry (${target})`);
+        queue.push(target);
+      }
+    }
+  }
+
+  // What a bundler ships for `import { BitsnapCheckout } from "bitsnap-react/cart"`: the metafile
+  // lists every module of the static and the lazy graph. None of these may be in it.
+  const result = await build({
+    stdin: { contents: 'import { BitsnapCheckout } from "./dist/cart.mjs"; console.log(BitsnapCheckout);', resolveDir: packageRoot },
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    splitting: true,
+    outdir: join(packageRoot, ".cart-subpath-check"),
+    write: false,
+    metafile: true,
+    logLevel: "silent",
+    external: ["react", "react-dom", "react/jsx-runtime"],
+    loader: { ".css": "empty" },
+  });
+  const modules = Object.keys(result.metafile.inputs);
+  for (const forbidden of [
+    "node_modules/zod/",
+    "node_modules/hls.js/",
+    "node_modules/dompurify/",
+    "node_modules/lucide-react/",
+    "node_modules/tailwind-merge/",
+    "node_modules/class-variance-authority/",
+    "node_modules/@radix-ui/react-select/",
+    "node_modules/react-phone-number-input/",
+    "node_modules/input-otp/",
+  ]) {
+    const hits = modules.filter((file) => file.includes(forbidden));
+    assert.deepEqual(hits, [], `the cart subpath bundle contains ${forbidden}`);
+  }
+  assert.ok(
+    modules.some((file) => file.includes("node_modules/") && file.includes("@bufbuild/protobuf")),
+    "the metafile looks empty: no dependency of the cart was resolved",
+  );
+
+  // The static dist files of `cart.mjs` carry no panel and no returns markup.
+  const staticFiles = new Set();
+  const queue = ["cart.mjs"];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (staticFiles.has(current)) continue;
+    staticFiles.add(current);
+    const text = readFileSync(join(dist, current), "utf8");
+    for (const match of text.matchAll(/(?:from\s*|import\s*)["'](\.{1,2}\/[^"']+\.mjs)["']/g)) {
+      queue.push(join(dirname(current), match[1]));
+    }
+  }
+  const staticText = [...staticFiles].map((file) => readFileSync(join(dist, file), "utf8")).join("\n");
+  const everything = readWithChunks("index.mjs").text;
+  for (const marker of ["data-bitsnap-panel", "data-bitsnap-returns"]) {
+    assert.ok(everything.includes(marker), `control: ${marker} is not in the main entry at all`);
+    assert.ok(!staticText.includes(marker), `the static graph of dist/cart.mjs contains ${marker}`);
+  }
+}
 
 // The course view is a subpath that `Panel` loads on demand: the main ESM
 // entry must reach it only through a dynamic import, so the video player,
@@ -422,7 +553,11 @@ assert.ok(
     }
   }
   const gzipped = gzipSync(embed, { level: 9 }).length;
-  assert.ok(gzipped < 8 * 1024, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8192)`);
+  // 8.25 KB since 1.29.1: making `bitsnap.site` a Bitsnap host and keeping cookies off shared
+  // roots (host list, parent-domain split, full-chain expiry) took the script from ~8.08 KB to
+  // 8.21 KB. Trimming the new code saved only a few bytes; the rest is the validated event
+  // contract the tracker shares with the collector.
+  assert.ok(gzipped < 8448, `dist/embed/analytics.js is ${gzipped} bytes gzipped (limit 8448)`);
 }
 
 // 3D viewer: `bitsnap-react/viewer3d` is ESM only and the only entry that can
@@ -584,7 +719,8 @@ for (const file of ["index.d.ts", "returns.d.ts"]) {
   assert.match(text, /BitsnapReturnsProviderProps/, `dist/${file} lacks BitsnapReturnsProviderProps`);
 }
 
-const declaration = readFileSync(join(dist, "index.d.ts"), "utf8");
+// The cart types are declared in `cart.d.ts` and re-exported by `index.d.ts`, like the catalog's.
+const declaration = ["index.d.ts", "cart.d.ts"].map((file) => readFileSync(join(dist, file), "utf8")).join("\n");
 
 assert.match(
   declaration,
@@ -604,11 +740,38 @@ assert.match(
 
 const css = readFileSync(join(dist, "index.css"), "utf8");
 
-assert.match(
-  css,
-  /@layer components\{\[data-bitsnap-checkout\]/,
-  "checkout appearance rules are missing or no longer in the components layer",
-);
+// 1.30.0 ships the checkout rules unlayered on purpose: inside `@layer components`
+// the host's own unlayered CSS beat the cart. They must be present and outside every
+// `@layer` block, at any nesting depth.
+/** Top-level-and-nested spans [start, end) of every `@layer <names> { ... }` block in `source`. */
+function layerBlocks(source) {
+  const spans = [];
+  // `\b` after "layer" and `*` for the names: also matches an anonymous `@layer{`.
+  const opener = /@layer\b[^{};]*\{/g;
+  let match;
+  while ((match = opener.exec(source))) {
+    let depth = 1;
+    let i = opener.lastIndex;
+    for (; i < source.length && depth > 0; i += 1) {
+      if (source[i] === "{") depth += 1;
+      else if (source[i] === "}") depth -= 1;
+    }
+    spans.push([match.index, i]);
+  }
+  return spans;
+}
+{
+  const checkoutRules = [...css.matchAll(/\[data-bitsnap-checkout/g)].map((m) => m.index);
+  assert.ok(checkoutRules.length > 0, "checkout appearance rules are missing from the packaged CSS");
+  const blocks = layerBlocks(css);
+  assert.ok(blocks.length > 0, "the layer scanner found no @layer block: it would pass vacuously");
+  const layered = checkoutRules.filter((at) => blocks.some(([start, end]) => at >= start && at < end));
+  assert.equal(
+    layered.length,
+    0,
+    `${layered.length} checkout rule(s) sit inside an @layer block; they must be unlayered (e.g. near: ${css.slice(layered[0] ?? 0, (layered[0] ?? 0) + 60)})`,
+  );
+}
 assert.ok(
   !css.includes(".bitsnap-react [data-bitsnap-checkout"),
   "checkout appearance rules must not be rewritten into descendant selectors",
@@ -617,6 +780,22 @@ assert.ok(
   css.includes("--bitsnap-checkout-button-background"),
   "checkout tokens are missing from the packaged CSS",
 );
+
+// 1.32.0: the cart stylesheet is the hand-written `cart.css`, minified to
+// `dist/cart.css` and appended to `dist/index.css` (scripts/build-cart-css.mjs).
+{
+  const cart = readFileSync(join(dist, "cart.css"), "utf8").trim();
+  assert.ok(cart.length > 1000, "dist/cart.css is empty");
+  assert.ok(css.includes(cart), "dist/cart.css is not contained verbatim in dist/index.css");
+  assert.doesNotMatch(cart, /@layer\b/, "dist/cart.css must be unlayered");
+  for (const match of cart.matchAll(/var\(\s*(--[\w-]+)/g)) {
+    assert.match(match[1], /^--(bitsnap-checkout-|bsc-)/, `dist/cart.css reads ${match[1]}: no Tailwind theme variables`);
+  }
+  assert.ok(!cart.includes(".bitsnap-react"), "dist/cart.css must not be prefixed");
+  // One checkout sheet: the firewall exists once in index.css (no second, prefixed copy).
+  assert.equal(css.split("all:initial").length - 1, 1, "the cart firewall appears more than once in dist/index.css");
+  assert.equal(css.indexOf(cart) > css.lastIndexOf("@layer"), true, "cart.css must come after every layered block");
+}
 
 assert.ok(
   css.includes("[data-bitsnap-returns"),

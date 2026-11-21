@@ -1,10 +1,10 @@
-import GooglePayButton from "@google-pay/button-react";
+import React from "react";
 import CartProvider, { useCartProvider } from "./CartProvider";
 import { isErr } from "./lib/err";
 import { currentProjectID } from "./project-id";
-import { Spinner } from "@/src/ui/spinner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { sendAnalyticEvent } from "./frontent.analytics";
+import { useCheckoutText } from "./texts.context";
 import {
   InstrumentProvider,
   useInstrument,
@@ -18,6 +18,8 @@ export type Props = {
   buttonColor?: "white" | "black";
   style?: {
     width?: string;
+    /** Height of the button; Google's default is 40px. */
+    height?: string;
   };
   items: {
     name: string;
@@ -34,6 +36,24 @@ export type Props = {
    */
   analytics?: AnalyticsOption;
 };
+
+// Google's button library loads with the first button that has a
+// configuration to show (it already appears only after that request): a
+// CommonJS package cannot be tree-shaken, so a static import would put it in
+// every bundle of the library's entry (slice 5). Made on first use: a
+// top-level call cannot be tree-shaken either.
+let googlePayButton:
+  | React.LazyExoticComponent<typeof import("@google-pay/button-react").default>
+  | undefined;
+function googlePayButtonComponent() {
+  // A library that cannot load shows no button, like an unavailable wallet.
+  googlePayButton ??= React.lazy(() =>
+    import("@google-pay/button-react").catch(() => ({
+      default: (() => null) as unknown as typeof import("@google-pay/button-react").default,
+    })),
+  );
+  return googlePayButton;
+}
 
 function GooglePayButtonComponent({
   items,
@@ -85,8 +105,9 @@ function GooglePayButtonComponent({
     return null;
   }
 
+  const GooglePayButton = googlePayButtonComponent();
   return (
-    <>
+    <React.Suspense fallback={null}>
       <GooglePayButton
         buttonSizeMode={buttonSizeMode}
         buttonColor={buttonColor}
@@ -160,8 +181,28 @@ function GooglePayButtonComponent({
           }
         }}
       />
-      {isPending ? <Spinner /> : null}
-    </>
+      <WalletBusy busy={isPending} />
+    </React.Suspense>
+  );
+}
+
+/**
+ * The status under the Google Pay button: a spinner and a visually hidden
+ * "Confirming your payment…" while the payment is confirmed. On the page
+ * before that, so the text is announced (a region added with its text is
+ * often silent); its own attribute styles it outside the cart too.
+ */
+export function WalletBusy({ busy }: { busy: boolean }) {
+  const pendingText = useCheckoutText("expressPending");
+  return (
+    <span role="status" data-bitsnap-checkout-part="wallet-busy">
+      {busy ? (
+        <>
+          <span className="bsc-spinner" aria-hidden="true" />
+          <span data-bitsnap-checkout-part="sr">{pendingText}</span>
+        </>
+      ) : null}
+    </span>
   );
 }
 

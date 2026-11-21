@@ -16,6 +16,7 @@ export {
   type CheckoutTheme,
 } from "./checkout/appearance";
 export { type CheckoutTexts } from "./checkout/texts";
+export { type CartPresentation } from "./checkout/presentation";
 export * from "./products";
 export { BitsnapReturns, type BitsnapReturnsProps } from "./returns/BitsnapReturns";
 export {
@@ -117,7 +118,7 @@ export {
 export { setProjectID } from "./checkout/CartProvider";
 export { getLocale, setLocale } from "./checkout/locale";
 export { setCustomHost } from "./checkout/constants";
-export { type LinkRequest } from "./checkout/link.request.schema";
+export { type LinkRequest } from "./checkout/link.request";
 export * from "./checkout/methods";
 export { ITEM_IDS_NOT_FOUND, type BuyErrorData } from "./checkout/buy-error";
 export { Environment } from "../gen/proto/common/v1/environment_pb";

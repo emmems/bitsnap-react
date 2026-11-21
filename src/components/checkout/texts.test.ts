@@ -6,11 +6,14 @@ import { getCheckoutText, resolveCheckoutTexts } from "./texts.ts";
 const english = {
   cart: "Cart",
   emptyCart: "Your cart is empty.",
+  continueShopping: "Continue shopping",
   total: "Total:",
   delivery: "+ delivery",
   chooseCountry: "Choose a country",
-  nextStep: "Next step",
+  nextStep: "Go to checkout",
+  orDivider: "or",
   unavailableProducts: "Not all products are available.",
+  unavailableProduct: "Unavailable product",
   checkoutFailed: "Something went wrong. Please try again later.",
   noPaymentGateway:
     "This shop doesn't accept online payments yet. Try again later or contact the seller.",
@@ -23,6 +26,10 @@ const english = {
   currencyUnsupported:
     "The shop doesn't accept payments in this currency. Contact the seller.",
   priceChanged: "The product price has changed. Refresh the page to see the current price.",
+  priceUpdated: "The price changed: was {was}, now {now}.",
+  reviewPrices: "Check the prices and the total, then continue.",
+  walletsUpdating: "Updating the cart…",
+  updateFailed: "Could not update this item. Your cart is unchanged.",
   close: "Close cart",
   remove: "Remove",
   quantity: "Quantity",
@@ -80,11 +87,14 @@ const english = {
 const polish = {
   cart: "Koszyk",
   emptyCart: "Brak produktów w koszyku.",
+  continueShopping: "Wróć do zakupów",
   total: "Suma:",
   delivery: "+ dostawa",
   chooseCountry: "Wybierz kraj",
-  nextStep: "Następny krok",
+  nextStep: "Przejdź do kasy",
+  orDivider: "lub",
   unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
+  unavailableProduct: "Produkt niedostępny",
   checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
   noPaymentGateway:
     "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
@@ -97,6 +107,10 @@ const polish = {
   currencyUnsupported:
     "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
   priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
+  priceUpdated: "Cena się zmieniła: była {was}, jest {now}.",
+  reviewPrices: "Sprawdź ceny i sumę, a potem przejdź dalej.",
+  walletsUpdating: "Aktualizujemy koszyk…",
+  updateFailed: "Nie udało się zmienić tej pozycji. Koszyk pozostał bez zmian.",
   close: "Zamknij koszyk",
   remove: "Usuń",
   quantity: "Ilość",

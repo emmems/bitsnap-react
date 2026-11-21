@@ -5,6 +5,13 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
 
 const page = setupReactPage();
 
+// "Next step" goes on only after every price was on screen for a second (the
+// price gate, D18): the tests move this clock instead of waiting.
+const realNow = Date.now;
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+const lookAtCart = () => void (clockOffset += 1500);
+
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let focusManager: typeof import("@tanstack/react-query").focusManager;
@@ -94,7 +101,7 @@ const doc = () => page.win.document;
 const fieldset = () => doc().querySelector<HTMLFieldSetElement>('[data-bitsnap-checkout-slot="paymentMethods"]');
 const radios = () => [...doc().querySelectorAll<HTMLInputElement>('[data-bitsnap-checkout-slot="paymentMethodOption"] input[type="radio"]')];
 const optionTitles = () =>
-  [...doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodOption"] span.font-semibold')].map((el) => el.textContent);
+  [...doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodOption"] .bsc-method-title')].map((el) => el.textContent);
 const errorText = () => doc().querySelector('[data-bitsnap-checkout-slot="error"]')?.textContent;
 
 async function openCart(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
@@ -123,6 +130,7 @@ async function changeCountry(code: string) {
 }
 
 async function clickCheckout() {
+  lookAtCart();
   const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
   await React.act(async () => button.click());
   await settle();
@@ -207,6 +215,7 @@ describe("payment method choice in the cart", () => {
     assert.equal(fieldset(), null);
 
     const button = doc().querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    lookAtCart();
     await React.act(async () => button.click());
     await React.act(async () => answer(choiceOf(["online", "manual"], ["blik"])()));
     await settle();
@@ -345,6 +354,145 @@ describe("payment method choice in the cart", () => {
     assert.equal(JSON.parse(buyBodies[0]).paymentMethod, "manual");
     assert.deepEqual(JSON.parse(page.win.localStorage.getItem("checkout")!).products, []);
     assert.equal(page.win.localStorage.getItem("bitsnap-pending-order"), null);
+  });
+});
+
+describe("payment logos in the method cards", () => {
+  const logo = (id: string, chip?: boolean) => ({
+    id,
+    src: `https://bitsnap.pl/logos/${id}.v1.svg`,
+    alt: id.toUpperCase(),
+    width: id === "wide" ? 60 : 32,
+    height: 20,
+    ...(chip == null ? {} : { chip }),
+  });
+  const withLogos = (logos: unknown, methods = ["online", "manual", "cod"]) => () =>
+    json({ success: true, choice: { methods, manualAccountTypes: ["blik"], logos } });
+  const card = (method: string) => doc().querySelector(`[data-payment-method="${method}"]`)!;
+  const logoIds = (method: string) =>
+    [...card(method).querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodLogo"]')].map((el) =>
+      el.getAttribute("data-payment-logo"),
+    );
+  /** The text a screen reader gets from a card: everything outside aria-hidden subtrees. */
+  const spokenText = (node: Node): string => {
+    if (node.nodeType === 3) return node.textContent ?? "";
+    const el = node as Element;
+    if (el.getAttribute?.("aria-hidden") === "true") return "";
+    if (el.tagName === "IMG") return el.getAttribute("alt") ?? "";
+    return [...node.childNodes].map(spokenText).join("");
+  };
+
+  it("shows each card's logos under its description, in the server's order, with fixed slots", async () => {
+    paymentMethodsResponse = withLogos({
+      online: [logo("blik"), logo("visa", true), logo("wide")],
+      cod: [logo("cash")],
+    });
+    await openCart();
+    assert.deepEqual(logoIds("online"), ["blik", "visa", "wide"]);
+    assert.deepEqual(logoIds("manual"), [], "no logos for manual");
+    assert.equal(card("manual").querySelector('[data-bitsnap-checkout-slot="paymentMethodLogos"]'), null, "no empty row");
+    assert.deepEqual(logoIds("cod"), ["cash"]);
+
+    const row = card("online").querySelector('[data-bitsnap-checkout-slot="paymentMethodLogos"]')!;
+    assert.equal(row.className, "bsc-method-logos");
+    assert.equal(row.previousElementSibling?.className, "bsc-method-desc", "under the description");
+    const img = card("online").querySelector<HTMLImageElement>('[data-payment-logo="wide"] img')!;
+    assert.equal(img.getAttribute("src"), "https://bitsnap.pl/logos/wide.v1.svg");
+    assert.equal(img.getAttribute("width"), "60");
+    assert.equal(img.getAttribute("height"), "20");
+    assert.equal(img.getAttribute("decoding"), "async");
+    assert.equal(img.getAttribute("referrerpolicy"), "no-referrer", "no page URL to the logo host");
+    assert.equal(img.className, "bsc-method-logo-img");
+  });
+
+  it("shows no logos for an old server and none when there is no choice", async () => {
+    paymentMethodsResponse = choiceOf(["online", "manual"], ["blik"]);
+    await openCart();
+    assert.ok(fieldset());
+    assert.equal(doc().querySelector('[data-bitsnap-checkout-slot="paymentMethodLogos"]'), null);
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    doc().body.innerHTML = "";
+
+    paymentMethodsResponse = () => json({ success: true, choice: null, logos: { online: [logo("blik")] } });
+    await openCart();
+    assert.equal(fieldset(), null);
+    assert.equal(doc().querySelector("img"), null, "nothing anywhere in the cart");
+  });
+
+  it("removes a logo that fails to load and keeps the others", async () => {
+    paymentMethodsResponse = withLogos({ online: [logo("blik"), logo("visa")], manual: [logo("transfer")] });
+    await openCart();
+    const blocked = card("online").querySelector('[data-payment-logo="blik"] img')!;
+    await React.act(async () => void blocked.dispatchEvent(new page.win.Event("error")));
+    assert.deepEqual(logoIds("online"), ["visa"]);
+    assert.deepEqual(logoIds("manual"), ["transfer"]);
+
+    const last = card("manual").querySelector('[data-payment-logo="transfer"] img')!;
+    await React.act(async () => void last.dispatchEvent(new page.win.Event("error")));
+    const row = card("manual").querySelector('[data-bitsnap-checkout-slot="paymentMethodLogos"]');
+    assert.equal(row?.childElementCount ?? 0, 0, "the emptied row has nothing (cart.css hides it with :empty)");
+  });
+
+  it("puts a chip logo on its tile class, in the dark and the light theme", async () => {
+    paymentMethodsResponse = withLogos({ online: [logo("blik"), logo("visa", true)] });
+    await openCart();
+    const root = doc().querySelector('[data-bitsnap-checkout="root"]')!;
+    assert.equal(root.getAttribute("data-bitsnap-checkout-theme"), "dark", "the default theme is dark");
+    assert.equal(root.classList.contains("dark"), false, "no bare theme class a host `.dark` rule could match");
+    assert.equal(card("online").querySelector('[data-payment-logo="visa"]')!.className, "bsc-method-logo bsc-method-logo-chip");
+    assert.equal(card("online").querySelector('[data-payment-logo="blik"]')!.className, "bsc-method-logo");
+    await React.act(async () => roots.splice(0).forEach((r) => r.unmount()));
+    doc().body.innerHTML = "";
+
+    await openCart({ appearance: { theme: "light" } });
+    assert.equal(doc().querySelector('[data-bitsnap-checkout="root"]')!.getAttribute("data-bitsnap-checkout-theme"), "light");
+    assert.ok(card("online").querySelector('[data-payment-logo="visa"]')!.classList.contains("bsc-method-logo-chip"));
+  });
+
+  it("styles the logo slots through appearance.elements and the paymentLogoHeight token", async () => {
+    paymentMethodsResponse = withLogos({ online: [logo("blik")] });
+    await openCart({
+      appearance: {
+        tokens: { paymentLogoHeight: "24px" },
+        elements: {
+          paymentMethodLogos: { className: "my-row", style: { gap: "2px" } },
+          paymentMethodLogo: { className: "my-logo", style: { opacity: 0.8 } },
+        },
+      },
+    });
+    const row = card("online").querySelector<HTMLElement>('[data-bitsnap-checkout-slot="paymentMethodLogos"]')!;
+    const item = row.querySelector<HTMLElement>('[data-bitsnap-checkout-slot="paymentMethodLogo"]')!;
+    assert.equal(row.className, "bsc-method-logos my-row");
+    assert.equal(row.style.gap, "2px");
+    assert.equal(item.className, "bsc-method-logo my-logo");
+    assert.equal(item.style.opacity, "0.8");
+    const root = doc().querySelector<HTMLElement>('[data-bitsnap-checkout="root"]')!;
+    assert.equal(root.style.getPropertyValue("--bitsnap-checkout-payment-logo-height"), "24px");
+  });
+
+  it("hides the logos from assistive technology and leaves the cards' names unchanged", async () => {
+    paymentMethodsResponse = withLogos({}, ["online", "manual", "cod"]);
+    await openCart();
+    const before = ["online", "manual", "cod"].map((method) => spokenText(card(method)));
+    await React.act(async () => roots.splice(0).forEach((r) => r.unmount()));
+    doc().body.innerHTML = "";
+
+    paymentMethodsResponse = withLogos({
+      online: [logo("blik"), logo("visa", true)],
+      manual: [logo("transfer")],
+      cod: [logo("cash")],
+    });
+    await openCart();
+    assert.deepEqual(["online", "manual", "cod"].map((method) => spokenText(card(method))), before);
+    for (const img of doc().querySelectorAll<HTMLImageElement>('[data-bitsnap-checkout-slot="paymentMethodLogo"] img')) {
+      assert.equal(img.getAttribute("alt"), "");
+      assert.equal(img.getAttribute("aria-hidden"), "true");
+    }
+    for (const row of doc().querySelectorAll('[data-bitsnap-checkout-slot="paymentMethodLogos"]')) {
+      assert.equal(row.getAttribute("aria-hidden"), "true");
+    }
+    const describedBy = doc().getElementById(radios()[0].getAttribute("aria-describedby")!)!;
+    assert.equal(describedBy.querySelector("img"), null, "the description holds no logo");
   });
 });
 

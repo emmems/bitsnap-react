@@ -5,6 +5,13 @@ import { setupReactPage, teardownReactPage, TEST_KEY } from "@/src/analytics/rea
 
 const page = setupReactPage();
 
+// "Next step" goes on only after every price was on screen for a second (the
+// price gate, D18): the tests move this clock instead of waiting.
+const realNow = Date.now;
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+const lookAtCart = () => void (clockOffset += 1500);
+
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
@@ -36,6 +43,9 @@ const product = {
 
 /** What POST /buy (and the payment link API) answers with. */
 let buyResponse: () => Response;
+/** The `cache` mode of every /products request, in order. */
+let productsCache: (RequestCache | undefined)[] = [];
+let buyCount = 0;
 const roots: Array<{ unmount: () => void }> = [];
 
 const originalError = console.error;
@@ -45,13 +55,21 @@ beforeEach(() => {
   page.win.localStorage.clear();
   page.win.localStorage.setItem("checkout", JSON.stringify({ products: [] }));
   useCheckoutStore.setState({ isCartVisible: false, numberOfProductsInCart: 0 });
+  productsCache = [];
+  buyCount = 0;
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const url = String(input);
     const json = (body: unknown) =>
       new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
-    if (url.includes("/public-commerce/products")) return json({ success: true, result: [product] });
+    if (url.includes("/public-commerce/products")) {
+      productsCache.push(init?.cache);
+      return json({ success: true, result: [product] });
+    }
     if (url.includes("/public-commerce/countries")) return json([{ name: "Polska", code: "PL" }]);
-    if (url.includes("/public-commerce/buy") || url.includes("/api/payment/link/auto")) return buyResponse();
+    if (url.includes("/public-commerce/buy") || url.includes("/api/payment/link/auto")) {
+      buyCount += 1;
+      return buyResponse();
+    }
     if (init?.method === "POST" && url.endsWith("/e")) return new Response(null, { status: 202 });
     return new Response("{}", { status: 404 });
   }) as typeof fetch;
@@ -79,13 +97,14 @@ async function mount(props: Partial<React.ComponentProps<typeof BitsnapCheckout>
 
 const settle = () => React.act(async () => void (await new Promise((r) => setTimeout(r, 30))));
 
-/** Adds a product, opens the cart, clicks "Następny krok" and returns the error text. */
+/** Adds a product, opens the cart, clicks "Przejdź do kasy" and returns the error text. */
 async function failCheckout(props: Partial<React.ComponentProps<typeof BitsnapCheckout>> = {}) {
   await mount(props);
   await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
   await React.act(async () => Bitsnap.showCart());
   await settle();
   const button = page.win.document.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+  lookAtCart();
   await React.act(async () => button.click());
   await settle();
   return page.win.document.querySelector('[data-bitsnap-checkout-slot="error"]')?.textContent;
@@ -104,13 +123,45 @@ describe("cart error after clicking the checkout button", () => {
   });
 
   it("follows the locale and the merchant overrides", async () => {
-    buyResponse = jsonError(400, { success: false, code: "price-changed", error: "x" });
-    assert.equal(await failCheckout({ locale: "en-US" }), "The product price has changed. Refresh the page to see the current price.");
+    buyResponse = jsonError(400, { success: false, code: "mixed-recurring", error: "x" });
+    assert.equal(
+      await failCheckout({ locale: "en-US" }),
+      "Subscriptions and one-time products cannot be paid for together. Pay for them in separate orders.",
+    );
   });
 
   it("lets the merchant override a mapped text", async () => {
-    buyResponse = jsonError(400, { success: false, code: "price-changed", error: "x" });
-    assert.equal(await failCheckout({ texts: { priceChanged: "Zmiana ceny!" } }), "Zmiana ceny!");
+    buyResponse = jsonError(400, { success: false, code: "mixed-recurring", error: "x" });
+    assert.equal(await failCheckout({ texts: { mixedRecurring: "Osobno!" } }), "Osobno!");
+  });
+
+  it("price-changed: asks again past the HTTP cache, no dead end, the next click buys", async () => {
+    let first = true;
+    buyResponse = () => {
+      if (first) {
+        first = false;
+        return jsonError(400, { success: false, code: "price-changed", productId: "var1", error: "x" })();
+      }
+      return new Response(JSON.stringify({ url: "https://pay.example.test/x" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const text = await failCheckout();
+    assert.equal(text, undefined, "no 'Refresh the page' error");
+    assert.equal(buyCount, 1);
+    assert.equal(productsCache.at(-1), "no-cache", "the revalidation bypasses the HTTP cache");
+    assert.equal(
+      page.win.document.querySelector('[data-bitsnap-checkout-notice="review-prices"]')?.textContent,
+      "Sprawdź ceny i sumę, a potem przejdź dalej.",
+    );
+
+    const button = page.win.document.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
+    lookAtCart();
+    await React.act(async () => button.click());
+    await settle();
+    assert.equal(buyCount, 2, "the next click goes through the gate to /buy");
+    assert.equal(page.win.document.querySelector('[data-bitsnap-checkout-notice="review-prices"]'), null);
   });
 
   it("shows the generic text for invalid-request, not the server message", async () => {

@@ -28,7 +28,7 @@ export type TokenVariables<Token extends string> = Readonly<
 /**
  * Remaps a token onto a shadcn theme variable (`--background`, `--ring`, ...)
  * so shared UI primitives follow the module's tokens. Only written when the
- * token is in effect.
+ * token is in effect and does not read that same variable.
  */
 export type ShadcnVariableMapping<Token extends string> = readonly {
   token: Token;
@@ -59,14 +59,21 @@ export type ResolvedAppearanceCore<
   boundaryStyle: CSSProperties;
 };
 
-/** Drops `undefined`/`null` tokens so unset values keep the stylesheet default. */
+/**
+ * Drops `undefined`/`null` tokens so unset values keep the stylesheet default,
+ * and values with a `;`. Any other CSS value passes through as written
+ * (`var(--host-x)`, `calc()`, ...). The browser writes a token with
+ * `style.setProperty`, which ignores a value with a `;`; React's server
+ * renderer writes the style attribute as text, where `red; color: blue` would
+ * add a declaration to the root. Dropping it keeps both the same.
+ */
 export function omitUndefined<Token extends string>(
   tokens: Partial<Record<Token, string>>,
 ): Partial<Record<Token, string>> {
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(tokens)) {
-    if (value != null) {
+    if (value != null && !String(value).includes(";")) {
       result[key] = value;
     }
   }
@@ -101,14 +108,54 @@ export function resolveBoundaryStyle<Token extends string>(
     }
   }
 
+  const shadcn = new Map<string, string>();
   for (const { token, variable } of shadcnVariables) {
     const value = tokens[token];
     if (value != null) {
+      shadcn.set(variable, value);
+    }
+  }
+  for (const [variable, value] of shadcn) {
+    if (!inCycle(variable, shadcn)) {
       style[variable] = value;
     }
   }
 
   return style as CSSProperties;
+}
+
+/**
+ * `true` when writing `start` would make it read itself through the other
+ * shadcn writes of the same call: `--background: var(--background)`, or a
+ * crossed pair such as `background: "var(--card)"` with
+ * `surface: "var(--background)"`. A cycle makes every variable in it invalid,
+ * so a token that follows the host's shadcn theme leaves the host's variable
+ * alone instead.
+ */
+function inCycle(start: string, writes: Map<string, string>): boolean {
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length > 0) {
+    const value = writes.get(queue.pop()!)!;
+    for (const variable of writes.keys()) {
+      if (!readsVariable(value, variable)) continue;
+      if (variable === start) return true;
+      if (!seen.has(variable)) {
+        seen.add(variable);
+        queue.push(variable);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * `true` when `value` reads `variable` (`var(--background)`,
+ * `var( --background, #fff)`, inside `color-mix()`...).
+ */
+function readsVariable(value: string, variable: string): boolean {
+  // Mapped names are plain `--[a-z-]+`: nothing to escape.
+  return new RegExp(`var\\(\\s*${variable}\\s*[,)]`).test(value);
 }
 
 /**

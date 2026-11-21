@@ -54,6 +54,20 @@ jobs:
       - name: Run tests
         run: 'pnpm test'
 
+      - name: Consumer types
+        run: 'pnpm test:types'
+
+      - name: Package checks
+        run: 'pnpm test:package'
+
+      - name: Size budget
+        run: 'pnpm size'
+
+      # Same tests as the `test:*-ssr` scripts, without their rebuilds: `dist/`
+      # comes from the Run build step above.
+      - name: SSR tests
+        run: 'node --test test/returns-widget.ssr.test.cjs test/catalog.ssr.test.cjs test/cart.ssr.test.cjs test/course.ssr.test.cjs test/express.ssr.test.cjs test/login.ssr.test.cjs'
+
       - name: Check whether this version is already on npm
         id: published
         run: |

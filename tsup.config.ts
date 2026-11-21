@@ -1,46 +1,16 @@
+import { execSync } from "node:child_process";
 import { defineConfig, type Options } from "tsup";
 import type { Plugin } from "esbuild";
 
 import { name, version } from "./package.json";
 
 /**
- * Runtime exports of `src/catalog/index.ts` (see `verify-package.mjs`, which
- * checks that this list matches the ESM entry).
+ * The CommonJS `catalog` and `cart` entries need no shim: tsup builds the
+ * CommonJS output with splitting too, so they re-export the same shared chunks
+ * as `index.js` and a page that mixes `bitsnap-react` and its subpaths has one
+ * copy of the cart state (`verify-package.mjs` checks every export is the same
+ * value as in the main entry).
  */
-const CATALOG_EXPORTS = [
-  "ProductList",
-  "useProducts",
-  "formatProductPrice",
-  "PRODUCT_LIST_SLOT_NAMES",
-];
-
-/**
- * The CommonJS `catalog` entry is a thin re-export of `./index.js`. Bundling
- * it separately would give CommonJS consumers a second copy of the cart
- * state, constants and stores next to the one in `index.js`. (ESM shares
- * chunks between entries, so it stays lean.)
- */
-const catalogCjsShim: Plugin = {
-  name: "catalog-cjs-shim",
-  setup(build) {
-    if (build.initialOptions.format !== "cjs") {
-      return;
-    }
-    build.onLoad({ filter: /src[\\/]catalog[\\/]index\.ts$/ }, () => ({
-      loader: "js",
-      resolveDir: __dirname,
-      contents: [
-        'Object.defineProperty(exports,"__esModule",{value:true});',
-        'var m=require("./index.js");',
-        ...CATALOG_EXPORTS.map((name) => `exports.${name}=m.${name};`),
-      ].join("\n"),
-    }));
-    build.onResolve({ filter: /^\.\/index\.js$/ }, (args) => ({
-      path: args.path,
-      external: true,
-    }));
-  },
-};
 
 /**
  * `bitsnap-react/viewer3d` is ESM only (three and R3F are ESM). The CommonJS
@@ -106,6 +76,9 @@ const liveChatEmbeds: Options = {
   define: { BITSNAP_REACT_EMBED_VERSION: JSON.stringify(version) },
 };
 
+/** One watcher for `cart.css` per watch session. */
+let cartCssWatcher: { close(): void } | undefined;
+
 export default defineConfig((overrideOptions) => {
   const isWatch = !!overrideOptions.watch;
   const shouldPublish = !!overrideOptions.env?.publish;
@@ -119,6 +92,7 @@ export default defineConfig((overrideOptions) => {
       returns: "src/returns/index.ts",
       contact: "src/contact/index.ts",
       catalog: "src/catalog/index.ts",
+      cart: "src/cart/index.ts",
       course: "src/course/index.ts",
       chat: "src/chat/index.ts",
       consent: "src/consent/index.ts",
@@ -126,7 +100,23 @@ export default defineConfig((overrideOptions) => {
       viewer3d: "src/viewer3d/index.ts",
     },
     dts: true,
-    onSuccess: shouldPublish ? "pnpm publish" : undefined,
+    // Every build: `dist/cart.css` from the hand-written cart stylesheet, also
+    // appended to `dist/index.css` (scripts/build-cart-css.mjs). Then publish
+    // when asked, so a published package always carries the cart styles.
+    onSuccess: async () => {
+      const { buildCartCss } = await import("./scripts/build-cart-css.mjs");
+      await buildCartCss(__dirname);
+      // `cart.css` is not imported, so tsup's watcher skips it: rebuild it on change.
+      if (isWatch && !cartCssWatcher) {
+        const { watch } = await import("node:fs");
+        cartCssWatcher = watch(`${__dirname}/src/components/checkout/cart.css`, () => {
+          buildCartCss(__dirname).catch((error) => console.error(error));
+        });
+      }
+      if (shouldPublish) {
+        execSync("pnpm publish", { stdio: "inherit" });
+      }
+    },
     format: ["cjs", "esm"],
     bundle: true,
     // CommonJS entries share chunks like ESM ones do. Separate copies of the
@@ -139,7 +129,7 @@ export default defineConfig((overrideOptions) => {
     platform: "browser",
     // three and React Three Fiber are optional peers of `bitsnap-react/viewer3d`.
     external: ["react", "react-dom", /^three($|\/)/, /^@react-three\//],
-    esbuildPlugins: [catalogCjsShim, viewer3dCjsStub],
+    esbuildPlugins: [viewer3dCjsStub],
     define: {
       PACKAGE_NAME: `"${name}"`,
       PACKAGE_VERSION: `"${version}"`,

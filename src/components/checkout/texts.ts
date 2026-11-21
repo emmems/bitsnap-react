@@ -14,16 +14,22 @@ export type CheckoutTexts = {
   cart: string;
   /** Shown when the cart has no products. */
   emptyCart: string;
+  /** Button in the empty cart that closes it. */
+  continueShopping: string;
   /** Label next to the total price. */
   total: string;
   /** Delivery note next to the total price. */
   delivery: string;
   /** Country selector placeholder. */
   chooseCountry: string;
-  /** Checkout button label. */
+  /** Checkout button label (plain, no amount: the total row above it carries the number). */
   nextStep: string;
+  /** Divider between the express payment buttons and the country and payment options. */
+  orDivider: string;
   /** Error shown when some products are out of stock. */
   unavailableProducts: string;
+  /** On a cart line the shop did not return (also its name when none is known). */
+  unavailableProduct: string;
   /** Error shown when the checkout fails and the server gave no reason. */
   checkoutFailed: string;
   /** Error shown when the shop has no payment gateway connected. */
@@ -36,8 +42,19 @@ export type CheckoutTexts = {
   mixedRecurring: string;
   /** Error shown when the cart currency cannot be paid in. */
   currencyUnsupported: string;
-  /** Error shown when a price changed after the product was added. */
+  /**
+   * Error shown when a price changed after the product was added. Since 1.31.0
+   * the cart shows the new price and `reviewPrices` instead.
+   */
   priceChanged: string;
+  /** Marker on a line whose price changed while the cart was open; `{was}` and `{now}` are unit prices. */
+  priceUpdated: string;
+  /** Shown by the checkout button when a price changed: the next click continues. */
+  reviewPrices: string;
+  /** Note under the express payment buttons while they wait for the cart to be confirmed. */
+  walletsUpdating: string;
+  /** Error shown when a quantity change or removal could not be saved. */
+  updateFailed: string;
   /** Accessible name of the close button of the drawer. */
   close: string;
   /** Remove button of a cart line (also read together with the product name). */
@@ -125,12 +142,15 @@ export type CheckoutTextKey = keyof CheckoutTexts;
 export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
   en: {
     cart: "Cart",
+    continueShopping: "Continue shopping",
     emptyCart: "Your cart is empty.",
     total: "Total:",
     delivery: "+ delivery",
     chooseCountry: "Choose a country",
-    nextStep: "Next step",
+    nextStep: "Go to checkout",
+    orDivider: "or",
     unavailableProducts: "Not all products are available.",
+    unavailableProduct: "Unavailable product",
     checkoutFailed: "Something went wrong. Please try again later.",
     noPaymentGateway:
       "This shop doesn't accept online payments yet. Try again later or contact the seller.",
@@ -143,6 +163,10 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "The shop doesn't accept payments in this currency. Contact the seller.",
     priceChanged: "The product price has changed. Refresh the page to see the current price.",
+    priceUpdated: "The price changed: was {was}, now {now}.",
+    reviewPrices: "Check the prices and the total, then continue.",
+    walletsUpdating: "Updating the cart…",
+    updateFailed: "Could not update this item. Your cart is unchanged.",
     close: "Close cart",
     remove: "Remove",
     quantity: "Quantity",
@@ -198,12 +222,15 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
   },
   pl: {
     cart: "Koszyk",
+    continueShopping: "Wróć do zakupów",
     emptyCart: "Brak produktów w koszyku.",
     total: "Suma:",
     delivery: "+ dostawa",
     chooseCountry: "Wybierz kraj",
-    nextStep: "Następny krok",
+    nextStep: "Przejdź do kasy",
+    orDivider: "lub",
     unavailableProducts: "Nie wszystkie produkty są dostępne w magazynie.",
+    unavailableProduct: "Produkt niedostępny",
     checkoutFailed: "Coś poszło nie tak. Spróbuj ponownie później.",
     noPaymentGateway:
       "Ten sklep nie przyjmuje jeszcze płatności online. Spróbuj ponownie później lub skontaktuj się ze sprzedawcą.",
@@ -216,6 +243,10 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     currencyUnsupported:
       "Sklep nie przyjmuje płatności w tej walucie. Skontaktuj się ze sprzedawcą.",
     priceChanged: "Cena produktu się zmieniła. Odśwież stronę, aby zobaczyć aktualną cenę.",
+    priceUpdated: "Cena się zmieniła: była {was}, jest {now}.",
+    reviewPrices: "Sprawdź ceny i sumę, a potem przejdź dalej.",
+    walletsUpdating: "Aktualizujemy koszyk…",
+    updateFailed: "Nie udało się zmienić tej pozycji. Koszyk pozostał bez zmian.",
     close: "Zamknij koszyk",
     remove: "Usuń",
     quantity: "Ilość",

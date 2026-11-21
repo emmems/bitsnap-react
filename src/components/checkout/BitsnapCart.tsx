@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef } from "react";
-import zod from "zod";
 import {
   InstrumentProvider,
   useCartInstrument,
@@ -10,25 +9,22 @@ import type { CheckoutAppearance } from "./appearance";
 import type { CheckoutTexts } from "./texts";
 import CartComponent from "./CartComponent";
 import { getCheckoutMethods, getProjectID, setProjectID } from "./CartProvider";
+import type { CartPresentation } from "./presentation";
+import { warmCart } from "./cart-warmup";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { useCheckoutStore } from "./state";
 import { getLocale, setLocale } from "./locale";
+import {
+  parseAddToCartPayload,
+  parseBuyProductArgs,
+  type AddToCartEvent,
+} from "./validate";
 import { getCheckoutText, type CheckoutTextKey } from "./texts";
 
 enum CartEvent {
   ADD_TO_CART = "ADD_TO_CART",
 }
-
-const cartAddToCartSchema = zod.object({
-  id: zod.string(),
-  isSubscription: zod.boolean().default(false),
-  quantity: zod.number(),
-  metadata: zod.record(zod.string(), zod.string().optional()).optional(),
-  url: zod.string().optional(),
-});
-
-type CartAddToCartEvent = zod.infer<typeof cartAddToCartSchema>;
 
 export type BitsnapCartProps = {
   projectID: string;
@@ -57,6 +53,19 @@ export type BitsnapCartProps = {
    * visitor's device.
    */
   analytics?: AnalyticsOption;
+  /**
+   * Loads the products and the payment options of a non-empty cart before the
+   * buyer opens it: at the first idle moment after the page loads, and when
+   * the pointer or the focus reaches the cart button. On by default; `false`
+   * turns it off (the cart then loads when it opens).
+   */
+  prefetch?: boolean;
+  /**
+   * How the cart opens: `"drawer"` (default), a panel on the right, full
+   * screen on phones; or `"dialog"`, a centred dialog that is a bottom sheet
+   * on phones and in landscape. Any other value renders the drawer.
+   */
+  presentation?: CartPresentation;
 };
 
 const visuallyHidden: React.CSSProperties = {
@@ -81,6 +90,8 @@ function BitsnapCart({
   appearance,
   texts,
   analytics,
+  prefetch,
+  presentation,
 }: BitsnapCartProps) {
   const instrument = useInstrument(projectID, analytics, "cart");
   // Cart changes made outside of components (`Bitsnap.addProductToCart`) are reported here.
@@ -88,6 +99,7 @@ function BitsnapCart({
   const { isCartVisible, showCart, hideCart, numberOfProductsInCart } =
     useCheckoutStore();
   const panelId = `bitsnap-cart-${useId()}`;
+  const onIntent = prefetch === false ? undefined : () => warmCart(true);
   const text = (key: CheckoutTextKey) =>
     getCheckoutText(key, locale ?? getLocale(), texts);
   // The `window.cart` handlers are created once and must read the latest props.
@@ -137,16 +149,7 @@ function BitsnapCart({
       window["cart"] = {
         buyProduct: async (args: unknown) => {
           try {
-            const payload = zod
-              .object({
-                productID: zod.string(),
-                email: zod.string().optional(),
-                name: zod.string().optional(),
-                country: zod.string().optional(),
-                marketingAgreement: zod.boolean().optional(),
-                locale: zod.string().optional(),
-              })
-              .parse(args);
+            const payload = parseBuyProductArgs(args);
             const methods = getCheckoutMethods(projectID);
             try {
               const products = await methods.getProducts();
@@ -187,7 +190,7 @@ function BitsnapCart({
     }
 
     try {
-      const data = cartAddToCartSchema.parse(payload);
+      const data = parseAddToCartPayload(payload);
 
       if (data.isSubscription) {
         await handleAddingSubscriptionToCart(projectID, data);
@@ -216,7 +219,7 @@ function BitsnapCart({
 
   async function handleAddingSubscriptionToCart(
     projectID: string,
-    event: CartAddToCartEvent,
+    event: AddToCartEvent,
   ) {
     console.warn(
       "subscriptions cannot be added to the cart yet",
@@ -276,6 +279,8 @@ function BitsnapCart({
       <button
         type="button"
         onClick={() => (isCartVisible ? hideCart() : showCart())}
+        onPointerEnter={onIntent}
+        onFocus={onIntent}
         aria-label={
           children
             ? undefined
@@ -287,10 +292,10 @@ function BitsnapCart({
         aria-haspopup="dialog"
         aria-controls={isCartVisible ? panelId : undefined}
         style={{ position: "relative" }}
-        className={[
-          "bitsnap-react",
-          className ?? "rounded-full hover:bg-neutral-300 transition p-1",
-        ].join(" ")}
+        // The default look (`cart.css`) applies only without a merchant class (D20).
+        // `className=""` keeps meaning "no default look", as before (D20).
+        data-bitsnap-checkout-trigger={className === undefined ? "default" : "custom"}
+        className={className ? `bitsnap-react ${className}` : "bitsnap-react"}
       >
         {children ? (
           <>{children}</>
@@ -305,7 +310,6 @@ function BitsnapCart({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="lucide lucide-shopping-cart"
             aria-hidden="true"
             focusable="false"
           >
@@ -351,6 +355,8 @@ function BitsnapCart({
           locale={locale}
           appearance={appearance}
           texts={texts}
+          prefetch={prefetch}
+          presentation={presentation}
           panelId={panelId}
           shouldHide={() => {
             hideCart();

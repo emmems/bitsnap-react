@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
-import { BitsnapCheckout, type CheckoutAppearance } from "bitsnap-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Bitsnap,
+  BitsnapCheckout,
+  type CartPresentation,
+  type CheckoutAppearance,
+} from "bitsnap-react";
+import { BitsnapConsent } from "bitsnap-react/consent";
 import { clearCart, seedCart } from "./mocks";
 import "./styles.css";
 
@@ -9,7 +15,10 @@ type Scenario =
   | "light"
   | "tokens"
   | "elements"
-  | "external-css";
+  | "external-css"
+  | "custom"
+  | "host"
+  | "shadcn";
 
 const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
   default: undefined,
@@ -47,14 +56,92 @@ const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
       countryOption: { className: "external-country-option" },
     },
   },
+  // Square corners, a brand button, a darker control outline, no panel shadow.
+  custom: {
+    theme: "light",
+    tokens: {
+      radius: "0px",
+      panelRadius: "0px",
+      controlRadius: "0px",
+      buttonRadius: "0px",
+      buttonBackground: "#c2410c",
+      buttonHoverBackground: "#9a3412",
+      buttonForeground: "#ffffff",
+      buttonFontSize: "15px",
+      controlBorder: "#3f3f46",
+      panelShadow: "none",
+    },
+  },
+  // `?theme=host`: every value is one of the host page's own variables
+  // (`styles.css`, `html.host-site`), so the cart follows the page's dark
+  // mode, switched by a class on <html>, with no JS.
+  host: {
+    tokens: {
+      fontFamily: "var(--site-font)",
+      background: "var(--site-bg)",
+      surface: "var(--site-surface)",
+      foreground: "var(--site-fg)",
+      mutedForeground: "var(--site-muted)",
+      border: "var(--site-border)",
+      controlBorder: "var(--site-input)",
+      hoverSurface: "var(--site-hover)",
+      buttonBackground: "var(--site-brand)",
+      buttonForeground: "var(--site-brand-fg)",
+      buttonHoverBackground: "var(--site-brand-hover)",
+      focusRing: "var(--site-ring)",
+      skeleton: "var(--site-skeleton)",
+      sale: "var(--site-sale)",
+      error: "var(--site-error)",
+      radius: "var(--site-radius)",
+      colorScheme: "var(--site-scheme)",
+    },
+  },
+  // `?theme=shadcn`: a shadcn/ui site. The tokens point at the site's own
+  // shadcn variables, whose `.dark` rule would also match a bare `dark` class
+  // on the cart root (19a review B1, S1).
+  shadcn: {
+    tokens: {
+      background: "var(--background)",
+      surface: "var(--card)",
+      foreground: "var(--foreground)",
+      mutedForeground: "var(--muted-foreground)",
+      border: "var(--border)",
+      controlBorder: "var(--input)",
+      hoverSurface: "var(--accent)",
+      buttonBackground: "var(--primary)",
+      buttonForeground: "var(--primary-foreground)",
+      buttonHoverBackground: "var(--primary)",
+      focusRing: "var(--ring)",
+      skeleton: "var(--muted)",
+      error: "var(--destructive)",
+      sale: "var(--destructive)",
+      radius: "var(--radius)",
+      colorScheme: "var(--scheme)",
+    },
+  },
 };
 
 export default function App({
   initialScenario = "default",
+  initialPresentation = "drawer",
+  locale,
+  openOnLoad = false,
+  consent = false,
 }: {
   initialScenario?: Scenario;
+  initialPresentation?: CartPresentation;
+  locale?: string;
+  openOnLoad?: boolean;
+  consent?: boolean;
 }) {
   const [scenario, setScenario] = useState<Scenario>(initialScenario);
+  const [presentation, setPresentation] = useState<CartPresentation>(initialPresentation);
+
+  useEffect(() => {
+    if (openOnLoad) {
+      Bitsnap.showCart();
+    }
+  }, [openOnLoad]);
   const [withProducts, setWithProducts] = useState(true);
   const [appearance, setAppearance] = useState<CheckoutAppearance | undefined>(
     scenarios[initialScenario],
@@ -105,6 +192,32 @@ export default function App({
         ))}
       </fieldset>
 
+      <fieldset style={{ display: "grid", gap: 8, border: 0, padding: 0 }}>
+        <legend>Presentation</legend>
+        {(["drawer", "dialog"] as const).map((key) => (
+          <label key={key} style={{ display: "flex", gap: 8 }}>
+            <input
+              type="radio"
+              name="presentation"
+              checked={presentation === key}
+              onChange={() => setPresentation(key)}
+            />
+            {key}
+          </label>
+        ))}
+      </fieldset>
+
+      {(scenario === "host" || scenario === "shadcn") && (
+        <button
+          type="button"
+          className="host-toggle"
+          // The host's own switch: a class on <html>, nothing passed to the cart.
+          onClick={() => document.documentElement.classList.toggle("dark")}
+        >
+          Toggle site dark mode
+        </button>
+      )}
+
       <label style={{ display: "flex", gap: 8 }}>
         <input
           type="checkbox"
@@ -115,11 +228,18 @@ export default function App({
       </label>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <BitsnapCheckout projectID="example-project" appearance={appearance}>
+        <BitsnapCheckout
+          projectID="example-project"
+          appearance={appearance}
+          presentation={presentation}
+          locale={locale}
+        >
           <span>🛒 Open cart</span>
         </BitsnapCheckout>
         <span>badge shows the seeded cart</span>
       </div>
+      {/* Preview mode: shown on every load, no cookie, nothing sent. */}
+      {consent && <BitsnapConsent preview locale="pl" theme="light" />}
     </main>
   );
 }

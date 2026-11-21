@@ -29,6 +29,21 @@ describe("parseBuyError", () => {
     );
   });
 
+  it("returns the productId of a price-changed answer (N14)", () => {
+    const parsed = parseBuyError(
+      json({ success: false, code: "price-changed", error: "x", productId: "prod_1" }),
+    );
+    assert.equal(parsed.productId, "prod_1");
+    assert.equal(parsed.itemIds, undefined);
+  });
+
+  it("leaves productId undefined when the body has none or a bad one", () => {
+    assert.equal(parseBuyError(json({ code: "price-changed", error: "x" })).productId, undefined);
+    assert.equal(parseBuyError(json({ code: "price-changed", productId: 5 })).productId, undefined);
+    assert.equal(parseBuyError(json({ code: "price-changed", productId: "" })).productId, undefined);
+    assert.ok(!("productId" in parseBuyError(json({ code: "price-changed" }))));
+  });
+
   it("unwraps an error that is itself a JSON string", () => {
     assert.deepEqual(
       parseBuyError(json({ success: false, error: json({ message: "Brak bramki." }) })),

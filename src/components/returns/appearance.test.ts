@@ -72,6 +72,21 @@ describe("resolveReturnsAppearance", () => {
     assert.equal(style["--ring"], "#111111");
   });
 
+  it("skips a shared variable the token reads, and still writes the others (19a review B1)", () => {
+    const style = resolveReturnsAppearance({
+      tokens: { background: "var(--background)", focusRing: "var( --ring, #111)", buttonBackground: "var(--site-cta)" },
+    }).boundaryStyle as Record<string, string>;
+
+    // `--background: var(--background)` would be a cycle and invalid.
+    assert.equal(style["--background"], undefined);
+    assert.equal(style["--ring"], undefined);
+    assert.equal(style["--bitsnap-returns-background"], "var(--background)");
+    assert.equal(style["--primary"], "var(--site-cta)");
+    // A different variable whose name only starts the same is not a cycle.
+    const near = resolveReturnsAppearance({ tokens: { background: "var(--background-alt)" } }).boundaryStyle as Record<string, string>;
+    assert.equal(near["--background"], "var(--background-alt)");
+  });
+
   it("does not know checkout only tokens", () => {
     assert.equal("overlay" in RETURNS_TOKEN_VARIABLES, false);
   });

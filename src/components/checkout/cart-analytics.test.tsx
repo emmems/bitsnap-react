@@ -5,6 +5,13 @@ import { findPII, collector, setupReactPage, teardownReactPage, TEST_KEY } from 
 
 const page = setupReactPage();
 
+// "Next step" goes on only after every price was on screen for a second (the
+// price gate, D18): the tests move this clock instead of waiting.
+const realNow = Date.now;
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+const lookAtCart = () => void (clockOffset += 1500);
+
 let React: typeof import("react");
 let createRoot: typeof import("react-dom/client").createRoot;
 let BitsnapCheckout: typeof import("./BitsnapCart.tsx").default;
@@ -100,6 +107,7 @@ describe("BitsnapCheckout analytics", () => {
 
     const button = page.win.document.querySelector<HTMLButtonElement>('[data-bitsnap-checkout-slot="checkoutButton"]')!;
     await settle();
+    lookAtCart();
     await React.act(async () => button.click());
     await React.act(async () => button.click());
     await settle();
@@ -146,8 +154,8 @@ describe("BitsnapCheckout analytics", () => {
     assert.ok(seen.events.length >= 2);
     assert.deepEqual(findPII([...seen.events, ...wire]), []);
     assert.ok(!JSON.stringify(wire).includes("Mug"), "product names are not sent");
-    // The cart and the locale are the library's own; analytics adds no key.
-    assert.deepEqual(Object.keys(page.win.localStorage).sort(), ["bitsnap-locale", "checkout"]);
+    // The cart, its product snapshot and the locale are the library's own; analytics adds no key.
+    assert.deepEqual(Object.keys(page.win.localStorage).sort(), ["bitsnap-cart-view", "bitsnap-locale", "checkout"]);
     assert.equal(page.win.sessionStorage.length, 0);
     assert.equal(page.win.document.cookie, "");
   });

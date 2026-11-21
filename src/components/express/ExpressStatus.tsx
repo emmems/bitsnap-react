@@ -1,4 +1,4 @@
-import { cn } from "@/src/lib/utils";
+import { cx } from "@/src/components/checkout/lib/cx";
 import { useCheckoutSlot } from "@/src/components/checkout/appearance.context";
 import { useCheckoutTextResolver } from "@/src/components/checkout/texts.context";
 import type { CheckoutTextKey } from "@/src/components/checkout/texts";
@@ -55,9 +55,11 @@ export function ExpressStatus({ phase }: { phase: ExpressPhase }) {
       role={isAlert ? "alert" : "status"}
       aria-live={isAlert ? "assertive" : "polite"}
       data-bitsnap-express-status={phase}
-      className={cn(
-        "w-full px-2 text-center text-sm",
-        isAlert && "opacity-90",
+      // Styles the line on a standalone InPost or Revolut button too.
+      data-bitsnap-checkout-part="status"
+      className={cx(
+        "bsc-express-status",
+        isAlert && "bsc-express-status-alert",
         errorSlot.className,
       )}
       style={errorSlot.style}

@@ -19,7 +19,7 @@ import {
  * Backward compatibility: the resolver never invents values. A token is only
  * present in the resolved output when the caller provided it or when the
  * caller explicitly selected a theme preset, so every unset token keeps falling
- * back to the value the checkout renders today (see `checkout.css`).
+ * back to the default in `cart.css`.
  */
 
 export type CheckoutTheme = "dark" | "light";
@@ -27,11 +27,17 @@ export type CheckoutTheme = "dark" | "light";
 export type CheckoutAppearanceTokens = {
   /** Checkout wide font family. The library never loads fonts. */
   fontFamily?: string;
-  /** Base font size of the checkout. */
+  /**
+   * Base font size of the checkout (default `16px`). Every text size scales
+   * from it (12, 13, 14, 15, 16 and 20 px at the default; the two smallest
+   * never go below 11 px); controls keep their 44 px touch targets. Use a
+   * length: a keyword like `"large"` sets the base size, but every step then
+   * renders at the root size, because `calc()` cannot scale a keyword.
+   */
   fontSize?: string;
   /** Panel background. */
   background?: string;
-  /** Raised surfaces: country dropdown, search bar, loading skeletons. */
+  /** Raised surfaces: country dropdown, search bar, selected payment method. */
   surface?: string;
   /** Main text color. */
   foreground?: string;
@@ -47,14 +53,74 @@ export type CheckoutAppearanceTokens = {
   buttonHoverBackground?: string;
   /** Hover and selected surfaces: close button, country options. */
   hoverSurface?: string;
-  /** Focus ring color. Also applied to shared UI primitives through `--ring`. */
+  /** Focus ring color. */
   focusRing?: string;
+  /**
+   * Outline of the controls: quantity stepper, country select, payment-method
+   * cards and radios, the retry and empty-cart buttons, notices. Default
+   * `#737373` (dark), `#8a8a8a` (light): keep it at 3:1 against the panel.
+   */
+  controlBorder?: string;
+  /** Fill of the loading placeholders. Default `#333333` (dark), `#d4d4d8` (light). */
+  skeleton?: string;
+  /**
+   * `color-scheme` of the cart (`"light"` or `"dark"`): scrollbars and the
+   * native country list. Default: from a hex `background` token, else the
+   * theme. `--bitsnap-checkout-color-scheme` in your CSS works the same way.
+   */
+  colorScheme?: string;
   /** Error and unavailable state color. */
   error?: string;
-  /** Drawer backdrop color. */
+  /** Backdrop color behind the cart. */
   overlay?: string;
-  /** Corner radius, applied through `--radius`. */
+  /** Corner radius. */
   radius?: string;
+  /**
+   * Corners of the dialog (default `radius` + 4 px) and the top corners of the
+   * bottom sheet (default `radius` + 8 px). The drawer has none.
+   */
+  panelRadius?: string;
+  /**
+   * Corners of the controls: country select, payment-method cards and the
+   * quantity stepper. Default `radius`; the stepper is a pill (`9999px`).
+   */
+  controlRadius?: string;
+  /**
+   * Corners of the buttons: checkout, "Continue shopping", retry and the empty
+   * cart's button. Default `radius`; `"9999px"` makes them pills.
+   */
+  buttonRadius?: string;
+  /** Font size of the checkout button. Default: `fontSize` (`16px`). */
+  buttonFontSize?: string;
+  /** Shadow of the dialog and the bottom sheet; `"none"` removes it. */
+  panelShadow?: string;
+  /** Sale price of a discounted line. Default `#f87171` (dark), `#b91c1c` (light). */
+  sale?: string;
+  /**
+   * Width of the cart (any CSS length, also `var(--your-variable)`): the
+   * drawer's from 640 px up (default 380 px, 420 px from 1200 px), or the
+   * dialog's (default 480 px, never wider than the screen minus 32 px). The
+   * compact layout (phones, also in landscape) keeps the full screen width.
+   */
+  panelWidth?: string;
+  /**
+   * Height cap of `presentation="dialog"` (default
+   * `min(100dvh - 48px, 704px)`). The bottom sheet of the compact layout
+   * also stays under it, and under 92 % of the screen. The drawer ignores it.
+   */
+  panelMaxHeight?: string;
+  /**
+   * Base duration of the cart's enter and exit animations (default `240ms`):
+   * the drawer's fade and slide read it. `"0ms"`, `"0s"` or `"0"` turns the
+   * cart's own animations off. Under `prefers-reduced-motion: reduce` the
+   * drawer only fades, for at most `120ms`.
+   */
+  motionDuration?: string;
+  /**
+   * Height of the payment logos in the payment-method cards (default `20px`).
+   * Their width follows each logo's aspect ratio.
+   */
+  paymentLogoHeight?: string;
 };
 
 /**
@@ -69,29 +135,56 @@ export const CHECKOUT_SLOT_NAMES = [
   "title",
   "closeButton",
   "productList",
+  /** The scroll region: lines and the options under them. */
+  "lines",
   "product",
   "productImage",
   "productName",
+  /** The variant under the name; not rendered when it equals the name. */
+  "productVariant",
+  /** "49,90 zł × 2" under the name, for a quantity above 1. */
+  "productUnitPrice",
+  /** The line total block (struck regular price and sale price when on sale). */
   "productPrice",
   "quantityControl",
   "quantityInput",
   "quantityButton",
   "removeButton",
+  /** The options block in the scroll region: express row, divider, country, payment methods. */
+  "options",
+  /** The footer: total, note, checkout button and its hint and error. Always visible. */
+  "footer",
   "summary",
   "totalLabel",
   "totalValue",
+  /** Accepted, renders nothing since 1.32.0. */
   "deliveryText",
   "summaryNote",
   "countryLabel",
+  /** The native country `<select>`. */
   "countryTrigger",
+  /** Accepted, renders nothing since 1.32.0 (native select, PLAN D4). */
   "countryDropdown",
+  /** Accepted, renders nothing since 1.32.0 (native select, PLAN D4). */
   "countrySearch",
+  /** Accepted, renders nothing since 1.32.0 (native select, PLAN D4). */
   "countryOption",
   "paymentButtons",
   "paymentMethods",
   "paymentMethodOption",
+  /** The row of logos in a payment method card; only when the server sent logos for it. */
+  "paymentMethodLogos",
+  /** One logo in that row (its `<span>`; `.bsc-method-logo-chip` when drawn for white). */
+  "paymentMethodLogo",
+  /** The checkout button only; the retry buttons have `retryButton` since 1.32.0. */
   "checkoutButton",
+  /** "Try again" after a failed load. */
+  "retryButton",
   "emptyState",
+  /** "Continue shopping" in the empty cart; closes it. */
+  "emptyAction",
+  /** "Continue shopping" under the checkout button of `presentation="dialog"`; closes the cart. */
+  "continueShopping",
   "error",
   "skeleton",
 ] as const;
@@ -114,30 +207,37 @@ export type CheckoutAppearance = {
   elements?: CheckoutAppearanceElements;
 };
 
+export type CheckoutBoundaryAttributes = {
+  /**
+   * Theme marker of the root. An attribute, not a bare `dark`/`light` class:
+   * a host rule like `.dark { --background: ... }` or a class-based Tailwind
+   * `dark:` variant would match a class on the cart root.
+   */
+  "data-bitsnap-checkout-theme": CheckoutTheme;
+  "data-bitsnap-checkout-motion"?: "off";
+};
+
 export type ResolvedCheckoutAppearance = {
   theme: CheckoutTheme;
-  /**
-   * `true` as soon as the caller passed anything through `appearance`. The
-   * country dropdown is portalled outside of the checkout root, so it only
-   * receives the checkout boundary when the caller opted in - an omitted or
-   * empty `appearance` keeps the previous (unthemed) dropdown untouched.
-   */
+  /** `true` as soon as the caller passed anything through `appearance`. */
   isCustomized: boolean;
   /** Tokens that are in effect. Empty entries were dropped. */
   tokens: CheckoutAppearanceTokens;
   elements: CheckoutAppearanceElements;
-  /** Theme marker class for the theme boundaries. */
-  boundaryClassName: string;
-  /** Inline custom properties applied to the drawer root. */
+  /**
+   * Inline custom properties applied to the drawer root, plus
+   * `--bsc-scheme-guess` when the effective `background` token is a hex
+   * colour. The guess is a variable, not an inline `color-scheme`, so a
+   * `--bitsnap-checkout-color-scheme` from the host's CSS still beats it.
+   */
   boundaryStyle: CSSProperties;
   /**
-   * Extra properties for the portalled country dropdown. The shared select
-   * content paints itself with `bg-popover`/`text-popover-foreground`, so those
-   * variables have to carry the checkout colors over to the portal. They are
-   * resolved eagerly because the dropdown is the only place where the built-in
-   * defaults differ from the drawer.
+   * Data attributes for the drawer root: the theme marker, and
+   * `data-bitsnap-checkout-motion="off"` only when the `motionDuration` token
+   * is zero (CSS cannot test the value of a variable, so the stylesheet keys
+   * the motion-off rule on it).
    */
-  dropdownStyle: CSSProperties;
+  boundaryAttributes: CheckoutBoundaryAttributes;
 };
 
 /** CSS custom property used for each token. */
@@ -154,9 +254,22 @@ export const CHECKOUT_TOKEN_VARIABLES = {
   buttonHoverBackground: "--bitsnap-checkout-button-hover-background",
   hoverSurface: "--bitsnap-checkout-hover-surface",
   focusRing: "--bitsnap-checkout-focus-ring",
+  controlBorder: "--bitsnap-checkout-control-border",
+  skeleton: "--bitsnap-checkout-skeleton",
+  colorScheme: "--bitsnap-checkout-color-scheme",
   error: "--bitsnap-checkout-error",
   overlay: "--bitsnap-checkout-overlay",
   radius: "--bitsnap-checkout-radius",
+  panelRadius: "--bitsnap-checkout-panel-radius",
+  controlRadius: "--bitsnap-checkout-control-radius",
+  buttonRadius: "--bitsnap-checkout-button-radius",
+  buttonFontSize: "--bitsnap-checkout-button-font-size",
+  panelShadow: "--bitsnap-checkout-panel-shadow",
+  sale: "--bitsnap-checkout-sale",
+  panelWidth: "--bitsnap-checkout-panel-width",
+  panelMaxHeight: "--bitsnap-checkout-panel-max-height",
+  motionDuration: "--bitsnap-checkout-motion-duration",
+  paymentLogoHeight: "--bitsnap-checkout-payment-logo-height",
 } as const;
 
 export type CheckoutTokenName = keyof typeof CHECKOUT_TOKEN_VARIABLES;
@@ -184,40 +297,68 @@ export const CHECKOUT_THEME_PRESETS: Record<
     hoverSurface: "#e4e4e7",
     focusRing: "#71717a",
     error: "#dc2626",
-    overlay: "rgb(0 0 0 / 0.35)",
+    // No `overlay`, `controlBorder`, `skeleton` or `colorScheme`: `cart.css`
+    // keeps them as per-theme literals behind their own variables, so only a
+    // merchant value replaces them (N01, D22).
+    sale: "#b91c1c",
   },
 };
 
 /**
- * Some shared UI primitives (`Button`, `SelectTrigger`, ...) read the shadcn
- * theme variables instead of checkout tokens. Those are remapped so a themed
- * dropdown and themed primitives stay consistent. They are only written when
- * the matching token is in effect, so untouched tokens change nothing.
+ * Empty: nothing in the cart reads a shadcn variable (`cart.css` reads only
+ * `--bitsnap-checkout-*`). Writing them would also break a token that points
+ * at the host's shadcn variable: `background: "var(--background)"` would be
+ * written as `--background: var(--background)`, a cycle, and the cart would
+ * fall back to its dark default (19a review B1).
  */
-const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [
-  { token: "background", variable: "--background" },
-  { token: "foreground", variable: "--foreground" },
-  { token: "surface", variable: "--card" },
-  { token: "surface", variable: "--popover" },
-  { token: "foreground", variable: "--popover-foreground" },
-  { token: "mutedForeground", variable: "--muted-foreground" },
-  { token: "border", variable: "--border" },
-  { token: "border", variable: "--input" },
-  { token: "focusRing", variable: "--ring" },
-  { token: "error", variable: "--destructive" },
-  { token: "radius", variable: "--radius" },
-];
+const CHECKOUT_SHADCN_VARIABLES: ShadcnVariableMapping<CheckoutTokenName> = [];
 
 /**
- * The portalled dropdown renders `bg-popover`/`text-popover-foreground` from the
- * shared primitives, so those two variables are resolved eagerly: without a
- * token they fall back to the dark values the checkout has always used.
+ * `color-scheme` for the root from the effective `background` token (N10):
+ * `dark` when white text reads better on it, `light` otherwise. Only `#rgb`
+ * and `#rrggbb` are read; any other value (`rgb()`, `var()`, a name) or no
+ * `background` gives `undefined`, and the theme decides in `cart.css`.
+ * Scrollbars, the native select popup and form controls follow it.
  */
-function resolveDropdownStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
-  return {
-    "--popover": tokens.surface ?? "var(--color-neutral-800)",
-    "--popover-foreground": tokens.foreground ?? "var(--color-neutral-200)",
-  } as CSSProperties;
+export function colorSchemeFor(
+  background: string | undefined,
+): "dark" | "light" | undefined {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(background?.trim() ?? "");
+  if (match == null) {
+    return undefined;
+  }
+  const hex = match[1].length === 3 ? match[1].replace(/./g, "$&$&") : match[1];
+  // WCAG relative luminance, then the rule of `onColor` (consent/core/contrast.ts):
+  // dark when white text contrasts at least as well as #111111 (luminance 0.0056054).
+  const [r, g, b] = [0, 2, 4].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05;
+  return 1.05 / light >= light / 0.0556054 ? "dark" : "light";
+}
+
+/**
+ * `true` for a zero duration (`0`, `0ms`, `0s`, `0.0s`, ...). Any other value,
+ * including `var(--host-duration)`, keeps motion on: the token passes through
+ * unvalidated and CSS decides.
+ */
+export function isMotionOff(duration: string | undefined): boolean {
+  if (duration == null) {
+    return false;
+  }
+  return /^[+-]?(0+(\.0*)?|\.0+)(ms|s)?$/i.test(duration.trim());
+}
+
+function withColorScheme(
+  style: CSSProperties,
+  colorScheme: "dark" | "light" | undefined,
+): CSSProperties {
+  return colorScheme == null
+    ? style
+    : ({ ...style, "--bsc-scheme-guess": colorScheme } as CSSProperties);
 }
 
 export function resolveCheckoutAppearance(
@@ -239,9 +380,20 @@ export function resolveCheckoutAppearance(
     isCustomized: resolved.isCustomized,
     tokens: resolved.tokens,
     elements: resolved.elements,
-    boundaryClassName: resolved.theme,
-    boundaryStyle: resolved.boundaryStyle,
-    dropdownStyle: resolveDropdownStyle(resolved.tokens),
+    // `cart.css` reads the guess under `--bitsnap-checkout-color-scheme`, so a
+    // `colorScheme` token, or that variable in the host's CSS, beats it (N1).
+    boundaryStyle: withColorScheme(
+      resolved.boundaryStyle,
+      resolved.tokens.colorScheme == null
+        ? colorSchemeFor(resolved.tokens.background)
+        : undefined,
+    ),
+    boundaryAttributes: {
+      "data-bitsnap-checkout-theme": resolved.theme,
+      ...(isMotionOff(resolved.tokens.motionDuration)
+        ? { "data-bitsnap-checkout-motion": "off" as const }
+        : {}),
+    },
   };
 }
 

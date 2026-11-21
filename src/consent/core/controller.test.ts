@@ -296,6 +296,54 @@ describe("consent banner", () => {
   });
 });
 
+describe("cart open (D19)", () => {
+  // jsdom's MutationObserver callbacks run as microtasks.
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("mirrors the cart's data-bitsnap-cart-open from <html> onto .root, so the banner hides", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!.querySelector<HTMLElement>(".root")!;
+    assert.equal(root.hasAttribute("data-cart-open"), false);
+    doc.documentElement.setAttribute("data-bitsnap-cart-open", "");
+    await flush();
+    assert.equal(root.hasAttribute("data-cart-open"), true, "a cart opened");
+    doc.documentElement.removeAttribute("data-bitsnap-cart-open");
+    await flush();
+    assert.equal(root.hasAttribute("data-cart-open"), false, "the cart closed");
+  });
+
+  it("picks up a cart that is already open when the banner first shows", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    doc.documentElement.setAttribute("data-bitsnap-cart-open", "");
+    const api = make();
+    await api.ready;
+    assert.equal(shadowOf(doc)!.querySelector(".root")!.hasAttribute("data-cart-open"), true);
+  });
+
+  it("hides only the banner, with visibility, so it returns as it was", async () => {
+    const { STYLES } = await import("./styles.ts");
+    assert.match(STYLES, /\.root\[data-cart-open\] \.banner\{visibility:hidden\}/);
+    assert.doesNotMatch(STYLES, /data-cart-open\] \.(overlay|dialog)/, "the settings layer is untouched");
+  });
+
+  it("stops watching after destroy()", async () => {
+    const dom = setupDom();
+    const doc = dom.window.document;
+    const api = make();
+    await api.ready;
+    const root = shadowOf(doc)!.querySelector<HTMLElement>(".root")!;
+    api.destroy();
+    doc.documentElement.setAttribute("data-bitsnap-cart-open", "");
+    await flush();
+    assert.equal(root.hasAttribute("data-cart-open"), false, "no observer left behind");
+    doc.documentElement.removeAttribute("data-bitsnap-cart-open");
+  });
+});
+
 describe("stored consent", () => {
   const stored = (bv: number, marketing = true) =>
     `bitsnap_consent=${encodeState({ id: "abc", ts: 1, bv, c: { analytics: false, marketing, preferences: false } })}; Path=/`;

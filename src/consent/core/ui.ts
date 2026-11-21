@@ -67,6 +67,7 @@ export function createUI(options: UIOptions): ConsentUI {
   let layer: "none" | "banner" | "settings" = "none";
   let opener: HTMLElement | null = null;
   let media: MediaQueryList | null = null;
+  let cartObserver: MutationObserver | null = null;
   const toggles = new Map<ConsentCategory, HTMLInputElement>();
   /** The exit animations running right now; at most one per node. */
   const exits: Exit[] = [];
@@ -254,7 +255,29 @@ export function createUI(options: UIOptions): ConsentUI {
       media.addEventListener?.("change", applyTheme);
     }
     applyTheme();
+    watchCart();
     doc.body.append(host);
+  }
+
+  /**
+   * The cart sets `data-bitsnap-cart-open` on `<html>` while it is open
+   * (`CART_OPEN_ATTRIBUTE` in `components/checkout/CartFrame.tsx`; this module
+   * must not import the cart, so the literal is repeated). CSS in the shadow
+   * root cannot see `<html>`, so the attribute is mirrored onto `.root`, where
+   * a rule hides the banner (it would cover the cart's checkout button, and
+   * the cart's focus trap makes it unreachable anyway).
+   */
+  function watchCart() {
+    const html = doc.documentElement;
+    const mirror = () => {
+      if (html.hasAttribute("data-bitsnap-cart-open")) root.setAttribute("data-cart-open", "");
+      else root.removeAttribute("data-cart-open");
+    };
+    mirror();
+    const Observer = doc.defaultView?.MutationObserver;
+    if (typeof Observer !== "function") return;
+    cartObserver = new Observer(mirror);
+    cartObserver.observe(html, { attributes: true, attributeFilter: ["data-bitsnap-cart-open"] });
   }
 
   function focusables(): HTMLElement[] {
@@ -406,6 +429,8 @@ export function createUI(options: UIOptions): ConsentUI {
   function destroy() {
     doc.removeEventListener("keydown", onKeydown, true);
     media?.removeEventListener?.("change", applyTheme);
+    cartObserver?.disconnect();
+    cartObserver = null;
     while (exits.length > 0) stopExit(exits[0]!.node);
     host?.remove();
     host = null;

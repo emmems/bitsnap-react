@@ -1,0 +1,70 @@
+{
+  "fixtures": {
+    "analytics": {
+      "jsGzipKB": 6.8
+    },
+    "cart-main": {
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/",
+        "node_modules/zod/"
+      ],
+      "jsGzipKB": 180.1
+    },
+    "cart-main-ns": {
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/",
+        "node_modules/zod/"
+      ],
+      "jsGzipKB": 319.7
+    },
+    "cart-subpath": {
+      "forbidStatic": [
+        "node_modules/hls.js/",
+        "node_modules/dompurify/",
+        "node_modules/zod/",
+        "node_modules/lucide-react/",
+        "node_modules/tailwind-merge/",
+        "node_modules/class-variance-authority/",
+        "node_modules/@radix-ui/react-select/",
+        "node_modules/react-phone-number-input/",
+        "node_modules/input-otp/"
+      ],
+      "jsGzipKB": 121.8
+    },
+    "catalog": {
+      "jsGzipKB": 26.5
+    },
+    "chat": {
+      "jsGzipKB": 74.8
+    },
+    "consent": {
+      "jsGzipKB": 12.1
+    },
+    "contact": {
+      "jsGzipKB": 28.3
+    },
+    "course": {
+      "forbidStatic": [
+        "node_modules/hls.js/"
+      ],
+      "jsGzipKB": 114.0
+    },
+    "models": {
+      "jsGzipKB": 16.9
+    },
+    "returns": {
+      "jsGzipKB": 112.1
+    },
+    "viewer3d": {
+      "jsGzipKB": 16.6
+    }
+  },
+  "css": {
+    "dist/cart.css": 4.5,
+    "dist/index.css": 24.0
+  },
+  "maxDependencies": 27,
+  "tarballBytes": 1891000
+}

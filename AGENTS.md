@@ -61,6 +61,10 @@ export default function Checkout({ projectID, products }: {
 
 Fetch products with `BitsnapBackend` on the server and pass only public fields.
 Import the exported CSS. Configure the project before calling cart methods.
+`presentation="dialog"` opens the cart as a centred dialog (bottom sheet on phones).
+For a page that needs only the cart, import from `bitsnap-react/cart` and
+`bitsnap-react/cart/cart.css` instead of `bitsnap-react` and `bitsnap-react/dist/index.css`
+(smaller bundle; same cart and same `Bitsnap` API; `dist/index.css` already contains `cart.css`).
 For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`.
 
 ## Other components
@@ -226,7 +230,7 @@ Rules:
 
 ## Cart checkout (`BitsnapCheckout`)
 
-"Next step" posts the cart to `{host}/api/integrations/{projectID}/public-commerce/buy`
+"Go to checkout" (`nextStep` text) posts the cart to `{host}/api/integrations/{projectID}/public-commerce/buy`
 (`createPaymentURL` in `src/components/checkout/methods.ts`, body built by
 `cartLinkRequest` in `CartProvider.tsx`) and redirects to the returned `url`.
 
@@ -247,8 +251,56 @@ Rules:
   accepted on the order's details form; it is paid to the courier). A
   `/payment/manualPayment/<project>/<order>` page is a placed order paid
   outside Bitsnap, so the cart is cleared at once.
-- Express buttons (Apple Pay, Google Pay) are separate online flows.
+- Express buttons (Apple Pay, Google Pay, InPost Pay, Revolut Pay) are
+  separate online flows. In the cart they render in `CartExpressArea.tsx`:
+  48 px high through each widget's own option (Apple/Google `style.height`,
+  Revolut `buttonStyle.height`; InPost keeps its own), artwork colour by
+  theme. The reset skips their DOM. A Google Pay that stays `.not-ready` (the
+  buyer has no saved card) and an `<inpost-izi-button>` its script never
+  defined take no space (`cart.css`).
+- Visual QA: `example/checkout` (repository only, not in the npm package; its README lists the URL parameters;
+  `?express=1` answers every express provider as available, `?host=preflight`
+  is a hostile host page, `?cart=many` a long cart).
+- Warm-up (`cart-warmup.ts`, since 1.31.0): the inner `CartComponent` registers
+  its `QueryClient` and provider, and at the first idle moment
+  (`requestIdleCallback`, 500 ms timeout; `setTimeout` fallback) prefetches the
+  `cart-products` and `cart-available-countries` queries. Hover/focus of the
+  cart button, `Bitsnap.warmUp()` and `ProductList` after add also prefetch
+  `cart-payment-methods` (needs a stored country). Keys and `staleTime` come
+  from `cart-queries.ts`, shared with the drawer: change a key there, never in
+  one place. Nothing runs on the server, with an empty cart or, for idle and
+  hover, with `prefetch={false}`. It must never send a cart event or write the
+  cart. Test: `cart-warmup.test.tsx`.
 - Tests mock `fetch` by URL: `cart-buy-error.test.tsx`, `cart-payment-method.test.tsx`.
+- Presentation (since 1.32.0): `presentation="drawer"` (default) or `"dialog"`;
+  compact layout `(max-width: 639.98px), (max-height: 500px)` makes the drawer
+  full screen and the dialog a bottom sheet. One shell, `CartFrame.tsx`, for
+  both; differences are `cart.css` rules on `data-bitsnap-checkout-presentation`.
+  The dialog panel (`Dialog.Content`) is itself the centred box: no wrapper
+  around it (it would cover the overlay and swallow outside clicks). Keep
+  `onPointerDownOutside` prevented: only the overlay's click closes. Tests
+  loop over both presentations (`cart-a11y.test.tsx`, `cart-presentation.test.tsx`).
+- Cart look (D22, since 1.32.0): every colour, radius, shadow and text size in
+  `cart.css` reads a `--bitsnap-checkout-*` token variable (`CHECKOUT_TOKEN_VARIABLES`)
+  or a `--bsc-*` alias of one. A per-theme literal (control border, skeleton,
+  overlay, `color-scheme`) is the fallback of its own variable, which no theme
+  preset may write (a preset value cannot be told apart from a merchant's).
+  Font sizes come from the `--bsc-t*` scale on `fontSize`, never px. Token
+  values pass through as written (`var(--site-x)` works); only a value with a
+  `;` is dropped (`omitUndefined`). Tests: the "follows the site's look"
+  blocks in `cart-css.test.ts` and `appearance.test.ts`.
+- The cart root's theme is `data-bitsnap-checkout-theme="dark|light"`, never
+  a bare `dark`/`light` class (a host `.dark { ... }` rule or class-based
+  `dark:` variant would match it). The root has no `bitsnap-react` class
+  (`index.css` sets `--background` & co. on `.bitsnap-react`) and the cart
+  writes no shadcn variable (`CHECKOUT_SHADCN_VARIABLES` is empty): either
+  would break a token `var(--background)` that follows a shadcn host. Returns and
+  products still map onto shadcn variables; `resolveBoundaryStyle` skips a
+  mapping whose value reads that same variable.
+- `data-bitsnap-cart-open` on `<html>` while a cart is open is a contract with
+  the consent module (`src/consent/core/ui.ts` mirrors it and hides its
+  banner); the literal is repeated on both sides because consent must not
+  import the cart.
 
 ## Chat (`ChatThread`, `Channel`, panel "Wiadomości")
 

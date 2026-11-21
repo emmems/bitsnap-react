@@ -1,6 +1,6 @@
 {
   "name": "bitsnap-react",
-  "version": "1.29.3",
+  "version": "1.32.0",
   "description": "This is Bitsnap React library for easy integration with any website which is using React framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -9,16 +9,18 @@
     "build": "node scripts/write-version.mjs && tsup",
     "test:returns-ssr": "pnpm build && node --test test/returns-widget.ssr.test.cjs",
     "test:catalog-ssr": "pnpm build && node --test test/catalog.ssr.test.cjs",
+    "test:cart-ssr": "pnpm build && node --test test/cart.ssr.test.cjs",
     "test:course-ssr": "pnpm build && node --test test/course.ssr.test.cjs",
     "build:publish": "pnpm build --env.publish",
     "clean": "rimraf ./dist",
     "dev": "node scripts/write-version.mjs && tsup --watch",
     "dev:publish": "pnpm dev --env.publish",
-    "test": "tsup src/components/checkout/appearance.test.ts src/components/checkout/texts.test.ts src/components/checkout/buy-error.test.ts src/components/checkout/cart-buy-error.test.tsx src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts src/panel/theme/theme.test.tsx src/panel/components/shared/shared.test.tsx src/panel/components/shared/shop-pills.test.tsx src/panel/panel-page.test.tsx src/lib/render.text.test.tsx src/components/products/appearance.test.ts src/components/products/texts.test.ts src/components/products/format.test.ts src/components/products/fetch.test.ts src/components/products/useProducts.test.ts src/components/products/cart-target.test.ts src/components/checkout/cart-items.test.ts src/components/checkout/pending-order.test.ts src/components/checkout/quantity.test.ts src/components/checkout/cart-a11y.test.tsx src/components/checkout/payment-method.test.ts src/components/checkout/cart-payment-method.test.tsx src/course/logic.test.ts src/course/accent.test.ts src/course/texts.test.ts src/course/datasource.test.ts src/course/sanitize.test.ts src/course/VideoPlayer.test.tsx src/course/PanelCourse.test.tsx src/consent/core/cookie.test.ts src/consent/core/hosts.test.ts src/consent/core/texts.test.ts src/consent/core/activate.test.ts src/consent/core/gcm.test.ts src/consent/core/contrast.test.ts src/consent/core/controller.test.ts src/consent/embed.test.ts src/consent/react.test.tsx src/consent/react-shown.test.tsx src/analytics/core.test.ts src/analytics/embed.test.ts src/analytics/instrument.test.tsx src/analytics/page-views.test.tsx src/analytics/visitor.test.ts src/components/checkout/visitor-header.test.ts src/components/products/impressions.test.ts src/components/products/ProductList.analytics.test.tsx src/components/products/rating.test.tsx src/components/products/ProductList.rating.test.tsx src/components/products/ProductList.quote.test.tsx src/components/checkout/cart-analytics.test.tsx src/components/checkout/apple-pay-analytics.test.tsx src/components/notifications/notifications-analytics.test.tsx src/components/returns/returns-analytics.test.tsx src/panel/panel-analytics.test.tsx src/course/course-analytics.test.tsx src/viewer3d/viewer3d.test.ts src/viewer3d/Model3DViewer.test.tsx src/panel/panel-products.test.tsx src/panel/components/products/ticket/ticket.test.ts src/panel/order-history.test.tsx src/panel/notification-settings.test.tsx src/ui/email-code-login/email-code-login.test.tsx src/ui/email-code-login/login-brand-logo.test.tsx src/panel/panel-login.test.tsx src/panel/session-storage.test.ts src/panel/shop-filter.test.ts src/components/returns/returns-login.test.tsx src/components/notifications/notifications-login.test.tsx src/panel/audio-player/audio-player.test.tsx src/express/client.test.ts src/express/cart-record.test.ts src/express/cart-session.test.ts src/express/revolut.test.ts src/express/return-url.test.ts src/express/loaders.test.ts src/components/express/express-ssr.test.tsx src/components/express/InPostPayButton.test.tsx src/components/express/RevolutPayButton.test.tsx src/chat/client.test.ts src/chat/payment-request.test.tsx src/chat/realtime.test.ts src/chat/widgets.test.tsx src/chat/panel-messages.test.tsx src/captcha/TurnstileChallenge.test.ts src/live-chat/live-chat.test.ts src/components/contact/contact.test.tsx src/panel/components/returns-panel/returns-panel.test.tsx --format esm --out-dir .test-dist --no-config --external jsdom --silent && node --test --test-force-exit \".test-dist/**/*.test.mjs\"",
+    "test": "node scripts/run-tests.mjs src/components/checkout/appearance.test.ts src/components/checkout/wallet-artwork.test.ts src/components/checkout/texts.test.ts src/components/checkout/buy-error.test.ts src/components/checkout/cart-buy-error.test.tsx src/lib/appearance-core.test.ts src/lib/texts.test.ts src/components/returns/appearance.test.ts src/components/returns/texts.test.ts src/components/returns/errors.test.ts src/components/returns/money.test.ts src/components/returns/session-storage.test.ts src/components/returns/state-machine.test.ts src/components/returns/selection.test.ts src/components/returns/legacy.test.ts src/panel/returns-appearance.test.ts src/panel/theme/theme.test.tsx src/panel/components/shared/shared.test.tsx src/panel/panel-page.test.tsx src/lib/render.text.test.tsx src/components/products/appearance.test.ts src/components/products/texts.test.ts src/components/products/format.test.ts src/components/products/fetch.test.ts src/components/products/useProducts.test.ts src/components/products/cart-target.test.ts src/components/checkout/cart-items.test.ts src/components/checkout/pending-order.test.ts src/components/checkout/quantity.test.ts src/components/checkout/cart-a11y.test.tsx src/components/checkout/presentation.test.ts src/components/checkout/cart-presentation.test.tsx src/components/checkout/cart-css.test.ts src/components/checkout/cart-class-graph.test.tsx src/components/checkout/country-dropdown.test.tsx src/components/checkout/lib/round.number.test.ts src/components/checkout/product-price.test.tsx src/components/checkout/cart-snapshot.test.ts src/components/checkout/cart-view.test.ts src/components/checkout/validate.test.ts src/components/checkout/locale.test.ts src/components/checkout/cart-instant.test.tsx src/components/checkout/payment-method.test.ts src/components/checkout/cart-payment-method.test.tsx src/components/checkout/cart-warmup.test.tsx src/course/logic.test.ts src/course/accent.test.ts src/course/texts.test.ts src/course/datasource.test.ts src/course/sanitize.test.ts src/course/VideoPlayer.test.tsx src/course/PanelCourse.test.tsx src/consent/core/cookie.test.ts src/consent/core/hosts.test.ts src/consent/core/texts.test.ts src/consent/core/activate.test.ts src/consent/core/gcm.test.ts src/consent/core/contrast.test.ts src/consent/core/controller.test.ts src/consent/embed.test.ts src/consent/react.test.tsx src/consent/react-shown.test.tsx src/analytics/core.test.ts src/analytics/embed.test.ts src/analytics/instrument.test.tsx src/analytics/page-views.test.tsx src/analytics/visitor.test.ts src/components/checkout/visitor-header.test.ts src/components/products/impressions.test.ts src/components/products/ProductList.analytics.test.tsx src/components/products/rating.test.tsx src/components/products/ProductList.rating.test.tsx src/components/products/ProductList.quote.test.tsx src/components/checkout/cart-analytics.test.tsx src/components/checkout/apple-pay-analytics.test.tsx src/components/notifications/notifications-analytics.test.tsx src/components/returns/returns-analytics.test.tsx src/panel/panel-analytics.test.tsx src/course/course-analytics.test.tsx src/viewer3d/viewer3d.test.ts src/viewer3d/Model3DViewer.test.tsx src/panel/panel-products.test.tsx src/panel/components/products/ticket/ticket.test.ts src/panel/order-history.test.tsx src/panel/notification-settings.test.tsx src/ui/email-code-login/email-code-login.test.tsx src/ui/email-code-login/login-brand-logo.test.tsx src/panel/panel-login.test.tsx src/components/returns/returns-login.test.tsx src/components/notifications/notifications-login.test.tsx src/panel/audio-player/audio-player.test.tsx src/express/client.test.ts src/express/cart-record.test.ts src/express/cart-session.test.ts src/express/revolut.test.ts src/express/return-url.test.ts src/express/loaders.test.ts src/components/express/express-ssr.test.tsx src/components/express/InPostPayButton.test.tsx src/components/express/RevolutPayButton.test.tsx src/chat/client.test.ts src/chat/payment-request.test.tsx src/chat/realtime.test.ts src/chat/widgets.test.tsx src/chat/panel-messages.test.tsx src/captcha/TurnstileChallenge.test.ts src/components/contact/contact.test.tsx src/panel/components/returns-panel/returns-panel.test.tsx src/panel/components/shared/shop-pills.test.tsx src/panel/session-storage.test.ts src/panel/shop-filter.test.ts src/live-chat/live-chat.test.ts",
     "test:live-chat-build": "node --test test/live-chat-build.test.cjs",
     "test:types": "tsc -p test/consumer/tsconfig.json",
     "test:package": "node test/consumer/verify-package.mjs",
-    "test:express-ssr": "pnpm build && node --test test/express.ssr.test.cjs"
+    "test:express-ssr": "pnpm build && node --test test/express.ssr.test.cjs",
+    "size": "node scripts/check-size.mjs"
   },
   "repository": {
     "type": "git",
@@ -48,14 +50,23 @@
     "@bufbuild/protoc-gen-es": "^2.10.0",
     "@react-three/drei": "10.7.9",
     "@react-three/fiber": "9.8.2",
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/applepayjs": "^14.0.9",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "0.187.0",
     "autoprefixer": "^10.4.20",
+    "esbuild": "0.24.0",
     "jsdom": "^30.1.3",
     "postcss": "^8.5.3",
+    "postcss-prefix-selector": "^2.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "shadcn": "^3.5.0",
+    "tailwindcss": "^4.2.1",
     "three": "0.187.0",
     "tsup": "^8.3.5",
+    "tw-animate-css": "^1.4.0",
     "typescript": "^5.6.3"
   },
   "dependencies": {
@@ -70,38 +81,19 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-popover": "^1.1.15",
-    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
-    "@tailwindcss/postcss": "^4.2.1",
     "@tanstack/react-query": "^5.90.9",
-    "@types/applepayjs": "^14.0.9",
-    "@zootools/email-spell-checker": "^1.12.0",
-    "add": "^2.0.6",
     "apple-pay-button": "^1.2.1",
-    "checkbox": "^0.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dlx": "^0.2.1",
     "dompurify": "^3.4.17",
     "hls.js": "^1.6.15",
     "input-otp": "^1.4.2",
-    "label": "^0.2.2",
     "lucide-react": "^0.553.0",
-    "motion": "^12.23.24",
-    "pnpm": "^10.23.0",
-    "postcss-prefix-selector": "^2.1.1",
-    "radix-ui": "^1.4.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "react-phone-number-input": "^3.4.13",
-    "shadcn": "^3.5.0",
-    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.2.1",
-    "tslib": "^2.8.1",
-    "tw-animate-css": "^1.4.0",
     "use-debounce": "^10.0.6",
     "zod": "4.1.12",
     "zustand": "^5.0.8"
@@ -159,6 +151,14 @@
       "import": "./dist/index.css",
       "require": "./dist/index.css"
     },
+    "./dist/cart.css": {
+      "import": "./dist/cart.css",
+      "require": "./dist/cart.css"
+    },
+    "./cart/cart.css": {
+      "import": "./dist/cart.css",
+      "require": "./dist/cart.css"
+    },
     "./errors": {
       "import": {
         "types": "./dist/errors.d.mts",
@@ -187,6 +187,16 @@
       "require": {
         "types": "./dist/catalog.d.ts",
         "default": "./dist/catalog.js"
+      }
+    },
+    "./cart": {
+      "import": {
+        "types": "./dist/cart.d.mts",
+        "default": "./dist/cart.mjs"
+      },
+      "require": {
+        "types": "./dist/cart.d.ts",
+        "default": "./dist/cart.js"
       }
     },
     "./course": {
@@ -263,6 +273,9 @@
       ],
       "catalog": [
         "./dist/catalog.d.ts"
+      ],
+      "cart": [
+        "./dist/cart.d.ts"
       ],
       "course": [
         "./dist/course.d.ts"

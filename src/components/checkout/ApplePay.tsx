@@ -20,10 +20,16 @@ import {
 } from "@/src/analytics/instrument";
 
 // A CommonJS package with a `default` export: bundlers unwrap it, Node's own
-// ESM loader (server rendering of the unbundled library) does not.
-const ApplePayButton: typeof ApplePayButtonModule =
-  (ApplePayButtonModule as unknown as { default?: typeof ApplePayButtonModule })
-    .default ?? ApplePayButtonModule;
+// ESM loader (server rendering of the unbundled library) does not. Read when
+// rendering, not at module load: a top-level property read cannot be
+// tree-shaken, and would keep this module in every bundle that imports the
+// library's entry, also when the button is never used (slice 5).
+function appleButtonComponent(): typeof ApplePayButtonModule {
+  return (
+    (ApplePayButtonModule as unknown as { default?: typeof ApplePayButtonModule })
+      .default ?? ApplePayButtonModule
+  );
+}
 
 type AppleButtonType =
   | "plain"
@@ -363,6 +369,7 @@ function ApplePayButtonComponent({
     session.begin();
   }
 
+  const ApplePayButton = appleButtonComponent();
   return (
     <ApplePayButton
       style={style}
