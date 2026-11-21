@@ -30,6 +30,8 @@ export default function CartExpressArea({
   const projectID = getProjectID() ?? "";
   // White artwork on the dark panel, black on the light one (PLAN §5 item 13).
   const light = useCheckoutAppearance().theme === "light";
+  // One height for the wallet row (Apple Pay's default is 30px, Google Pay's 40px).
+  const walletStyle = { width: "100%", height: "48px" };
 
   return (
     <>
@@ -41,7 +43,7 @@ export default function CartExpressArea({
         >
           <ApplePayButton
             colorType={light ? "black" : "white"}
-            style={{ width: "100%" }}
+            style={walletStyle}
             items={items}
           />
         </div>
@@ -55,7 +57,7 @@ export default function CartExpressArea({
           <GooglePayButton
             buttonSizeMode="fill"
             buttonColor={light ? "black" : "white"}
-            style={{ width: "100%" }}
+            style={walletStyle}
             items={items}
           />
         </div>
@@ -66,7 +68,15 @@ export default function CartExpressArea({
         style={paymentButtons.style}
       >
         <InPostPayButtonInner projectID={projectID} locale={locale} />
-        <RevolutPayButtonInner projectID={projectID} locale={locale} />
+        {/* As the wallets: light artwork on the dark panel, 48px. Its frame
+            is 5px wider than its box (Revolut's `min-width: calc(100% + 5px)`):
+            the padding keeps it inside the panel. */}
+        <RevolutPayButtonInner
+          projectID={projectID}
+          locale={locale}
+          buttonStyle={{ variant: light ? "dark" : "light", height: "48px" }}
+          style={{ paddingRight: 5 }}
+        />
       </div>
     </>
   );

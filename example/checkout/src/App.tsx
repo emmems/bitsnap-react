@@ -5,6 +5,7 @@ import {
   type CartPresentation,
   type CheckoutAppearance,
 } from "bitsnap-react";
+import { BitsnapConsent } from "bitsnap-react/consent";
 import { clearCart, seedCart } from "./mocks";
 import "./styles.css";
 
@@ -125,11 +126,13 @@ export default function App({
   initialPresentation = "drawer",
   locale,
   openOnLoad = false,
+  consent = false,
 }: {
   initialScenario?: Scenario;
   initialPresentation?: CartPresentation;
   locale?: string;
   openOnLoad?: boolean;
+  consent?: boolean;
 }) {
   const [scenario, setScenario] = useState<Scenario>(initialScenario);
   const [presentation, setPresentation] = useState<CartPresentation>(initialPresentation);
@@ -235,6 +238,8 @@ export default function App({
         </BitsnapCheckout>
         <span>badge shows the seeded cart</span>
       </div>
+      {/* Preview mode: shown on every load, no cookie, nothing sent. */}
+      {consent && <BitsnapConsent preview locale="pl" theme="light" />}
     </main>
   );
 }

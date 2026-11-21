@@ -355,6 +355,12 @@ describe("cart class graph", () => {
         3,
         "the Apple Pay, Google Pay and InPost/Revolut wrappers render",
       );
+      // One height for the wallet row (step 20): Apple Pay's own default is 30px.
+      assert.match(
+        $('[data-bitsnap-checkout-slot="paymentButtons"] style')?.textContent ?? "",
+        /--apple-pay-button-height: 48px/,
+        "Apple Pay is 48px high",
+      );
       assert.ok($('[data-bitsnap-express-status="failed"]'), "the alert express status renders");
       assert.ok($('[data-bitsnap-express-status="pending"]'), "the polite express status renders");
       assert.ok($("[data-bitsnap-checkout-divider]"), "the or divider renders");

@@ -121,3 +121,10 @@ html.shadcn-site body {
   background: var(--background) !important;
   color: var(--foreground) !important;
 }
+
+/* `?font=latin`: the host font has no Polish letters (main.tsx loads only its
+   ASCII glyphs); the cart inherits the font, the browser takes "ą", "ż" ...
+   from the next family. */
+html.latin-font body {
+  font-family: "Space Grotesk", Georgia, serif !important;
+}

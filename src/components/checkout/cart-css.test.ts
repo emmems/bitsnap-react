@@ -331,6 +331,8 @@ describe("cart.css isolation", () => {
       // A host `a { text-decoration: underline }` or `ul { list-style: disc }` (S5).
       ["text-decoration", "inherit"],
       ["list-style", "none"],
+      // A host `button { box-shadow: 0 0 0 2px red }` (step 20, `?host=preflight`).
+      ["box-shadow", "none"],
     ]) {
       assert.equal(reset.declarations.get(property), value, property);
     }
@@ -417,6 +419,8 @@ describe("cart.css grid shell and header", () => {
     const base = findTop('[data-bitsnap-checkout-trigger="default"]')!;
     assert.equal(base.declarations.get("min-width"), "44px");
     assert.equal(base.declarations.get("min-height"), "44px");
+    // A host `button { box-shadow: ... }` (step 20, `?host=preflight`).
+    assert.equal(base.declarations.get("box-shadow"), "none");
     assert.doesNotMatch(css, /data-bitsnap-checkout-trigger="custom"/, "a merchant trigger gets no SDK rule");
   });
 
@@ -1006,6 +1010,27 @@ describe("cart.css express divider (N1, N2, N6)", () => {
     for (const [name, buttons, define] of cases) {
       assert.deepEqual(express(buttons, define), { divider: "flex", collapsed: false }, name);
     }
+  });
+
+  it("gives a wallet that will not show no room in the row, so Apple Pay takes the row (step 20)", () => {
+    const { window } = new JSDOM(`<div data-bitsnap-checkout="root"><div class="bsc-wallets">
+      <div id="apple" data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn"><apple-pay-button></apple-pay-button></div>
+      <div id="waiting" data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn">${GOOGLE_NOT_READY}<span data-bitsnap-checkout-part="wallet-busy" role="status"></span></div>
+      <div id="google" data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn"><div class="google-pay-button-container"><button type="button"></button></div></div>
+      <div data-bitsnap-checkout-slot="paymentButtons" class="bsc-express-btn bsc-express-wide">
+        <div data-bitsnap-express="inpostPay"><inpost-izi-button id="unloaded"></inpost-izi-button></div>
+        <div data-bitsnap-express="inpostPay"><inpost-pay-loaded id="loaded"></inpost-pay-loaded></div>
+      </div></div></div>`);
+    window.customElements.define("inpost-pay-loaded", class extends window.HTMLElement {});
+    const doc = window.document;
+    // Grid: no line box under the inline-block buttons.
+    assert.equal(cascade(doc.getElementById("apple")!).get("display"), "grid");
+    assert.equal(cascade(doc.getElementById("google")!).get("display"), "grid");
+    // Google Pay keeps `.not-ready` when the buyer has no saved card; its status span is not content.
+    assert.equal(cascade(doc.getElementById("waiting")!).get("display"), "none");
+    // An InPost element its script never defined keeps the widget's margins otherwise.
+    assert.equal(cascade(doc.getElementById("unloaded")!).get("display"), "none");
+    assert.notEqual(cascade(doc.getElementById("loaded")!).get("display"), "none");
   });
 });
 

@@ -70,6 +70,26 @@ const PRODUCTS: Product[] = [
   },
 ];
 
+/** Extra lines for `?cart=many`: a cart long enough to scroll (one name with Polish diacritics). */
+const MANY_PRODUCTS: Product[] = [
+  ["Zażółć gęślą jaźń: e-book", "#a855f7", "Ż"],
+  ["Workshop recording, part 1", "#f97316", "1"],
+  ["Workshop recording, part 2", "#ef4444", "2"],
+  ["Templates pack", "#14b8a6", "T"],
+  ["Mentoring session (60 min)", "#84cc16", "M"],
+  ["Community access, one year", "#e11d48", "C"],
+  ["Printed workbook", "#0284c7", "W"],
+].map(([name, color, label], index) => ({
+  id: `many-${index + 1}`,
+  name,
+  description: null,
+  price: 2900 + index * 1000,
+  currency: "PLN",
+  metadata: {},
+  image_url: image(color, label),
+  isDeliverable: false,
+}));
+
 const COUNTRIES = [
   { name: "Poland", code: "PL" },
   { name: "Germany", code: "DE" },
@@ -78,6 +98,9 @@ const COUNTRIES = [
 ];
 
 export const MOCK_PRODUCT_IDS = PRODUCTS.map((product) => product.id);
+export const MANY_PRODUCT_IDS = [...MOCK_PRODUCT_IDS, ...MANY_PRODUCTS.map((product) => product.id)];
+/** `?express=1`: no deliverable line, so Revolut Pay (no shipping address) can show too. */
+export const EXPRESS_PRODUCT_IDS = ["course-1", "ebook-1"];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -103,7 +126,81 @@ export type MockOptions = {
   countriesLatencyMs?: number;
   /** The payment-method choice with cash on delivery and server-picked logos in every card. */
   paymentLogos?: boolean;
+  /**
+   * Apple Pay, Google Pay, InPost Pay and Revolut Pay answer "available" (test
+   * mode). The buttons are the providers' own: their scripts load from the
+   * providers, nothing is drawn here. Apple Pay also needs `ApplePaySession`,
+   * which only Safari has; the example stubs it so Chromium shows the button.
+   */
+  express?: boolean;
 };
+
+/** Protobuf wire format, enough for the two RPC answers `?express=1` needs. */
+function protoString(field: number, value: string): number[] {
+  const bytes = Array.from(new TextEncoder().encode(value));
+  return [(field << 3) | 2, bytes.length, ...bytes];
+}
+
+/** `IsOneClickPaymentAvailableResponse`: Apple Pay, Google Pay (TEST gateway of Google's docs), InPost Pay. */
+function oneClickAvailable(): Uint8Array<ArrayBuffer> {
+  const config = [
+    ...protoString(1, "01234567890123456789"),
+    ...protoString(2, "Example shop"),
+    ...protoString(3, "example"),
+    ...protoString(4, "exampleGatewayMerchantId"),
+  ];
+  return new Uint8Array([0x08, 1, 0x10, 1, 0x18, 1, 0x22, config.length, ...config]);
+}
+
+function varint(value: number): number[] {
+  const bytes: number[] = [];
+  while (value > 0x7f) {
+    bytes.push((value & 0x7f) | 0x80);
+    value >>>= 7;
+  }
+  return [...bytes, value];
+}
+
+/** `GetPreOrderDetailsResponse`: no delivery methods, the cart's total (Google Pay needs one). */
+function preOrderDetails(totalMinor: number): Uint8Array<ArrayBuffer> {
+  return new Uint8Array([0x20, ...varint(totalMinor), ...protoString(6, "PLN"), ...protoString(7, "PL")]);
+}
+
+function proto(body: Uint8Array<ArrayBuffer>) {
+  return new Response(body, { status: 200, headers: { "Content-Type": "application/proto" } });
+}
+
+function expressSnapshot(body: { items?: { id: string; quantity: number }[] }) {
+  const lines = (body.items ?? []).map((item, index) => {
+    const product = [...PRODUCTS, ...MANY_PRODUCTS].find((entry) => entry.id === item.id);
+    const unit = product?.price ?? 0;
+    return {
+      lineId: `line-${index}`,
+      productId: item.id,
+      variantId: item.id,
+      quantity: item.quantity,
+      name: product?.name ?? item.id,
+      unitPriceMinor: unit,
+      lineTotalMinor: unit * item.quantity,
+      currency: "PLN",
+    };
+  });
+  const total = lines.reduce((sum, line) => sum + line.lineTotalMinor, 0);
+  return {
+    cartId: "example-cart",
+    revision: 1,
+    status: "open",
+    environment: "test",
+    currency: "PLN",
+    locale: "pl",
+    lines,
+    subtotalMinor: total,
+    deliveryMinor: 0,
+    discountMinor: 0,
+    totalMinor: total,
+    expiresAt: Date.now() + 3_600_000,
+  };
+}
 
 /**
  * Generic placeholder logos from `public/logos` (no real brand marks). The
@@ -152,11 +249,49 @@ export function installCheckoutMocks(options: MockOptions = {}) {
       await new Promise((resolve) => setTimeout(resolve, options.latencyMs));
     }
 
+    if (options.express === true) {
+      if (url.endsWith("/IsOneClickPaymentAvailable")) {
+        return proto(oneClickAvailable());
+      }
+      if (url.endsWith("/GetPreOrderDetails")) {
+        // The `?express=1` cart: course-1 × 1 + ebook-1 × 2.
+        return proto(preOrderDetails(9900 + 2 * 4900));
+      }
+      if (url.includes("/api/rpc/")) {
+        // Every other RPC (GetPreOrderDetails, ...): an empty answer.
+        return proto(new Uint8Array());
+      }
+      if (url.includes("/public-commerce/express/availability")) {
+        const provider = (publicConfig: Record<string, string>) => ({
+          available: true,
+          environment: "test",
+          reasons: [],
+          publicConfig,
+        });
+        return json({
+          success: true,
+          environment: "test",
+          providers: {
+            inpostPay: provider({ merchantClientId: "example-merchant" }),
+            revolutPay: provider({ publicKey: "pk_example", mode: "sandbox" }),
+            adyen: { available: false, environment: "test", reasons: [] },
+          },
+        });
+      }
+      if (url.includes("/public-commerce/express/cart")) {
+        const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}");
+        return json({ success: true, cartToken: "example-token", snapshot: expressSnapshot(body) });
+      }
+    }
+
     if (url.includes("/public-commerce/products")) {
       if (options.failProducts === true) {
         return json({}, 500);
       }
-      let result = PRODUCTS;
+      const ids = new URL(url, window.location.href).searchParams.get("ids")?.split(",");
+      let result = [...PRODUCTS, ...MANY_PRODUCTS].filter(
+        (product) => ids == null || ids.includes(product.id),
+      );
       if (options.priceChange === true) {
         // The sale price went up, with a new price version.
         result = result.map((product) =>
@@ -170,7 +305,7 @@ export function installCheckoutMocks(options: MockOptions = {}) {
         );
       }
       if (options.missingProduct === true) {
-        result = result.slice(0, -1);
+        result = result.filter((product) => product.id !== "ebook-1");
       }
       return json({
         success: true,

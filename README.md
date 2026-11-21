@@ -18,9 +18,9 @@ The library is designed to provide a complete e-commerce checkout solution that 
 It uses modern React patterns and libraries like:
 
 - React Query for data fetching
-- Zod for schema validation
+- Zod for schema validation (`bitsnap-react/models`; the cart uses small built-in checks)
 - Protocol Buffers for data serialization
-- Tailwind CSS for styling
+- Tailwind CSS for styling (the cart has its own hand-written stylesheet, `cart.css`)
 
 ## Express checkout: InPost Pay and Revolut Pay (unreleased)
 
@@ -77,107 +77,113 @@ defaults, overridable through `texts`).
 
 ## 1.32.0 (unreleased)
 
-- **New: `bitsnap-react/cart`, the cart without the rest of the SDK.**
-  `import { BitsnapCheckout } from "bitsnap-react/cart"` with
-  `import "bitsnap-react/cart/cart.css"` ships no panel, returns, course, product
-  list, consent or chat code: 118 KB gzip of JavaScript instead of 175 KB for the
-  same `BitsnapCheckout` from `bitsnap-react` (227 KB in 1.31; ESM bundlers). `bitsnap-react`
-  exports everything it did and nothing changes for it. See
-  [Import only the cart](#import-only-the-cart).
-- **`zod` is gone from the cart.** The cart reads `localStorage`, `/countries` and
-  the `window.cart.buyProduct` / `ADD_TO_CART` payloads with small built-in
-  checks (same rules as the zod schemas), which takes about 52 KB gzip out of
-  the cart for `bitsnap-react` users too. `LinkRequest` is a plain type: the
-  package's `.d.ts` no longer needs `zod` for it (`bitsnap-react/models` still
-  does). A bad `buyProduct` argument or `ADD_TO_CART` payload is ignored with a
-  `console.warn` that names the field, as before; the warned error is a plain
-  `Error` named `InvalidInputError` instead of a `ZodError`.
+The cart opens at once, is smaller, has a new look and can open as a dialog.
+1.30 and 1.31 were never published, so coming from 1.29 everything below is
+new. Most shops need no change; read **Upgrading from 1.29** first.
 
-- **New: `presentation="dialog"`.** `BitsnapCheckout` opens as the right drawer
-  (default, unchanged) or as a centred dialog; on phones, also in landscape,
-  the dialog is a bottom sheet. Adding to the cart opens it in the chosen
-  presentation. See [Cart presentation](#cart-presentation).
-- **The cart follows your site's look.** New tokens `controlBorder`,
-  `skeleton`, `colorScheme`, `panelRadius`, `controlRadius`, `buttonRadius`,
-  `buttonFontSize` and `panelShadow`; `fontSize` now scales every text size of
-  the cart (before, most sizes were fixed). Token values may be
-  `var(--your-variable)`, so the cart follows your design-system variables and
-  your own dark-mode switch. See [Follow your site's theme](#follow-your-sites-theme).
-  Without these tokens nothing changes.
-- **The cart's theme is an attribute, not a class.** The cart root carries
-  `data-bitsnap-checkout-theme="dark"` (or `"light"`) instead of a bare `dark`
-  or `light` class, so a site rule like shadcn's `.dark { --background: ... }`
-  or a class-based Tailwind `dark:` variant no longer reaches into the cart.
-  A stylesheet that keys on `.dark [data-bitsnap-checkout...]` or
-  `[data-bitsnap-checkout="root"].dark` must switch to
-  `[data-bitsnap-checkout-theme="dark"]`. The cart root also loses its
-  `bitsnap-react` class (the cart's stylesheet never used it; the cart
-  button keeps it) and the cart stops writing shadcn variables (`--background`,
-  `--ring`, ...) on it: nothing in the cart reads them, and a token like
-  `background: "var(--background)"` now follows your shadcn theme in light and
-  dark mode instead of the library's or the dark default.
-- **New token `panelMaxHeight`** caps the dialog's height (default
-  `min(100dvh - 48px, 704px)`); `panelWidth` is the dialog's width in the
-  dialog (default 480 px).
-- **Drawer widths:** full screen below 640 px and on screens up to 500 px
+### Upgrading from 1.29
+
+- **Your CSS and `appearance.elements` classes.** The cart's stylesheet is no
+  longer in a CSS cascade layer. Its root firewall (`all: initial`), its local
+  reset and its `.bsc-*` rules (at most (0,2,0): hover, focus and other states
+  sit in `:where()`) beat a layered class on every property they set, so a
+  Tailwind v4 utility in `appearance.elements.*.className` (`bg-black`) no
+  longer changes it, and an unlayered single class ties or loses. Use, in this
+  order: a token or `--bitsnap-checkout-*` variable, `appearance.elements.<slot>.style`,
+  a selector of at least (0,2,0) such as
+  `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"].your-class`,
+  or Tailwind's important modifier (`bg-black!` in v4). In return your page's
+  generic CSS (`button { background: transparent }`, `.w-full`,
+  `a:hover { color: red }`) no longer breaks the cart. See
+  [Overriding the checkout's own styles](#overriding-the-checkouts-own-styles).
+- **Theme selector.** The cart root carries `data-bitsnap-checkout-theme="dark"`
+  (or `"light"`) instead of a bare `dark`/`light` class, and no longer the
+  `bitsnap-react` class (the cart button keeps it). CSS that keys on
+  `.dark [data-bitsnap-checkout…]` or `[data-bitsnap-checkout="root"].dark`
+  must use `[data-bitsnap-checkout-theme="dark"]`. The cart also stops writing
+  shadcn variables (`--background`, `--ring`, ...) on its root: a site's
+  `.dark { ... }` rule or class-based `dark:` variant no longer reaches it.
+- **`fontSize`** now scales every text size of the cart (before, most sizes
+  were fixed). Check a cart that passes it.
+- **Slots.** The country picker is a native `<select>` without flags or search
+  (style it with `countryTrigger`); `countrySearch`, `countryOption` and
+  `countryDropdown` are accepted and do nothing. `quantityButton` and
+  `removeButton` lose the shadcn button look. `checkoutButton` no longer styles
+  "Try again" (new slot `retryButton`).
+- **New requests (Content Security Policy).** With items in the cart the SDK
+  asks bitsnap.pl (or your `host`) for their products and the shop's countries
+  after the page loads, and payment logos load from the same origin: allow it
+  in `connect-src` and `img-src`. `prefetch={false}` turns the prefetch off.
+- **Drawer width:** full screen below 640 px and on screens at most 500 px
   high, 380 px from 640 px, 420 px from 1200 px (before: 350 px from 768 px,
   420 px from 1280 px). Tablets from 640 to 767 px get a side panel.
-- **Payment logos in the payment-method cards.** When bitsnap.pl sends logos
-  with the payment-method choice, each card shows them under its description
-  (new slots `paymentMethodLogos`, `paymentMethodLogo`, new token
-  `paymentLogoHeight`). See [Paying online, by transfer / BLIK to a phone or on delivery](#paying-online-by-transfer--blik-to-a-phone-or-on-delivery).
-- **The consent banner (`bitsnap-react/consent`) hides while the cart is open**
-  and comes back when it closes.
-- **Country names follow the cart's `locale`** ("Polska" in a Polish cart),
-  from `Intl.DisplayNames`; the server's name stays where the browser has none.
-- **An unavailable line can only be removed**: no quantity stepper, and its
-  quantity is not counted in the cart title ("Koszyk (n)"). The trigger's badge
-  still counts every stored line.
-- **Merchant classes on cart slots lose to the cart's rules.** The cart's
-  stylesheet is unlayered: its root firewall (`all: initial`, which also
-  covers `appearance.elements.root.className`), its local reset and its
-  `.bsc-*` component rules beat a layered class in `appearance.elements.*.className`
-  (every Tailwind v4 utility) on every property they set, and tie with an
-  unlayered class of the same specificity, so stylesheet order decides. To
-  override, use `appearance.tokens` or `appearance.elements.<slot>.style`, or a
-  selector of at least (0,2,0) on the slot attribute, such as
-  `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"].your-class`.
-  See [Overriding the checkout's own styles](#overriding-the-checkouts-own-styles).
 
-## 1.31.0 (unreleased)
+### Faster and smaller
 
-- **Cart prices follow the cart locale.** Line prices, the struck price and
-  the Omnibus line are formatted in the cart's `locale` (or the active
-  `setLocale` locale, `pl-PL` by default), not the browser language: a Polish
-  shop in an English browser shows "99,80 zł", not "PLN 99.80". Google Pay's
-  shipping labels keep the browser language.
-- **Readable sale line.** New default colours for a discounted line: the
-  struck regular price and the Omnibus line ("Najniższa cena z 30 dni") use
-  `mutedForeground` (`#a3a3a3` on the dark panel, 7.11:1; `#71717a` in the
-  light theme, 4.83:1), the sale price uses the new `sale` token (`#f87171`
-  dark, 6.48:1; `#b91c1c` light, 6.47:1). Before they were `#737373`,
-  `#b91c1c` and `#525252` on the dark panel (3.78, 2.77 and 2.29:1).
-- **New tokens** `sale`, `panelWidth` and `motionDuration` (see
-  [Tokens](#tokens)). Like every token they accept any CSS value, so
-  `var(--your-variable)` works. `motionDuration: "0ms"` (or `"0s"`, `"0"`)
-  turns the cart's own animations and transitions off; Apple Pay, Google Pay
-  and the other express buttons keep theirs. Other values set the duration of
-  the drawer's enter and exit (default `240ms`).
-- **Drawer animation.** The drawer fades in with a short slide from the right
-  and is readable from the first frame; before, auto-animate kept it fully
-  transparent for about 250 ms on every open. Under
-  `prefers-reduced-motion: reduce` it only fades, for at most `120ms`.
-- **Light look from tokens.** The new muted and sale defaults are tuned for the
-  dark panel. A light look built from tokens without `theme: "light"` should
-  also set `mutedForeground` and `sale`, or the struck price, Omnibus line and
-  sale price drop below 4.5:1 on white.
-- **Video, audio and rich descriptions load their libraries on first use.**
-  `hls.js` and `dompurify` are no longer in the cart bundle; a video or audio
-  stream starts a moment later the first time it plays.
-- **The cart loads before it opens.** With items in the cart, the cart asks
-  for their products and the shop's countries at the first idle moment after
-  the page loads, so opening it needs no wait. See
-  [Performance](#performance). `prefetch={false}` turns it off.
+- **The cart shows its lines at once**, also after a reload or offline. The
+  browser keeps a small copy of the cart's product names, images and prices
+  (`localStorage` key `bitsnap-cart-view`, at most 48 KB, 30 days) and checks
+  it with Bitsnap in the background. `+` and remove change the line and the
+  total at once, without waiting for the network. The copy never sets what is
+  charged: the server checks every price at checkout.
+- **Changed prices.** When a price changed after the buyer saw it, the line
+  says "Cena się zmieniła: była X, jest Y" (`priceUpdated`) and the buyer
+  continues with a second click, instead of the old "Refresh the page".
+  Wallet buttons wait, with "Aktualizujemy koszyk…" (`walletsUpdating`), until
+  the new price was on screen.
+- **The cart loads before it opens**: see [Performance](#performance) and
+  `Bitsnap.warmUp()`.
+- **Smaller.** `import { BitsnapCheckout } from "bitsnap-react"` ships about
+  175 KB gzip of JavaScript for the cart (403 KB in 1.29): `hls.js` and
+  `dompurify` load on first use (a video or audio stream starts a moment later
+  the first time), and `zod` is gone from the cart (a bad `buyProduct`
+  argument or `ADD_TO_CART` payload is still ignored with a `console.warn`,
+  now an `InvalidInputError` instead of a `ZodError`; `LinkRequest` is a plain
+  type; `bitsnap-react/models` keeps `zod`).
+- **New: `bitsnap-react/cart`**, the cart without the rest of the SDK: about
+  118 KB gzip, with its own `bitsnap-react/cart/cart.css`. See
+  [Import only the cart](#import-only-the-cart).
+
+### New look and options
+
+- **Layout.** Title "Koszyk (n)", 72 px thumbnails (a placeholder tile when a
+  product has no image), a pill quantity stepper and a trash icon, express
+  buttons first and "lub" under them, then country and payment method cards,
+  a total bigger than its label and the button "Przejdź do kasy" / "Go to
+  checkout". The empty cart has "Wróć do zakupów". Focus lands on the panel
+  when it opens. The cart takes your page's font at 16 px and no longer
+  inherits its text-align, letter-spacing, line-height or colour.
+- **`presentation="dialog"`**: a centred dialog, a bottom sheet on phones
+  (also in landscape). See [Cart presentation](#cart-presentation).
+- **The cart follows your site's look.** Every colour, radius, shadow and text
+  size is a token, and token values may be `var(--your-variable)`, so the cart
+  follows your design-system variables and your own dark-mode switch. New
+  tokens `sale`, `panelWidth`, `panelMaxHeight`, `motionDuration`,
+  `controlBorder`, `skeleton`, `colorScheme`, `panelRadius`, `controlRadius`,
+  `buttonRadius`, `buttonFontSize`, `panelShadow` and `paymentLogoHeight`. See
+  [Follow your site's theme](#follow-your-sites-theme) and [Tokens](#tokens).
+- **Payment logos.** When Bitsnap sends logos with the payment-method choice,
+  each card shows them under its description. The server picks them; new
+  slots `paymentMethodLogos`, `paymentMethodLogo`. See
+  [Paying online, by transfer / BLIK to a phone or on delivery](#paying-online-by-transfer--blik-to-a-phone-or-on-delivery).
+- **Readable sale line.** The struck price and the Omnibus line use
+  `mutedForeground`, the sale price the new `sale` token (at least 4.5:1 in
+  both themes; before as low as 2.29:1). A light look built from tokens
+  without `theme: "light"` should also set `mutedForeground` and `sale`, and
+  gets a light `color-scheme` from its `background`.
+- **Express buttons.** Apple Pay, Google Pay and Revolut Pay are 48 px high and
+  use their dark artwork on `theme: "light"`, their light artwork on the dark
+  panel. Apple Pay and Google Pay are hidden while the cart has a
+  pay-what-you-want line.
+- **The consent banner (`bitsnap-react/consent`) hides while the cart is
+  open** and comes back when it closes; `<html>` carries
+  `data-bitsnap-cart-open` meanwhile.
+- **Locale.** Prices follow the cart's `locale`, not the browser language (a
+  Polish shop in an English browser shows "99,80 zł"), and so do country names.
+- **Smaller changes.** The cart button gets a new default look unless you pass
+  `className`. An unavailable line can only be removed and is not counted in
+  the title. Animations follow `motionDuration` (`"0ms"` turns them off) and
+  `prefers-reduced-motion`.
 
 ## 1.29.3
 
@@ -428,8 +434,8 @@ Changes after 1.16.0, in the e-mail + 6-digit-code logins of `PanelLogin`,
 
 ## Performance
 
-The cart loads its data before the buyer opens it, so the drawer shows the
-items at once.
+The cart loads its data before the buyer opens it, so it shows the items at
+once.
 
 - With items in the cart, `<BitsnapCheckout>` asks for the products of the
   cart lines (`GET /products`) and the shop's countries (`GET /countries`) at
@@ -437,14 +443,14 @@ items at once.
 - When the pointer or the focus reaches the cart button, it also asks for the
   payment options (`POST /payment-methods`).
 - After "add to cart" from `ProductList`, it does the same, so the new item is
-  ready before the drawer opens.
+  ready before the cart opens.
 - An answer that is still fresh, or a request that is still running, is never
   asked for again.
 - With an empty cart nothing is sent. Nothing is sent on the server.
 - The cart's product ids go to Bitsnap (or your custom `host`) even if the
   buyer never opens the cart. No cookies and no personal data go with them.
-- It only fills a cache. The price is still checked before "Next step", and no
-  cart analytics event is sent.
+- It only fills a cache. The price is still checked at checkout, and no cart
+  analytics event is sent.
 
 Turn it off for one cart with `prefetch={false}`:
 
@@ -513,7 +519,7 @@ cart: one store, one `setProjectID`.
   `require("bitsnap-react/cart")` loads the shared CommonJS chunks the cart needs
   and shares its state with `require("bitsnap-react")`.
 - **Stylesheet.** `bitsnap-react/cart/cart.css` (also served as
-  `bitsnap-react/dist/cart.css`) holds every rule the cart uses, 4.4 KB gzip. It
+  `bitsnap-react/dist/cart.css`) holds every rule the cart uses, about 4.5 KB gzip. It
   is already part of `bitsnap-react/dist/index.css`: import one of them (both
   together only repeat the rules). `cart.css` does not include the product list, returns or panel styles.
 - **Product list.** `ProductList` is in `bitsnap-react/catalog`; its "Add to cart"
@@ -590,7 +596,8 @@ and a click on the backdrop close it. Everything that opens the cart
 ```
 
 `theme` accepts `"dark"` (the default presentation) and `"light"`. There is no
-automatic system theme selection.
+automatic system theme selection; to follow your site's own light and dark
+mode, see the next section.
 
 ### Follow your site's theme
 
@@ -676,7 +683,7 @@ built-in styles):
     elements: {
       title: { style: { fontFamily: '"Georgia", serif', fontSize: "28px" } },
       checkoutButton: { className: "store-checkout-button" },
-      countryOption: { className: "px-4" },
+      countryTrigger: { style: { borderRadius: "999px" } },
     },
   }}
 />
@@ -684,39 +691,45 @@ built-in styles):
 
 | Slot                 | Element                                     |
 | -------------------- | ------------------------------------------- |
-| `root`               | Theme boundary of the drawer                |
-| `overlay`            | Backdrop behind the drawer                   |
-| `panel`              | Drawer panel                                |
-| `header`             | Drawer header row                           |
-| `title`              | "Cart" heading                              |
+| `root`               | Theme boundary of the cart                  |
+| `overlay`            | Backdrop behind the drawer or dialog        |
+| `panel`              | The drawer or dialog panel                  |
+| `header`             | Header row                                  |
+| `title`              | "Koszyk (n)" heading                        |
 | `closeButton`        | Close button                                |
-| `productList`        | Scrollable product list                     |
-| `product`            | Single product row                          |
-| `productImage`       | Product image                               |
-| `productName`        | Product name                                |
-| `productPrice`       | Product price                               |
+| `lines`              | Scroll region: the lines and the options under them |
+| `productList`        | List of lines                               |
+| `product`            | Single line                                 |
+| `productImage`       | Product image or its placeholder tile       |
+| `productName`        | Product name (a link when the line has a product page) |
+| `productVariant`     | Variant under the name                      |
+| `productUnitPrice`   | "49,90 zł × 2" under the name               |
+| `productPrice`       | Line total (struck regular price and sale price when on sale) |
 | `quantityControl`    | Quantity stepper                            |
 | `quantityInput`      | Quantity value input                        |
 | `quantityButton`     | Quantity `-`/`+` buttons                    |
-| `removeButton`       | "Remove" button                             |
-| `summary`            | Total block                                 |
-| `totalLabel`         | "Total" label                               |
-| `totalValue`         | Total amount                                |
-| `deliveryText`       | Delivery note                               |
+| `removeButton`       | Remove (trash) button                       |
+| `options`            | Express buttons, divider, country, payment methods |
+| `paymentButtons`     | Wrappers of the express buttons (Apple Pay, Google Pay, InPost Pay, Revolut Pay) |
 | `countryLabel`       | "Choose country" label                      |
-| `countryTrigger`     | Country select trigger                      |
-| `countryDropdown`    | Portalled country list                      |
-| `countrySearch`      | Country search field                        |
-| `countryOption`      | Single country option                       |
-| `paymentButtons`     | Apple Pay / Google Pay wrappers              |
+| `countryTrigger`     | Native country `<select>`                   |
 | `paymentMethods`     | "How would you like to pay?" group (online, transfer / BLIK to a phone, cash on delivery) |
 | `paymentMethodOption`| Single payment method card                   |
 | `paymentMethodLogos` | Row of logos in a payment method card (only when the server sent logos for it) |
 | `paymentMethodLogo`  | One logo in that row; `.bsc-method-logo-chip` when it sits on a white tile |
-| `checkoutButton`     | "Next step" button                          |
+| `footer`             | Total, note and checkout button; always visible |
+| `summary`            | Total row                                   |
+| `totalLabel`         | "Total" label                               |
+| `totalValue`         | Total amount                                |
+| `summaryNote`        | "Discounts, delivery and taxes in the next step" |
+| `checkoutButton`     | "Go to checkout" button                     |
+| `continueShopping`   | "Continue shopping" under the checkout button (dialog only) |
+| `retryButton`        | "Try again" after a failed load             |
 | `emptyState`         | Empty cart message                          |
+| `emptyAction`        | "Continue shopping" in the empty cart       |
 | `error`              | Checkout error message                      |
 | `skeleton`           | Loading placeholder                         |
+| `deliveryText`, `countryDropdown`, `countrySearch`, `countryOption` | Accepted, render nothing since 1.32.0 |
 
 The same names are rendered as `data-bitsnap-checkout-slot` attributes, and the
 checkout root carries `data-bitsnap-checkout`, so you can also target the slots
@@ -751,7 +764,7 @@ reach the cart. Since 1.32.0 three kinds of rules set the cart's look:
   `button`, `input`, `select`, `label`, `fieldset`, `legend`, `img` and `svg`
   inside the cart (express buttons excepted): `margin`, `padding`, `font`,
   `letter-spacing`, `text-transform`, `background`, `border`, `color`,
-  `text-decoration` and `list-style`.
+  `text-decoration`, `list-style` and `box-shadow`.
 - **The component rules**, (0,2,0) at most:
   `[data-bitsnap-checkout] .bsc-…` or
   `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="…"]`. Hover, focus,
@@ -822,15 +835,15 @@ reset on the elements listed above):
 | ------------------------- | ------------------------------------------------------- |
 | `fontFamily`              | The whole checkout                                      |
 | `fontSize`                | The whole checkout: every text size scales from it (default `16px`; 12 to 20 px, never below 11 px). Use a length: a keyword like `"large"` sets the base, but every step renders at the root size. Touch targets keep 44 px |
-| `background`              | Panel, country trigger                                  |
-| `surface`                 | Country dropdown, search bar, selected payment method   |
-| `foreground`              | Titles, prices, total, country list                                   |
-| `mutedForeground`         | Empty cart, delivery note, country label, search field, struck regular price, Omnibus line |
-| `border`                  | Country trigger, dropdown, product separators, payment method cards |
-| `buttonBackground`        | "Next step" button                                      |
-| `buttonForeground`        | "Next step" button                                      |
-| `buttonHoverBackground`   | "Next step" button on hover                             |
-| `hoverSurface`            | Close button, country options                           |
+| `background`              | Panel, footer, country select                           |
+| `surface`                 | Tile behind the product image (the placeholder when there is none) |
+| `foreground`              | Text: titles, names, prices, total, icons, country select, selected payment method |
+| `mutedForeground`         | Secondary text: item count, unit price, notes, the "or" divider, payment method descriptions, total label, struck regular price, Omnibus line |
+| `border`                  | Panel edge, header and footer lines, separators between lines, the "or" divider |
+| `buttonBackground`        | Checkout button                                         |
+| `buttonForeground`        | Checkout button                                         |
+| `buttonHoverBackground`   | Checkout button on hover                                |
+| `hoverSurface`            | Hover of the close, quantity, "Continue shopping" and retry buttons |
 | `focusRing`               | Focus rings of the shared controls                      |
 | `controlBorder`           | Outline of the quantity stepper, country select, payment method cards and radios, notices, retry and empty-cart buttons (default `#737373`; `#8a8a8a` in the light theme; keep 3:1 on `background`) |
 | `skeleton`                | Loading placeholders (default `#333333`; `#d4d4d8` in the light theme) |
@@ -863,19 +876,19 @@ ring widths, icon sizes and font weights.
   every callback keep their current meaning.
 - The appearance lives in the checkout component only. It is not a global setting
   and does not reuse the panel's `setTheme`.
-- Apple Pay and Google Pay keep their native artwork and fonts; only the space
-  around them is themed.
+- The express buttons (Apple Pay, Google Pay, InPost Pay, Revolut Pay) keep
+  their own artwork and fonts. The cart sets their height (48 px; InPost's is
+  its own), the artwork colour for the theme and the space around them; its
+  reset skips their DOM.
 - The drawer is full width in the compact layout (below 640 px, or at most
   500 px high), 380 px from 640 px and 420 px from 1200 px. To change the
   width outside the compact layout, pass the `panelWidth`
   token or set `--bitsnap-checkout-panel-width` on `[data-bitsnap-checkout]` in
   your CSS (for example `[data-bitsnap-checkout] { --bitsnap-checkout-panel-width: 480px; }`).
   A width class or a plain width rule on the `panel` slot loses.
-- The country list is rendered in a portal, outside the drawer. It receives the
-  theme (colors, font, focus ring and stacking) from the checkout, with or
-  without an `appearance`, and opens above the drawer. Its rules follow the same
-  specificity cap, so the same override options apply to `countryDropdown`,
-  `countrySearch` and `countryOption`.
+- The country picker is the browser's native `<select>`, inside the panel. Its
+  list is drawn by the browser in the cart's `color-scheme` (`colorScheme`
+  token); `countryTrigger` styles the field.
 
 ## Returns
 
@@ -1032,7 +1045,7 @@ Checkout keys (`CheckoutTexts`): `cart`, `emptyCart`, `total`, `delivery`,
 ### Paying online, by transfer / BLIK to a phone or on delivery
 
 When the shop turned on manual payments with "show at checkout", the cart asks
-the buyer how they want to pay before "Next step": online (card, BLIK code,
+the buyer how they want to pay before "Go to checkout": online (card, BLIK code,
 instant transfer through the shop's gateway) or by hand (bank transfer and/or
 BLIK to the seller's phone number; the label follows the accounts the seller
 has). The first option is the seller's preferred one and is selected. The
@@ -1072,10 +1085,11 @@ marks it `chip` (drawn on a white tile); logos load only from the Bitsnap API
 origin (the endpoint's, or bitsnap.pl), without a referrer, and others are
 dropped.
 
-When "Next step" fails, the cart shows the text of the backend error code
+When "Go to checkout" fails, the cart shows the text of the backend error code
 (`noPaymentGateway`, `gatewayNotConfigured`, `shippingNotConfigured`,
-`mixedRecurring`, `currencyUnsupported`, `priceChanged`; `unavailableProducts`
-for `product-not-found`). Server errors (5xx, `internal`) and `invalid-request`
+`mixedRecurring`, `currencyUnsupported`; `unavailableProducts` for
+`product-not-found`). A `price-changed` answer marks the changed lines with
+`priceUpdated` instead and the next click continues. Server errors (5xx, `internal`) and `invalid-request`
 show `checkoutFailed`. For any other 4xx code the cart shows the message sent
 by the server, else `checkoutFailed`. It never shows the bare code, and never
 a message that is HTML, multi-line, longer than 200 characters or a stack

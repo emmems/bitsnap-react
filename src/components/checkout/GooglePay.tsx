@@ -18,6 +18,8 @@ export type Props = {
   buttonColor?: "white" | "black";
   style?: {
     width?: string;
+    /** Height of the button; Google's default is 40px. */
+    height?: string;
   };
   items: {
     name: string;

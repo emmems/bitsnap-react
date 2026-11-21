@@ -230,7 +230,7 @@ Rules:
 
 ## Cart checkout (`BitsnapCheckout`)
 
-"Next step" posts the cart to `{host}/api/integrations/{projectID}/public-commerce/buy`
+"Go to checkout" (`nextStep` text) posts the cart to `{host}/api/integrations/{projectID}/public-commerce/buy`
 (`createPaymentURL` in `src/components/checkout/methods.ts`, body built by
 `cartLinkRequest` in `CartProvider.tsx`) and redirects to the returned `url`.
 
@@ -251,7 +251,16 @@ Rules:
   accepted on the order's details form; it is paid to the courier). A
   `/payment/manualPayment/<project>/<order>` page is a placed order paid
   outside Bitsnap, so the cart is cleared at once.
-- Express buttons (Apple Pay, Google Pay) are separate online flows.
+- Express buttons (Apple Pay, Google Pay, InPost Pay, Revolut Pay) are
+  separate online flows. In the cart they render in `CartExpressArea.tsx`:
+  48 px high through each widget's own option (Apple/Google `style.height`,
+  Revolut `buttonStyle.height`; InPost keeps its own), artwork colour by
+  theme. The reset skips their DOM. A Google Pay that stays `.not-ready` (the
+  buyer has no saved card) and an `<inpost-izi-button>` its script never
+  defined take no space (`cart.css`).
+- Visual QA: `example/checkout` (its README lists the URL parameters;
+  `?express=1` answers every express provider as available, `?host=preflight`
+  is a hostile host page, `?cart=many` a long cart).
 - Warm-up (`cart-warmup.ts`, since 1.31.0): the inner `CartComponent` registers
   its `QueryClient` and provider, and at the first idle moment
   (`requestIdleCallback`, 500 ms timeout; `setTimeout` fallback) prefetches the

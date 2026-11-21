@@ -106,8 +106,9 @@
  * The elements host stylesheets reset or decorate. The express containers
  * (`paymentButtons` and everything in them) are skipped: Apple Pay, Google Pay,
  * InPost and Revolut inject their own DOM and artwork (R08). `text-decoration`
- * inherits (a host `a { text-decoration: underline }` stops here) and lists
- * lose their markers (a host `ul { list-style: disc }`). */
+ * inherits (a host `a { text-decoration: underline }` stops here), lists
+ * lose their markers (a host `ul { list-style: disc }`) and a host
+ * `button { box-shadow: ... }` stops here. */
 [data-bitsnap-checkout] :where(a, h1, h2, h3, h4, p, ul, ol, li, hr, figure, button, input, select, label, fieldset, legend, img, svg):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)) {
     margin: 0;
     padding: 0;
@@ -119,6 +120,7 @@
     color: inherit;
     text-decoration: inherit;
     list-style: none;
+    box-shadow: none;
 }
 
 [data-bitsnap-checkout] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)),
@@ -811,18 +813,28 @@
     margin-bottom: -16px;
 }
 
+/* Grid: no line box under the inline-block buttons. */
 [data-bitsnap-checkout] .bsc-express-btn {
     flex: 1 1 160px;
     min-width: 0;
+    display: grid;
 }
 
-/* A wallet that is not available renders nothing: no gap for it. */
-[data-bitsnap-checkout] .bsc-express-btn:where(:empty) {
+/* A wallet that is not available renders nothing: no gap for it. Google Pay
+ * keeps `.not-ready` when it will not show (no saved card): Apple Pay then
+ * takes the row instead of half of it. */
+[data-bitsnap-checkout] .bsc-express-btn:where(:empty, :has(> .not-ready)) {
     display: none;
 }
 
 [data-bitsnap-checkout] .bsc-express-wide {
     flex-basis: 100%;
+}
+
+/* An InPost element its script never defined (widget not loaded, or refused)
+ * keeps the widget's 10 px margins: no gap for it. */
+[data-bitsnap-checkout] :where(inpost-izi-button:not(:defined)) {
+    display: none;
 }
 
 /* Size and alignment: `[data-bitsnap-checkout-part="status"]` below. */
@@ -1304,6 +1316,7 @@
     border: 0;
     border-radius: 9999px;
     background: transparent;
+    box-shadow: none;
     color: inherit;
     font: inherit;
     cursor: pointer;
