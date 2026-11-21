@@ -146,7 +146,7 @@ describe(`cart accessibility (${presentation})`, () => {
     assert.equal(panel.getAttribute("data-bitsnap-checkout-presentation"), presentation);
     const title = doc().getElementById(panel.getAttribute("aria-labelledby")!)!;
     assert.equal(title.tagName, "H1");
-    assert.equal(title.textContent, "Cart");
+    assert.equal(title.textContent, "Cart", "an empty cart shows no count");
     assert.equal(trigger().getAttribute("aria-expanded"), "true");
     assert.equal(trigger().getAttribute("aria-controls"), panel.id);
 
@@ -215,6 +215,8 @@ describe(`cart accessibility (${presentation})`, () => {
 
     await openCart();
     const panel = dialog()!;
+    // The title carries the item count from the store (PLAN §5 item 8).
+    assert.equal(doc().getElementById(panel.getAttribute("aria-labelledby")!)?.textContent, "Cart (2)");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productName"] + p')?.textContent, "Blue");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="removeButton"]')?.getAttribute("aria-label"), "Remove: Mug Blue");
@@ -236,6 +238,29 @@ describe(`cart accessibility (${presentation})`, () => {
 });
 
 }
+
+describe("cart trigger", () => {
+  it("is styled by cart.css only without a merchant class (D20)", async () => {
+    await mount();
+    assert.equal(trigger().getAttribute("data-bitsnap-checkout-trigger"), "default");
+    assert.equal(trigger().className, "bitsnap-react");
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+
+    await mount({ className: "my-cart-button" });
+    assert.equal(trigger().getAttribute("data-bitsnap-checkout-trigger"), "custom");
+    assert.equal(trigger().className, "bitsnap-react my-cart-button");
+  });
+
+  it("counts before the lines load: the title reads the store", async () => {
+    useCheckoutStore.setState({ numberOfProductsInCart: 3 });
+    productsStatus = 500;
+    await mount();
+    useCheckoutStore.setState({ numberOfProductsInCart: 3 });
+    await openCart();
+    const panel = dialog()!;
+    assert.equal(doc().getElementById(panel.getAttribute("aria-labelledby")!)?.textContent, "Cart (3)");
+  });
+});
 
 describe("cart product links", () => {
   it("links the image and the name to the product page given when adding", async () => {

@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
+import { JSDOM } from "jsdom";
+import { contrastRatio } from "@/src/consent/core/contrast";
 
 /*
- * Static guard for the checkout stylesheet (F-01 regression guard).
+ * Static guard for the cart stylesheet `cart.css` (F-01 regression guard,
+ * plan part 3 §7.1).
  *
  * The cart lost to host pages because its rules sat in a cascade layer: any
  * unlayered host rule (`.w-full`, `button { background: transparent }`) beats a
@@ -14,7 +17,7 @@ import { describe, it } from "node:test";
  */
 
 // Tests run from the package root (`node --test .test-dist/...`).
-const CSS_PATH = resolve(process.cwd(), "src/components/checkout/checkout.css");
+const CSS_PATH = resolve(process.cwd(), "src/components/checkout/cart.css");
 /** The cart's shell: the provider wrapper and the one frame of every presentation. */
 const SHELL_PATHS = ["CartComponent.tsx", "CartFrame.tsx"].map((file) =>
   resolve(process.cwd(), "src/components/checkout", file),
@@ -40,7 +43,7 @@ function readStyleRules(css: string): StyleRule[] {
       buffer = "";
     } else if (char === "}") {
       const prelude = stack.pop();
-      assert.ok(prelude != null, "unbalanced braces in checkout.css");
+      assert.ok(prelude != null, "unbalanced braces in cart.css");
       if (!prelude.startsWith("@")) {
         const declarations = new Map<string, string>();
         for (const part of buffer.split(";")) {
@@ -63,7 +66,7 @@ function readStyleRules(css: string): StyleRule[] {
     }
   }
 
-  assert.equal(stack.length, 0, "unbalanced braces in checkout.css");
+  assert.equal(stack.length, 0, "unbalanced braces in cart.css");
   return rules;
 }
 
@@ -175,6 +178,10 @@ const rules = readStyleRules(css);
 const styleRules = rules.filter(
   (rule) => !rule.atRules.some((atRule) => atRule.startsWith("@keyframes")),
 );
+const topLevel = styleRules.filter((rule) => rule.atRules.length === 0);
+const findTop = (selector: string) => topLevel.find((rule) => rule.selectors.includes(selector));
+const slot = (name: string) => `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="${name}"]`;
+const PAYMENT_BUTTONS_EXCLUSION = ':not(:where([data-bitsnap-checkout-slot="paymentButtons"] *))';
 
 describe("specificity helper", () => {
   it("counts the selectors the stylesheet uses", () => {
@@ -184,32 +191,32 @@ describe("specificity helper", () => {
     assert.deepEqual(specificity('[data-a] [data-b="x"] input[type="radio"]'), [0, 3, 1]);
     assert.deepEqual(specificity('[data-a] :where([data-b]:disabled) [data-c]'), [0, 2, 0]);
     assert.deepEqual(specificity('[data-a] [data-b]:has(input:focus-visible)'), [0, 3, 1]);
+    assert.deepEqual(specificity(`[data-a] :where(a, svg)${PAYMENT_BUTTONS_EXCLUSION}`), [0, 1, 0]);
     assert.deepEqual(specificity("#id .a::before"), [1, 1, 1]);
   });
 });
 
-describe("checkout.css", () => {
+describe("cart.css isolation", () => {
   it("has rules to check", () => {
-    assert.ok(styleRules.length > 20, `only ${styleRules.length} rules parsed`);
+    assert.ok(styleRules.length > 40, `only ${styleRules.length} rules parsed`);
+  });
+
+  it("is the one checkout sheet: checkout.css is gone and the entry imports no checkout CSS", () => {
+    assert.throws(() => readFileSync(resolve(process.cwd(), "src/components/checkout/checkout.css")));
+    const entry = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
+    assert.doesNotMatch(entry, /checkout\/(checkout|cart)\.css/, "cart.css is appended by the build, never imported");
   });
 
   it("is not wrapped in a cascade layer, so unlayered host CSS cannot beat it", () => {
-    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
-    assert.doesNotMatch(withoutComments, /@layer\b/);
-    for (const rule of rules) {
-      assert.ok(
-        !rule.atRules.some((atRule) => atRule.startsWith("@layer")),
-        `${rule.selectors.join(", ")} sits in a layer`,
-      );
-    }
+    assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ""), /@layer\b/);
   });
 
-  it("scopes every selector to the checkout boundary", () => {
+  it("scopes every selector outside @keyframes to the checkout boundary or the cart trigger", () => {
     for (const rule of styleRules) {
       for (const selector of rule.selectors) {
         assert.ok(
           selector.startsWith("[data-bitsnap-checkout"),
-          `"${selector}" is not scoped to [data-bitsnap-checkout…] (the prefixer would rewrite it and it could leak)`,
+          `"${selector}" is not scoped to [data-bitsnap-checkout…]`,
         );
       }
     }
@@ -227,253 +234,242 @@ describe("checkout.css", () => {
     }
   });
 
-  it("positions the root explicitly, so its z-index works under reduced motion too", () => {
-    const root = styleRules.find(
-      (rule) =>
-        rule.atRules.length === 0 &&
-        rule.selectors.includes('[data-bitsnap-checkout="root"]'),
-    );
-    assert.ok(root, 'no [data-bitsnap-checkout="root"] rule');
-    assert.equal(root.declarations.get("position"), "relative");
-    assert.equal(root.declarations.get("z-index"), "999999");
-  });
-
-  it("owns the drawer geometry instead of utility classes", () => {
-    const panelSelector = '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]';
-    const base = styleRules.find(
-      (rule) => rule.atRules.length === 0 && rule.selectors.includes(panelSelector),
-    );
-    assert.ok(base, "no base panel rule");
-    assert.equal(base.declarations.get("position"), "fixed");
-    assert.equal(base.declarations.get("top"), "0");
-    assert.equal(base.declarations.get("right"), "0");
-    assert.equal(base.declarations.get("bottom"), "0");
-    assert.equal(base.declarations.get("width"), "100%");
-
-    const widths = styleRules
-      .filter((rule) => rule.atRules.length === 1 && rule.selectors.includes(panelSelector))
-      .map((rule) => [rule.atRules[0], rule.declarations.get("width")]);
-    assert.deepEqual(widths, [
-      // Tailwind's `md` and `xl` breakpoints, as `md:w-[350px] xl:w-[420px]` used.
-      ["@media (min-width: 48rem)", "var(--bitsnap-checkout-panel-width, 350px)"],
-      ["@media (min-width: 80rem)", "var(--bitsnap-checkout-panel-width, 420px)"],
-    ]);
-
-    const overlay = styleRules.find((rule) =>
-      rule.selectors.includes('[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]'),
-    );
-    assert.ok(overlay, "no overlay rule");
-    assert.equal(overlay.declarations.get("position"), "fixed");
-    assert.equal(overlay.declarations.get("z-index"), "10");
-  });
-
-  it("gives the checkout button its surface and spacing", () => {
-    const button = styleRules.find((rule) =>
-      rule.selectors.includes(
-        '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]',
-      ),
-    );
-    assert.ok(button, "no checkoutButton rule");
-    assert.match(button.declarations.get("background-color") ?? "", /--bitsnap-checkout-button-background/);
-    // `px-3 py-2 mx-2 my-2`, compiled the way Tailwind compiles them.
-    assert.equal(
-      button.declarations.get("padding"),
-      "calc(var(--spacing) * 2) calc(var(--spacing) * 3)",
-    );
-    assert.equal(button.declarations.get("margin"), "calc(var(--spacing) * 2)");
-    assert.equal(button.declarations.get("font-weight"), "700");
-
-    const retry = styleRules.find((rule) =>
-      rule.selectors.includes(
-        '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where([data-bitsnap-checkout-retry])',
-      ),
-    );
-    assert.ok(retry, "no rule for the retry button");
-    assert.equal(retry.declarations.get("margin"), "0");
-  });
-
-  it("writes the lengths that replace utilities in rem, not px", () => {
-    // 1.29.1 sized these with Tailwind utilities (rem), so they followed a host
-    // `html { font-size: 62.5% }`. Only borders, outlines and the arbitrary
-    // panel widths were px then.
-    const allowedPx = new Set(["border-width", "border", "border-radius", "outline", "outline-offset"]);
-    for (const rule of styleRules) {
-      for (const [property, value] of rule.declarations) {
-        if (!/\dpx\b/.test(value)) continue;
-        const isPanelWidth =
-          property === "width" && value.startsWith("var(--bitsnap-checkout-panel-width,");
-        assert.ok(
-          allowedPx.has(property) || isPanelWidth,
-          `${rule.selectors.join(", ")} { ${property}: ${value} } uses px; write calc(var(--spacing) * n)`,
-        );
-      }
+  it("uses literal values only: no Tailwind theme variable, so a page with only cart.css works", () => {
+    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const match of withoutComments.matchAll(/var\(\s*(--[\w-]+)/g)) {
+      assert.match(match[1], /^--(bitsnap-checkout-|bsc-)/, `${match[1]} is not a cart variable`);
     }
   });
 
-  it("keeps the skeleton at its 1.29.1 colour, independent of the surface token", () => {
-    const skeleton = styleRules.find((rule) =>
-      rule.selectors.includes('[data-bitsnap-checkout] [data-bitsnap-checkout-slot="skeleton"]'),
+  it("writes lengths in px, never rem (a host `html { font-size: 62.5% }` cannot shrink the cart, D8)", () => {
+    assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ""), /\d(\.\d+)?rem\b/);
+  });
+
+  it("builds the inheritance firewall on the root only, the one rule that uses `all` (R01)", () => {
+    const withAll = rules.filter((rule) => rule.declarations.has("all"));
+    assert.equal(withAll.length, 1, "exactly one rule sets `all`");
+    const [firewall] = withAll;
+    assert.deepEqual(firewall.selectors, ['[data-bitsnap-checkout="root"]']);
+    assert.deepEqual(firewall.atRules, []);
+    assert.equal(firewall.declarations.get("all"), "initial");
+    assert.equal(firewall.declarations.get("display"), "block");
+    // Stacking is explicit, not left to the inline z-index (R05).
+    assert.equal(firewall.declarations.get("position"), "relative");
+    assert.equal(firewall.declarations.get("z-index"), "999999");
+    // The host's font (D16); the token switches it. 16 px default size.
+    assert.equal(firewall.declarations.get("font-family"), "var(--bitsnap-checkout-font-family, inherit)");
+    assert.equal(firewall.declarations.get("font-size"), "var(--bitsnap-checkout-font-size, 16px)");
+    assert.equal(firewall.declarations.get("box-sizing"), "border-box");
+  });
+
+  it("sets color-scheme per theme after the firewall, with the per-theme literals (R09, N01)", () => {
+    const firewall = topLevel.findIndex((rule) => rule.declarations.has("all"));
+    const expected = {
+      dark: { "color-scheme": "dark", "--bsc-control-border": "#737373", "--bsc-skeleton": "#333333" },
+      light: { "color-scheme": "light", "--bsc-control-border": "#8a8a8a", "--bsc-skeleton": "#d4d4d8" },
+    };
+    for (const [theme, values] of Object.entries(expected)) {
+      const selector = `[data-bitsnap-checkout="root"]:where(.${theme})`;
+      const index = topLevel.findIndex((rule) => rule.selectors.includes(selector));
+      assert.ok(index > firewall, `${selector} must come after the firewall (all: initial resets color-scheme)`);
+      for (const [property, value] of Object.entries(values)) {
+        assert.equal(topLevel[index].declarations.get(property), value, `${theme} ${property}`);
+      }
+      // Literals, never a preset variable's fallback (the light preset writes `border` inline).
+      assert.doesNotMatch(topLevel[index].declarations.get("--bsc-overlay") ?? "", /var\(/);
+    }
+  });
+
+  it("keeps the per-theme literals above their contrast bars on both panels (R14, N02)", () => {
+    const panels = { dark: ["#171717", "#262626"], light: ["#ffffff", "#f9fafb"] } as const;
+    for (const [theme, [panel, surface]] of Object.entries(panels)) {
+      const block = findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+      const control = block.declarations.get("--bsc-control-border")!;
+      const skeleton = block.declarations.get("--bsc-skeleton")!;
+      assert.ok(contrastRatio(control, panel) >= 3, `${theme} control border on the panel`);
+      assert.ok(contrastRatio(control, surface) >= 3, `${theme} control border on the surface`);
+      assert.ok(contrastRatio(skeleton, panel) >= 1.3, `${theme} skeleton on the panel`);
+    }
+  });
+
+  it("resets the elements hosts decorate at (0,1,0), skipping the express containers (R08, R23)", () => {
+    const reset = topLevel.find((rule) =>
+      rule.selectors.some((selector) => selector.startsWith("[data-bitsnap-checkout] :where(a,")),
     );
-    assert.ok(skeleton, "no skeleton rule");
-    assert.equal(skeleton.declarations.get("background-color"), "var(--color-neutral-700)");
+    assert.ok(reset, "no local reset");
+    assert.equal(reset.selectors.length, 1);
+    const [selector] = reset.selectors;
+    for (const element of ["a", "svg", "button", "input", "select", "img", "hr", "h1", "p", "fieldset", "legend"]) {
+      assert.match(selector, new RegExp(`[(\\s]${element}[,)]`), `${element} is not reset`);
+    }
+    assert.ok(selector.endsWith(PAYMENT_BUTTONS_EXCLUSION), "the express containers are not excluded");
+    assert.deepEqual(specificity(selector), [0, 1, 0]);
+    for (const [property, value] of [
+      ["margin", "0"],
+      ["padding", "0"],
+      ["font", "inherit"],
+      ["background", "none"],
+      ["border", "0 solid"],
+      ["color", "inherit"],
+    ]) {
+      assert.equal(reset.declarations.get(property), value, property);
+    }
+    const firstComponent = topLevel.findIndex((rule) => compare(specificity(rule.selectors[0]), [0, 2, 0]) === 0);
+    assert.ok(topLevel.indexOf(reset) < firstComponent, "the reset comes before the component rules");
+  });
+
+  it("sets box-sizing on every descendant and its pseudo-elements, never inside the express containers (N15)", () => {
+    const boxSizing = topLevel.find(
+      (rule) => rule.declarations.get("box-sizing") === "border-box" && rule.selectors.length === 3,
+    );
+    assert.ok(boxSizing, "no box-sizing rule for descendants");
+    const base = `[data-bitsnap-checkout] :where(*)${PAYMENT_BUTTONS_EXCLUSION}`;
+    assert.deepEqual(boxSizing.selectors, [base, `${base}::before`, `${base}::after`]);
+  });
+
+  it("names every keyframes with the bitsnap prefix (keyframe names are global)", () => {
+    const names = [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((match) => match[1]);
+    assert.ok(names.length >= 7);
+    for (const name of names) {
+      assert.match(name, /^bitsnap-(cart|checkout)-/, name);
+    }
+  });
+});
+
+describe("cart.css grid shell and header", () => {
+  it("owns the drawer geometry: a grid of header, scroll region and footer, 380/420 px, full screen when compact (D7, D8)", () => {
+    const panel = findTop(slot("panel"));
+    assert.ok(panel, "no base panel rule");
+    assert.equal(panel.declarations.get("position"), "fixed");
+    assert.equal(panel.declarations.get("display"), "grid");
+    assert.equal(panel.declarations.get("grid-template-rows"), "auto minmax(0, 1fr) auto");
+    assert.equal(panel.declarations.get("overflow"), "hidden", "only the scroll region scrolls");
+    assert.equal(panel.declarations.get("height"), "100dvh");
+    assert.match(css, /height: 100vh;\s*height: 100dvh;/, "100vh stays as the fallback");
+    assert.equal(panel.declarations.get("width"), "var(--bitsnap-checkout-panel-width, 380px)");
+    assert.equal(panel.declarations.get("max-width"), "100vw");
+
+    const media = styleRules
+      .filter((rule) => rule.atRules.length === 1 && rule.selectors.includes(slot("panel")))
+      .map((rule) => [rule.atRules[0], rule.declarations.get("width")]);
+    assert.deepEqual(media, [
+      ["@media (min-width: 1200px)", "var(--bitsnap-checkout-panel-width, 420px)"],
+      ["@media (max-width: 639.98px), (max-height: 500px)", "100%"],
+    ]);
+
+    const overlay = findTop(slot("overlay"));
+    assert.ok(overlay, "no overlay rule");
+    assert.equal(overlay.declarations.get("position"), "fixed");
+    assert.equal(overlay.declarations.get("z-index"), "10");
+    assert.equal(
+      overlay.declarations.get("background-color"),
+      "var(--bitsnap-checkout-overlay, var(--bsc-overlay))",
+      "a merchant overlay token wins over the theme literal",
+    );
+  });
+
+  it("lets only the scroll region scroll", () => {
+    const scroll = findTop("[data-bitsnap-checkout] .bsc-scroll");
+    assert.ok(scroll, "no scroll region rule");
+    assert.equal(scroll.declarations.get("min-height"), "0");
+    assert.equal(scroll.declarations.get("overflow-y"), "auto");
+    assert.equal(scroll.declarations.get("overscroll-behavior"), "contain");
+  });
+
+  it("gives the header 56 px and the close button a 44 px target", () => {
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-header")?.declarations.get("min-height"), "56px");
+    const iconButton = findTop("[data-bitsnap-checkout] .bsc-icon-btn");
+    assert.equal(iconButton?.declarations.get("min-width"), "44px");
+    assert.equal(iconButton?.declarations.get("min-height"), "44px");
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-icon-btn:where(:focus-visible)")?.declarations.has("outline"));
+  });
+
+  it("styles the default cart trigger through its own attribute only (D20)", () => {
+    const triggerRules = styleRules.filter((rule) =>
+      rule.selectors.some((selector) => selector.includes("data-bitsnap-checkout-trigger")),
+    );
+    assert.ok(triggerRules.length >= 3);
+    for (const rule of triggerRules) {
+      for (const selector of rule.selectors.filter((s) => s.includes("data-bitsnap-checkout-trigger"))) {
+        assert.ok(selector.startsWith('[data-bitsnap-checkout-trigger="default"]'), selector);
+      }
+    }
+    const base = findTop('[data-bitsnap-checkout-trigger="default"]')!;
+    assert.equal(base.declarations.get("min-width"), "44px");
+    assert.equal(base.declarations.get("min-height"), "44px");
+    assert.doesNotMatch(css, /data-bitsnap-checkout-trigger="custom"/, "a merchant trigger gets no SDK rule");
+  });
+});
+
+describe("cart.css content rules (1.31.0, in literals until steps 15-17)", () => {
+  it("gives the checkout button its surface and spacing; the retry button no margin", () => {
+    const button = findTop(slot("checkoutButton"));
+    assert.ok(button, "no checkoutButton rule");
+    assert.equal(button.declarations.get("background-color"), "var(--bsc-cta-bg)");
+    assert.equal(button.declarations.get("padding"), "8px 12px");
+    assert.equal(button.declarations.get("margin"), "8px");
+    assert.equal(button.declarations.get("font-weight"), "700");
+    assert.equal(findTop(`${slot("checkoutButton")}:where([data-bitsnap-checkout-retry])`)?.declarations.get("margin"), "0");
+  });
+
+  it("colours the sale line from the tokens with fallbacks that pass 4.5:1 on the dark panel", () => {
+    const price = (kind: string) => findTop(`[data-bitsnap-checkout] [data-bitsnap-checkout-price="${kind}"]`);
+    assert.equal(price("regular")?.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
+    assert.equal(price("omnibus")?.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
+    assert.equal(price("sale")?.declarations.get("color"), "var(--bitsnap-checkout-sale, #f87171)");
+  });
+
+  it("keeps the ring-coloured border on the focused country trigger", () => {
+    assert.equal(
+      findTop(`${slot("countryTrigger")}:where(:focus-visible)`)?.declarations.get("border-color"),
+      "var(--bsc-ring)",
+    );
   });
 
   it("lists every state rule after its base rule, so the state wins at equal specificity", () => {
-    const topLevel = styleRules.filter((rule) => rule.atRules.length === 0);
-    const indexOf = (selector: string) =>
-      topLevel.findIndex((rule) => rule.selectors.includes(selector));
-
+    const indexOf = (selector: string) => topLevel.findIndex((rule) => rule.selectors.includes(selector));
     let checked = 0;
     for (const [index, rule] of topLevel.entries()) {
       for (const selector of rule.selectors) {
-        const match = /^(.*\[data-bitsnap-checkout-slot="[^"]+"\]):where\(.*\)$/.exec(selector);
+        const match = /^(.*(?:\[data-bitsnap-checkout-slot="[^"]+"\]|\.bsc-[\w-]+|\[data-bitsnap-checkout-trigger="default"\])):where\(.*\)$/.exec(selector);
         if (match == null) continue;
         const base = indexOf(match[1]);
         if (base === -1) continue; // e.g. `product`: only styled in a state
         checked += 1;
-        assert.ok(
-          base < index,
-          `"${selector}" comes before its base rule "${match[1]}"; equal specificity, so the base would win`,
-        );
+        assert.ok(base < index, `"${selector}" comes before its base rule "${match[1]}"`);
       }
     }
-    assert.ok(checked >= 8, `only ${checked} state rules checked`);
-
-    const slot = (name: string, state: string) =>
-      `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="${name}"]:where(${state})`;
-    const order = (earlier: string, later: string) => {
-      const a = indexOf(earlier);
-      const b = indexOf(later);
-      assert.ok(a !== -1, `no rule "${earlier}"`);
-      assert.ok(b !== -1, `no rule "${later}"`);
-      assert.ok(a < b, `"${later}" has to come after "${earlier}"`);
-    };
-    order(slot("countryOption", ":hover, [data-highlighted]"), slot("countryOption", '[data-state="checked"]'));
-    order(slot("paymentMethodOption", ":hover"), slot("paymentMethodOption", "[data-selected]"));
-  });
-
-  it("keeps the ring-coloured border on the focused country trigger", () => {
-    const focus = styleRules.find((rule) =>
-      rule.selectors.includes(
-        '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"]:where(:focus-visible)',
-      ),
-    );
-    assert.ok(focus, "no focus rule for the country trigger");
-    assert.equal(
-      focus.declarations.get("border-color"),
-      "var(--bitsnap-checkout-focus-ring, var(--ring))",
-    );
+    assert.ok(checked >= 10, `only ${checked} state rules checked`);
+    const order = (earlier: string, later: string) => assert.ok(indexOf(earlier) < indexOf(later), `${later} after ${earlier}`);
+    order(`${slot("countryOption")}:where(:hover, [data-highlighted])`, `${slot("countryOption")}:where([data-state="checked"])`);
+    order(`${slot("paymentMethodOption")}:where(:hover)`, `${slot("paymentMethodOption")}:where([data-selected])`);
   });
 });
 
-describe("CartComponent.tsx and CartFrame.tsx", () => {
-  it("keeps auto-animate off the drawer root and off the list with motion off (S8)", () => {
-    const drawer = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
-    const content = readFileSync(
-      resolve(process.cwd(), "src/components/checkout/CartComponentContent.tsx"),
-      "utf8",
-    );
-    // On the root, auto-animate ran its "add" keyframes on the portalled panel
-    // (opacity 0 for ~250 ms); checkout.css animates the drawer instead.
-    assert.equal(drawer.includes("useAutoAnimate("), false, "the drawer root calls useAutoAnimate directly");
-    assert.equal(drawer.includes("useCartAutoAnimate"), false, "the drawer root uses auto-animate again");
-    // CSS cannot stop the animations auto-animate starts from script.
-    assert.equal(content.match(/useAutoAnimate\(/g)?.length, 1, "only inside useCartAutoAnimate");
-    assert.match(content, /const productsParent = useCartAutoAnimate\(\)/);
-    assert.match(
-      content,
-      /"data-bitsnap-checkout-motion"\]\s*===\s*"off"[\s\S]*?if \(!motionOff\) \{\s*return undefined;\s*\}\s*setEnabled\(false\)/,
-    );
-  });
-
-  it("leaves the drawer geometry to the stylesheet", () => {
-    const source = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
-    // A host page that defines `.w-full` or `.fixed` unlayered would win over
-    // these classes (F-01); checkout.css sets the values instead.
-    for (const utility of ["w-full", "md:w-[", "xl:w-[", "fixed", "z-10", "z-20"]) {
-      assert.ok(
-        !source.includes(`"${utility}`) && !source.includes(` ${utility}`),
-        `CartComponent.tsx still uses the utility "${utility}"`,
-      );
-    }
-  });
-});
-
-describe("checkout.css 1.31.0 tokens", () => {
-  const findRule = (selector: string) =>
-    styleRules.find((rule) => rule.selectors.includes(selector));
-
-  it("colours the sale line from the tokens with fallbacks that pass 4.5:1 on the dark panel", () => {
-    const regular = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="regular"]');
-    const omnibus = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="omnibus"]');
-    const sale = findRule('[data-bitsnap-checkout] [data-bitsnap-checkout-price="sale"]');
-    assert.ok(regular && omnibus && sale, "missing a sale-line rule");
-    assert.equal(regular.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
-    assert.equal(omnibus.declarations.get("color"), "var(--bitsnap-checkout-muted-foreground, #a3a3a3)");
-    assert.equal(sale.declarations.get("color"), "var(--bitsnap-checkout-sale, #f87171)");
-  });
-
-  it("turns the cart's own motion off on the root marker, but not the express widgets", () => {
-    const motionOff = styleRules.find((rule) =>
-      rule.selectors.some((selector) =>
-        selector.startsWith('[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"]'),
-      ),
-    );
-    assert.ok(motionOff, "no motion-off rule");
-    assert.equal(motionOff.declarations.get("animation"), "none !important");
-    assert.equal(motionOff.declarations.get("transition"), "none !important");
-    assert.match(
-      motionOff.selectors.join(","),
-      /:not\(:where\(\[data-bitsnap-checkout-slot="paymentButtons"\], \[data-bitsnap-checkout-slot="paymentButtons"\] \*, \[data-bitsnap-checkout-slot="skeleton"\]\)\)/,
-    );
-    // The exclusion must match the skeleton the cart renders (its pulse is a
-    // status signal), not a class nothing carries.
-    assert.doesNotMatch(motionOff.selectors.join(","), /\.bsc-skeleton/);
-    assert.match(
-      readFileSync(resolve(process.cwd(), "src/components/checkout/CartLines.tsx"), "utf8"),
-      /<Skeleton\s+data-bitsnap-checkout-slot="skeleton"/,
-    );
-    // The skeleton's delayed show (1.32.0) must never be stopped by motion off.
-  });
-});
-
-describe("checkout.css drawer enter and exit", () => {
-  const panel = '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]';
-  const overlay = '[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]';
-  const keyframes = (name: string) =>
-    rules.filter((rule) => rule.atRules.at(-1) === `@keyframes ${name}`);
-  const topLevel = (selector: string) =>
-    styleRules.find((rule) => rule.atRules.length === 0 && rule.selectors.includes(selector));
-  const reduced = (selector: string) =>
-    styleRules.find(
-      (rule) =>
-        rule.atRules.length === 1 &&
-        rule.atRules[0] === "@media (prefers-reduced-motion: reduce)" &&
-        rule.selectors.includes(selector),
-    );
+describe("cart.css motion", () => {
+  const panel = slot("panel");
+  const overlay = slot("overlay");
+  const keyframes = (name: string) => rules.filter((rule) => rule.atRules.at(-1) === `@keyframes ${name}`);
+  const REDUCED = "@media (prefers-reduced-motion: reduce)";
+  const reduced = styleRules.filter((rule) => rule.atRules.length === 1 && rule.atRules[0] === REDUCED);
+  const reducedRule = (selector: string) => reduced.find((rule) => rule.selectors.includes(selector));
   const DURATION = "var(--bitsnap-checkout-motion-duration, 240ms)";
+  const motionOffIndex = topLevel.findIndex((rule) =>
+    rule.selectors.some((selector) => selector.startsWith('[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"]')),
+  );
 
-  it("defines the drawer keyframes, the panel never starting at opacity 0", () => {
+  it("keeps the 1.31.0 drawer keyframes, the panel never starting at opacity 0 (perf gate A1)", () => {
     const panelIn = keyframes("bitsnap-checkout-panel-in");
-    assert.equal(panelIn.length, 1, "no bitsnap-checkout-panel-in keyframes");
-    assert.deepEqual(panelIn[0].selectors, ["from"]);
-    assert.equal(panelIn[0].declarations.get("transform"), "translateX(1.5rem)");
-    // A1 counts the rows once their effective opacity is above 0: the enter
-    // must not hold the panel at 0, as auto-animate's "add" did.
-    const startOpacity = Number(panelIn[0].declarations.get("opacity"));
-    assert.ok(startOpacity > 0 && startOpacity < 1, `panel enter starts at opacity ${startOpacity}`);
-
-    const panelFadeIn = keyframes("bitsnap-checkout-panel-fade-in");
-    assert.equal(panelFadeIn.length, 1, "no bitsnap-checkout-panel-fade-in keyframes");
-    assert.ok(Number(panelFadeIn[0].declarations.get("opacity")) > 0, "reduced-motion panel enter starts at 0");
-    assert.equal(panelFadeIn[0].declarations.has("transform"), false, "reduced motion slides");
-
+    assert.equal(panelIn.length, 1);
+    assert.equal(panelIn[0].declarations.get("transform"), "translateX(24px)");
+    const start = Number(panelIn[0].declarations.get("opacity"));
+    assert.ok(start > 0 && start < 1, `panel enter starts at opacity ${start}`);
+    const fadeIn = keyframes("bitsnap-checkout-panel-fade-in");
+    assert.ok(Number(fadeIn[0]?.declarations.get("opacity")) > 0);
+    assert.equal(fadeIn[0].declarations.has("transform"), false, "reduced motion slides");
     const panelOut = keyframes("bitsnap-checkout-panel-out");
-    assert.equal(panelOut.length, 1, "no bitsnap-checkout-panel-out keyframes");
-    assert.deepEqual(panelOut[0].selectors, ["to"]);
-    assert.equal(panelOut[0].declarations.get("opacity"), "0");
-    assert.equal(panelOut[0].declarations.get("transform"), "translateX(1.5rem)");
-
+    assert.equal(panelOut[0]?.declarations.get("opacity"), "0");
+    assert.equal(panelOut[0]?.declarations.get("transform"), "translateX(24px)");
     assert.equal(keyframes("bitsnap-checkout-fade-in")[0]?.declarations.get("opacity"), "0");
     assert.equal(keyframes("bitsnap-checkout-fade-out")[0]?.declarations.get("opacity"), "0");
   });
@@ -486,74 +482,108 @@ describe("checkout.css drawer enter and exit", () => {
       [`${overlay}:where([data-state="closed"])`, `bitsnap-checkout-fade-out ${DURATION} ease-in forwards`],
     ];
     for (const [selector, animation] of expected) {
-      const rule = topLevel(selector);
-      assert.ok(rule, `no rule ${selector}`);
-      assert.equal(rule.declarations.get("animation"), animation);
-      assert.equal(rule.declarations.get("animation-fill-mode"), undefined);
+      assert.equal(findTop(selector)?.declarations.get("animation"), animation, selector);
     }
-    // Radix Presence waits for an exit only when the animation name changes.
+    // Presence waits for an exit only when the name changes; the enter holds no transform (N14).
     assert.notEqual(expected[0][1].split(" ")[0], expected[1][1].split(" ")[0]);
-    assert.notEqual(expected[2][1].split(" ")[0], expected[3][1].split(" ")[0]);
-    // The enter keeps no fill: a held transform would make the panel the
-    // containing block of fixed descendants.
     assert.doesNotMatch(expected[0][1], /\b(forwards|both)\b/);
   });
 
-  it("lets the closing panel and overlay take no clicks, over Radix's inline pointer-events (review N2)", () => {
+  it("lets the closing panel and overlay take no clicks, over Radix's inline pointer-events", () => {
     for (const element of [panel, overlay]) {
-      const closed = topLevel(`${element}:where([data-state="closed"])`);
-      assert.ok(closed, `no closed rule for ${element}`);
-      // Radix writes `style="pointer-events: auto"` on both: only !important wins.
-      assert.equal(closed.declarations.get("pointer-events"), "none !important");
-      assert.equal(topLevel(`${element}:where([data-state="open"])`)?.declarations.has("pointer-events"), false);
+      assert.equal(findTop(`${element}:where([data-state="closed"])`)?.declarations.get("pointer-events"), "none !important");
+      assert.equal(findTop(`${element}:where([data-state="open"])`)?.declarations.has("pointer-events"), false);
     }
   });
 
-  it("drops the slide and shortens the fade under prefers-reduced-motion", () => {
+  it("fades for at most 120 ms and stops the pulse under reduced motion, never touching .bsc-skeleton (R20)", () => {
     const short = `min(${DURATION}, 120ms)`;
-    const open = reduced(`${panel}:where([data-state="open"])`);
-    const closed = reduced(`${panel}:where([data-state="closed"])`);
-    const overlays = reduced(`${overlay}:where([data-state="open"], [data-state="closed"])`);
-    assert.ok(open && closed && overlays, "missing a reduced-motion rule");
-    assert.equal(open.declarations.get("animation-name"), "bitsnap-checkout-panel-fade-in");
-    assert.equal(closed.declarations.get("animation-name"), "bitsnap-checkout-fade-out");
-    for (const rule of [open, closed, overlays]) {
-      assert.equal(rule.declarations.get("animation-duration"), short);
+    assert.equal(reducedRule(`${panel}:where([data-state="open"])`)?.declarations.get("animation-name"), "bitsnap-checkout-panel-fade-in");
+    assert.equal(reducedRule(`${panel}:where([data-state="closed"])`)?.declarations.get("animation-name"), "bitsnap-checkout-fade-out");
+    for (const selector of [
+      `${panel}:where([data-state="open"])`,
+      `${panel}:where([data-state="closed"])`,
+      `${overlay}:where([data-state="open"], [data-state="closed"])`,
+    ]) {
+      assert.equal(reducedRule(selector)?.declarations.get("animation-duration"), short, selector);
     }
-  });
-
-  it("is stopped by the motion-off rule, which comes later and is !important", () => {
-    const all = styleRules.filter((rule) => rule.atRules.length === 0);
-    const motionOff = all.findIndex((rule) =>
-      rule.selectors.some((selector) =>
-        selector.startsWith('[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"]'),
-      ),
-    );
-    assert.ok(motionOff !== -1, "no motion-off rule");
-    assert.equal(all[motionOff].declarations.get("animation"), "none !important");
-    // `:where(*)` matches the overlay and the panel (neither is excluded), so
-    // `animation: none` reaches them and Radix Presence unmounts at once.
-    const selector = all[motionOff].selectors.join(",");
-    assert.doesNotMatch(selector, /slot="(panel|overlay)"/);
-    for (const rule of styleRules) {
-      const sets = rule.declarations.get("animation") ?? rule.declarations.get("animation-name") ?? "";
-      if (!/bitsnap-checkout-(panel|fade)-/.test(sets)) continue;
-      assert.doesNotMatch(sets, /!important/, `${rule.selectors.join(", ")} would beat motion off`);
-      assert.ok(
-        styleRules.indexOf(rule) < styleRules.indexOf(all[motionOff]),
-        `${rule.selectors.join(", ")} comes after the motion-off rule`,
-      );
-    }
-  });
-
-  it("keeps every drawer animation rule within the (0,2,0) cap", () => {
-    const animated = styleRules.filter(
-      (rule) => rule.declarations.has("animation") || rule.declarations.has("animation-name"),
-    );
-    assert.ok(animated.length >= 7, `only ${animated.length} animation rules`);
-    for (const rule of animated) {
+    assert.equal(reducedRule("[data-bitsnap-checkout] .bsc-pulse")?.declarations.get("animation"), "none");
+    for (const rule of reduced) {
       for (const selector of rule.selectors) {
-        assert.ok(compare(specificity(selector), [0, 2, 0]) <= 0, `${selector} is above (0,2,0)`);
+        assert.doesNotMatch(selector, /bsc-skeleton/, `${selector} touches the skeleton's delayed show`);
+      }
+    }
+  });
+
+  it("shows the skeleton after 150 ms from a visible resting state; only .bsc-pulse pulses (N12)", () => {
+    const skeleton = findTop("[data-bitsnap-checkout] .bsc-skeleton");
+    assert.equal(skeleton?.declarations.get("opacity"), "1");
+    assert.equal(skeleton?.declarations.get("animation"), "bitsnap-cart-show 1ms linear 150ms backwards");
+    const pulsing = styleRules.filter((rule) => /bitsnap-cart-pulse/.test(rule.declarations.get("animation") ?? ""));
+    assert.deepEqual(pulsing.map((rule) => rule.selectors), [["[data-bitsnap-checkout] .bsc-pulse"]]);
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-pulse")?.declarations.get("background-color"), "var(--bsc-skeleton)");
+    assert.match(readFileSync(resolve(process.cwd(), "src/components/checkout/Skeleton.tsx"), "utf8"), /bsc-pulse/);
+  });
+
+  it("turns motion off on the root marker, except for the express widgets and the skeleton (R21, N03)", () => {
+    assert.ok(motionOffIndex !== -1, "no motion-off rule");
+    const motionOff = topLevel[motionOffIndex];
+    assert.equal(motionOff.declarations.get("animation"), "none !important");
+    assert.equal(motionOff.declarations.get("transition"), "none !important");
+    const [selector] = motionOff.selectors;
+
+    const { window } = new JSDOM(`<div data-bitsnap-checkout="root" data-bitsnap-checkout-motion="off">
+      <div data-bitsnap-checkout-slot="overlay"></div>
+      <div data-bitsnap-checkout-slot="panel">
+        <button class="bsc-icon-btn"></button>
+        <div class="bsc-skeleton"><div class="bsc-pulse" data-bitsnap-checkout-slot="skeleton"></div></div>
+        <div data-bitsnap-checkout-slot="paymentButtons"><button id="wallet"></button></div>
+      </div>
+    </div>`);
+    const doc = window.document;
+    const matches = (query: string) => doc.querySelector(query)!.matches(selector);
+    assert.equal(matches('[data-bitsnap-checkout-slot="panel"]'), true);
+    assert.equal(matches('[data-bitsnap-checkout-slot="overlay"]'), true);
+    assert.equal(matches(".bsc-icon-btn"), true);
+    assert.equal(matches(".bsc-skeleton"), false, "the delayed show must never stay at opacity 0");
+    assert.equal(matches('[data-bitsnap-checkout-slot="skeleton"]'), false);
+    assert.equal(matches('[data-bitsnap-checkout-slot="paymentButtons"]'), false);
+    assert.equal(matches("#wallet"), false, "a wallet button keeps its own animation");
+    assert.deepEqual(specificity(selector), [0, 2, 0]);
+  });
+
+  it("puts motion off after every animation rule it stops, none of them !important", () => {
+    for (const rule of topLevel) {
+      const sets = rule.declarations.get("animation") ?? rule.declarations.get("animation-name") ?? "";
+      if (!/bitsnap-(checkout|cart)-/.test(sets)) continue;
+      assert.doesNotMatch(sets, /!important/, `${rule.selectors.join(", ")} would beat motion off`);
+      assert.ok(topLevel.indexOf(rule) < motionOffIndex, `${rule.selectors.join(", ")} comes after motion off`);
+    }
+  });
+});
+
+describe("CartComponent.tsx and CartFrame.tsx", () => {
+  it("keeps auto-animate off the drawer root and off the list with motion off (S8)", () => {
+    const drawer = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
+    const content = readFileSync(
+      resolve(process.cwd(), "src/components/checkout/CartComponentContent.tsx"),
+      "utf8",
+    );
+    assert.equal(drawer.includes("useAutoAnimate("), false, "the drawer root calls useAutoAnimate directly");
+    assert.equal(drawer.includes("useCartAutoAnimate"), false, "the drawer root uses auto-animate again");
+    assert.equal(content.match(/useAutoAnimate\(/g)?.length, 1, "only inside useCartAutoAnimate");
+    assert.match(content, /const productsParent = useCartAutoAnimate\(\)/);
+    assert.match(
+      content,
+      /"data-bitsnap-checkout-motion"\]\s*===\s*"off"[\s\S]*?if \(!motionOff\) \{\s*return undefined;\s*\}\s*setEnabled\(false\)/,
+    );
+  });
+
+  it("carries no Tailwind utility in the shell; the stylesheet owns its look", () => {
+    const source = SHELL_PATHS.map((path) => readFileSync(path, "utf8")).join("\n");
+    for (const match of source.matchAll(/className=\{?(?:cn\()?"([^"]*)"/g)) {
+      for (const token of match[1].split(/\s+/).filter(Boolean)) {
+        assert.match(token, /^(bsc-[\w-]+|bitsnap-react)$/, `shell class "${token}"`);
       }
     }
   });

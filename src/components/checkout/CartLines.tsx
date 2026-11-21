@@ -109,10 +109,7 @@ export function CartLines() {
 
       <div
         data-bitsnap-checkout-slot="productList"
-        className={cn(
-          "max-h-[70vh] overflow-clip overflow-y-scroll",
-          productList.className,
-        )}
+        className={cn(productList.className)}
         style={productList.style}
       >
         {status === "ready" && (

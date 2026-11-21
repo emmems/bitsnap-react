@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CHECKOUT_SLOT_NAMES,
+  CHECKOUT_THEME_PRESETS,
   CHECKOUT_TOKEN_VARIABLES,
+  colorSchemeFor,
   getCheckoutSlotAppearance,
   resolveCheckoutAppearance,
 } from "./appearance.ts";
@@ -160,6 +162,46 @@ describe("resolveCheckoutAppearance", () => {
   });
 });
 
+describe("checkout color-scheme (N10)", () => {
+  const scheme = (appearance: Parameters<typeof resolveCheckoutAppearance>[0]) =>
+    resolveCheckoutAppearance(appearance).boundaryStyle.colorScheme;
+
+  it("follows the effective background token, a preset value included", () => {
+    assert.equal(scheme({ tokens: { background: "#ffffff" } }), "light");
+    assert.equal(scheme({ tokens: { background: "#111111" } }), "dark");
+    assert.equal(scheme({ tokens: { background: "#fff" } }), "light");
+    assert.equal(scheme({ theme: "light" }), "light");
+    assert.equal(scheme({ theme: "light", tokens: { background: "#111111" } }), "dark");
+  });
+
+  it("writes nothing for a value it cannot read, or without a background", () => {
+    assert.equal(scheme(undefined), undefined);
+    assert.equal(scheme({ theme: "dark" }), undefined);
+    for (const background of ["rgb(255 255 255)", "var(--host-bg)", "white", "#ffffff80", "oklch(1 0 0)"]) {
+      assert.equal(scheme({ tokens: { background } }), undefined, background);
+    }
+  });
+
+  it("matches the onColor rule of the consent module for every colour", async () => {
+    const { onColor } = await import("@/src/consent/core/contrast");
+    for (let step = 0; step < 4096; step += 1) {
+      // A grid over the RGB cube, plus the neighbourhood of the switch point.
+      const channel = (shift: number) => ((step >> shift) & 15) * 17;
+      const hex = `#${[channel(8), channel(4), channel(0)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+      const expected = onColor(hex) === "#ffffff" ? "dark" : "light";
+      assert.equal(colorSchemeFor(hex), expected, hex);
+    }
+    for (let grey = 0x70; grey <= 0x80; grey += 1) {
+      const hex = `#${grey.toString(16).repeat(3)}`;
+      assert.equal(colorSchemeFor(hex), onColor(hex) === "#ffffff" ? "dark" : "light", hex);
+    }
+  });
+
+  it("drops the overlay from the light preset, so cart.css keeps the light literal (N01)", () => {
+    assert.equal("overlay" in CHECKOUT_THEME_PRESETS.light, false);
+  });
+});
+
 describe("checkout slots", () => {
   it("covers every documented slot", () => {
     for (const slot of [
@@ -170,6 +212,7 @@ describe("checkout slots", () => {
       "title",
       "closeButton",
       "productList",
+      "lines",
       "product",
       "productImage",
       "productName",

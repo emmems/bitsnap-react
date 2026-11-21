@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { defineConfig, type Options } from "tsup";
 import type { Plugin } from "esbuild";
 
@@ -126,7 +127,16 @@ export default defineConfig((overrideOptions) => {
       viewer3d: "src/viewer3d/index.ts",
     },
     dts: true,
-    onSuccess: shouldPublish ? "pnpm publish" : undefined,
+    // Every build: `dist/cart.css` from the hand-written cart stylesheet, also
+    // appended to `dist/index.css` (scripts/build-cart-css.mjs). Then publish
+    // when asked, so a published package always carries the cart styles.
+    onSuccess: async () => {
+      const { buildCartCss } = await import("./scripts/build-cart-css.mjs");
+      await buildCartCss(__dirname);
+      if (shouldPublish) {
+        execSync("pnpm publish", { stdio: "inherit" });
+      }
+    },
     format: ["cjs", "esm"],
     bundle: true,
     // CommonJS entries share chunks like ESM ones do. Separate copies of the

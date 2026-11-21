@@ -119,9 +119,9 @@ describe("country dropdown", () => {
   });
 });
 
-describe("checkout.css country dropdown rule", () => {
+describe("cart.css country dropdown rule", () => {
   const css = readFileSync(
-    resolve(process.cwd(), "src/components/checkout/checkout.css"),
+    resolve(process.cwd(), "src/components/checkout/cart.css"),
     "utf8",
   ).replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -132,8 +132,9 @@ describe("checkout.css country dropdown rule", () => {
     assert.ok(match, "no rule matches the dropdown boundary element");
     const body = match[1].replace(/\s+/g, " ");
     assert.match(body, /z-index: 999999;/, "stacks above the drawer root (999999, earlier in the DOM)");
-    assert.match(body, /background-color: var\( --bitsnap-checkout-surface, var\(--color-neutral-800\) \);/);
-    assert.match(body, /color: var\(--bitsnap-checkout-foreground, var\(--color-neutral-200\)\);/);
+    // Outside the root there are no `--bsc-*` aliases: token, then the dark literal.
+    assert.match(body, /background-color: var\(--bitsnap-checkout-surface, #262626\);/);
+    assert.match(body, /color: var\(--bitsnap-checkout-foreground, #e5e5e5\);/);
     assert.match(body, /border-width: 1px;/);
     assert.match(body, /border-style: solid;/);
   });

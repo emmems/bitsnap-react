@@ -47,6 +47,7 @@ const requiredFiles = [
   "index.d.ts",
   "index.d.mts",
   "index.css",
+  "cart.css",
   "models.d.ts",
   "internal.d.ts",
   "errors.d.ts",
@@ -648,6 +649,22 @@ assert.ok(
   css.includes("--bitsnap-checkout-button-background"),
   "checkout tokens are missing from the packaged CSS",
 );
+
+// 1.32.0: the cart stylesheet is the hand-written `cart.css`, minified to
+// `dist/cart.css` and appended to `dist/index.css` (scripts/build-cart-css.mjs).
+{
+  const cart = readFileSync(join(dist, "cart.css"), "utf8").trim();
+  assert.ok(cart.length > 1000, "dist/cart.css is empty");
+  assert.ok(css.includes(cart), "dist/cart.css is not contained verbatim in dist/index.css");
+  assert.doesNotMatch(cart, /@layer\b/, "dist/cart.css must be unlayered");
+  for (const match of cart.matchAll(/var\(\s*(--[\w-]+)/g)) {
+    assert.match(match[1], /^--(bitsnap-checkout-|bsc-)/, `dist/cart.css reads ${match[1]}: no Tailwind theme variables`);
+  }
+  assert.ok(!cart.includes(".bitsnap-react"), "dist/cart.css must not be prefixed");
+  // One checkout sheet: the firewall exists once in index.css (no second, prefixed copy).
+  assert.equal(css.split("all:initial").length - 1, 1, "the cart firewall appears more than once in dist/index.css");
+  assert.equal(css.indexOf(cart) > css.lastIndexOf("@layer"), true, "cart.css must come after every layered block");
+}
 
 assert.ok(
   css.includes("[data-bitsnap-returns"),

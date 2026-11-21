@@ -4,6 +4,7 @@ import { cn } from "@/src/lib/utils";
 import { useCheckoutAppearance, useCheckoutSlot } from "./appearance.context";
 import { useCheckoutText } from "./texts.context";
 import { resolvePresentation, type CartPresentation } from "./presentation";
+import { useCheckoutStore } from "./state";
 
 /**
  * The one shell of the cart, for every presentation (PLAN D7): the checkout
@@ -116,55 +117,55 @@ export function CartFrame({
   );
 }
 
-/** Title and close button of the cart. Rendered by `CartFrame` only (one module: each module costs bytes). */
+/**
+ * Title with the item count, and the close button. Rendered by `CartFrame`
+ * only (one module: each module costs bytes in the cart-only bundle). The
+ * count comes from the store, so it is right before the lines load.
+ */
 export function CartHeader({ onClose }: { onClose: () => void }) {
   const header = useCheckoutSlot("header");
   const title = useCheckoutSlot("title");
   const closeButton = useCheckoutSlot("closeButton");
   const cartText = useCheckoutText("cart");
   const closeText = useCheckoutText("close");
+  const count = useCheckoutStore((state) => state.numberOfProductsInCart);
 
   return (
     <div
       data-bitsnap-checkout-slot="header"
-      className={cn(
-        "mx-3 mt-7 flex justify-between items-center",
-        header.className,
-      )}
+      className={cn("bsc-header", header.className)}
       style={header.style}
     >
       <Dialog.Title asChild>
         <h1
           data-bitsnap-checkout-slot="title"
-          className={cn("text-2xl font-medium", title.className)}
+          className={cn("bsc-title", title.className)}
           style={title.style}
         >
           {cartText}
+          {count > 0 && <span className="bsc-title-count"> ({count})</span>}
         </h1>
       </Dialog.Title>
       <button
         type="button"
         data-bitsnap-checkout-slot="closeButton"
-        className={cn("rounded-xl transition", closeButton.className)}
+        className={cn("bsc-icon-btn", closeButton.className)}
         style={closeButton.style}
         aria-label={closeText}
         onClick={onClose}
       >
         <svg
+          className="bsc-icon"
           xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
-          strokeLinejoin="round"
           aria-hidden="true"
           focusable="false"
         >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
+          <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
     </div>

@@ -303,10 +303,9 @@ function BitsnapCart({
         aria-haspopup="dialog"
         aria-controls={isCartVisible ? panelId : undefined}
         style={{ position: "relative" }}
-        className={[
-          "bitsnap-react",
-          className ?? "rounded-full hover:bg-neutral-300 transition p-1",
-        ].join(" ")}
+        // The default look (`cart.css`) applies only without a merchant class (D20).
+        data-bitsnap-checkout-trigger={className ? "custom" : "default"}
+        className={className ? `bitsnap-react ${className}` : "bitsnap-react"}
       >
         {children ? (
           <>{children}</>
@@ -321,7 +320,6 @@ function BitsnapCart({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="lucide lucide-shopping-cart"
             aria-hidden="true"
             focusable="false"
           >

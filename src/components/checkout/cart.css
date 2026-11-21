@@ -1,0 +1,550 @@
+/*
+ * bitsnap-react cart stylesheet (PLAN D5).
+ *
+ * Hand-written and unlayered. It is NOT processed by Tailwind or the
+ * `.bitsnap-react` prefixer: `scripts/build-cart-css.mjs` minifies it to
+ * `dist/cart.css` and appends the same text to `dist/index.css`, so main-entry
+ * users get it without a new import.
+ *
+ * Rules of this file (`cart-css.test.ts` checks them):
+ * - Every selector starts with `[data-bitsnap-checkout` (the checkout root and
+ *   its descendants, the portalled country dropdown, or the cart trigger
+ *   `[data-bitsnap-checkout-trigger]`), so nothing reaches the host page.
+ * - Literal values only: no Tailwind theme variable (`--color-*`, `--spacing`,
+ *   ...), because a page with only this file has no Tailwind. Px, never rem, so
+ *   a host `html { font-size: 62.5% }` cannot shrink the cart (D8).
+ * - Specificity at most (0,2,0): `[data-bitsnap-checkout] .bsc-x` or
+ *   `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="x"]`. State, theme and
+ *   presentation qualifiers sit in `:where()`. A merchant rule "SDK selector
+ *   plus one class" (0,3,0) therefore always wins, in every state. Within one
+ *   component the state rule comes after the base rule.
+ * - The reset (0,1,0) comes first; component rules (0,2,0) win over it.
+ */
+
+/* ---- Root: inheritance firewall (R01) ------------------------------------
+ * Only the root, never the bare `[data-bitsnap-checkout]`: the portalled
+ * country dropdown carries the attribute too. `all: initial` stops the host's
+ * inherited text-align, letter-spacing, line-height, colour and font size; it
+ * does not touch custom properties, `direction` or `unicode-bidi`.
+ * The font is the host's (D16): `inherit` reads the parent; the `fontFamily`
+ * token switches it. The stacking is explicit (R05), not left to the inline
+ * z-index alone. */
+[data-bitsnap-checkout="root"] {
+    all: initial;
+    display: block;
+    position: relative;
+    z-index: 999999;
+    box-sizing: border-box;
+    font-family: var(--bitsnap-checkout-font-family, inherit);
+    font-size: var(--bitsnap-checkout-font-size, 16px);
+    line-height: 1.45;
+    color: var(--bsc-fg);
+
+    /* Aliases: the token when set (theme presets write tokens inline), else
+     * the dark default. Internal, not API. */
+    --bsc-bg: var(--bitsnap-checkout-background, #171717);
+    --bsc-fg: var(--bitsnap-checkout-foreground, #e5e5e5);
+    --bsc-muted: var(--bitsnap-checkout-muted-foreground, #a3a3a3);
+    --bsc-border: var(--bitsnap-checkout-border, #404040);
+    --bsc-surface: var(--bitsnap-checkout-surface, #262626);
+    --bsc-hover: var(--bitsnap-checkout-hover-surface, #404040);
+    --bsc-cta-bg: var(--bitsnap-checkout-button-background, #d4d4d4);
+    --bsc-cta-fg: var(--bitsnap-checkout-button-foreground, #262626);
+    --bsc-cta-hover: var(--bitsnap-checkout-button-hover-background, #f5f5f5);
+    --bsc-ring: var(--bitsnap-checkout-focus-ring, #a3a3a3);
+    --bsc-error: var(--bitsnap-checkout-error, #ef4444);
+    --bsc-sale: var(--bitsnap-checkout-sale, #f87171);
+    --bsc-radius: var(--bitsnap-checkout-radius, 8px);
+}
+
+/* ---- Per-theme literals (N01, R09) ---------------------------------------
+ * Values that must pass a contrast bar never read a preset variable: the light
+ * preset writes `--bitsnap-checkout-border: #e4e4e7` inline (1.27:1 on white).
+ * `color-scheme` follows the theme class here; the resolver writes it inline
+ * from an effective hex `background` token, which wins (N10). These come after
+ * the firewall, whose `all: initial` resets `color-scheme`. */
+[data-bitsnap-checkout="root"]:where(.dark) {
+    color-scheme: dark;
+    --bsc-control-border: #737373;
+    --bsc-skeleton: #333333;
+    --bsc-overlay: rgb(0 0 0 / 0.3);
+}
+
+[data-bitsnap-checkout="root"]:where(.light) {
+    color-scheme: light;
+    --bsc-control-border: #8a8a8a;
+    --bsc-skeleton: #d4d4d8;
+    --bsc-overlay: rgb(0 0 0 / 0.35);
+}
+
+/* ---- Local reset (0,1,0) (R23) --------------------------------------------
+ * The elements host stylesheets reset or decorate. The express containers
+ * (`paymentButtons` and everything in them) are skipped: Apple Pay, Google Pay,
+ * InPost and Revolut inject their own DOM and artwork (R08). */
+[data-bitsnap-checkout] :where(a, h1, h2, h3, h4, p, ul, ol, li, hr, figure, button, input, select, label, fieldset, legend, img, svg):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)) {
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: none;
+    background: none;
+    border: 0 solid;
+    color: inherit;
+}
+
+[data-bitsnap-checkout] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *)),
+[data-bitsnap-checkout] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *))::before,
+[data-bitsnap-checkout] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"] *))::after {
+    box-sizing: border-box;
+}
+
+/* ---- Keyframes ------------------------------------------------------------
+ * Global names, so they carry the `bitsnap-` prefix. The drawer's enter and
+ * exit are the 1.31.0 ones: the panel starts at opacity 0.25, never 0, so its
+ * rows are readable from the first frame (perf gate A1). */
+@keyframes bitsnap-checkout-panel-in {
+    from {
+        opacity: 0.25;
+        transform: translateX(24px);
+    }
+}
+
+@keyframes bitsnap-checkout-panel-out {
+    to {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+}
+
+@keyframes bitsnap-checkout-panel-fade-in {
+    from {
+        opacity: 0.25;
+    }
+}
+
+@keyframes bitsnap-checkout-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes bitsnap-checkout-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+/* The skeleton shows after 150 ms (no 4 ms flash, F-05); `backwards` holds the
+ * `from` frame during the delay only, so without the animation it is visible. */
+@keyframes bitsnap-cart-show {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes bitsnap-cart-pulse {
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ---- Overlay and panel (grid shell, D7) -----------------------------------
+ * The panel is Radix `Dialog.Content`; its direct children are the header, the
+ * scroll region and (from the footer step on) the footer. Only the middle row
+ * scrolls. Drawer: full screen in the compact layout (phones, also landscape,
+ * D8), 380 px from 640 px, 420 px from 1200 px; `panelWidth` replaces the side
+ * widths. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"] {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    cursor: pointer;
+    background-color: var(--bitsnap-checkout-overlay, var(--bsc-overlay));
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: var(--bitsnap-checkout-panel-width, 380px);
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+    background-color: var(--bsc-bg);
+    color: var(--bsc-fg);
+    border-left: 1px solid var(--bsc-border);
+    outline: none;
+}
+
+@media (min-width: 1200px) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+        width: var(--bitsnap-checkout-panel-width, 420px);
+    }
+}
+
+/* Compact layout, written after the side widths (same specificity, later wins). */
+@media (max-width: 639.98px), (max-height: 500px) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"] {
+        width: 100%;
+        border-left: 0;
+    }
+}
+
+/* Enter and exit on Radix's `data-state`; Radix `Presence` keeps each element
+ * mounted until the exit's `animationend`. Each state has its own keyframes
+ * (Presence waits only when the name changes). No fill mode on the enter: a
+ * held transform would make the panel the containing block of fixed
+ * descendants (N14). */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="open"]) {
+    animation: bitsnap-checkout-panel-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+}
+
+/* A closing cart takes no clicks during its exit. Radix writes an inline
+ * `pointer-events: auto` on the overlay and the content, so only `!important`
+ * beats it. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="closed"]) {
+    animation: bitsnap-checkout-panel-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+    pointer-events: none !important;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"]) {
+    animation: bitsnap-checkout-fade-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="closed"]) {
+    animation: bitsnap-checkout-fade-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+    pointer-events: none !important;
+}
+
+/* ---- Header (56 px, title with count, 44 px close) ------------------------ */
+[data-bitsnap-checkout] .bsc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 56px;
+    padding: 0 6px 0 16px;
+    border-bottom: 1px solid var(--bsc-border);
+}
+
+[data-bitsnap-checkout] .bsc-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+[data-bitsnap-checkout] .bsc-title-count {
+    color: var(--bsc-muted);
+    font-weight: 500;
+}
+
+[data-bitsnap-checkout] .bsc-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: var(--bsc-radius);
+    color: var(--bsc-fg);
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-icon-btn:where(:hover) {
+    background-color: var(--bsc-hover);
+}
+
+[data-bitsnap-checkout] .bsc-icon-btn:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: -2px;
+}
+
+[data-bitsnap-checkout] .bsc-icon {
+    display: block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+}
+
+/* ---- Scroll region (the `lines` slot) ------------------------------------- */
+[data-bitsnap-checkout] .bsc-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Interim until the footer step: the total, the options and the button sit at
+ * the bottom of a short cart, as the old spacer did. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="summary"] {
+    margin-top: auto;
+}
+
+/* ---- Skeleton -------------------------------------------------------------
+ * The wrapper's delayed show and the bars' pulse sit on two elements (N12).
+ * The fill is the per-theme literal, visible in the light theme too (R14). */
+[data-bitsnap-checkout] .bsc-skeleton {
+    opacity: 1;
+    animation: bitsnap-cart-show 1ms linear 150ms backwards;
+}
+
+[data-bitsnap-checkout] .bsc-pulse {
+    border-radius: 6px;
+    background-color: var(--bsc-skeleton);
+    animation: bitsnap-cart-pulse 1.5s ease-in-out infinite;
+}
+
+/* ---- Content (1.31.0 rules, literal values; steps 15-17 replace them) ----- */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(ul) {
+    margin-top: 20px;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(hr) {
+    height: 4px;
+    margin: 0;
+    border-width: 1px 0 0;
+    border-style: solid;
+    border-color: var(--bsc-border);
+}
+
+/* Only rendered with an outline when the product is unavailable. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="product"]:where([data-bitsnap-checkout-unavailable]) {
+    outline-color: var(--bitsnap-checkout-error, #dc2626);
+}
+
+/* Sale line: muted #a3a3a3 is 7.11:1 and sale #f87171 6.48:1 on #171717; the
+ * light preset sets #71717a (4.83:1 on white) and #b91c1c (6.47:1). */
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="regular"],
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="omnibus"] {
+    color: var(--bitsnap-checkout-muted-foreground, #a3a3a3);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-price="sale"] {
+    color: var(--bitsnap-checkout-sale, #f87171);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
+    margin: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+    background-color: var(--bsc-cta-bg);
+    color: var(--bsc-cta-fg);
+}
+
+/* The retry button shares the slot and sits in a padded block without margin. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where([data-bitsnap-checkout-retry]) {
+    margin: 0;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:hover:not(:disabled)) {
+    background-color: var(--bsc-cta-hover);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"]:where(:disabled) {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="error"] {
+    color: var(--bsc-error);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="emptyState"] {
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="deliveryText"] {
+    color: var(--bitsnap-checkout-muted-foreground, inherit);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryLabel"] {
+    margin: 0 0 0 12px;
+    color: var(--bsc-muted);
+}
+
+/* Border width and padding of the old select trigger, so a host `button`
+ * reset cannot strip them. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] {
+    padding: 8px 12px;
+    border-width: 1px;
+    border-style: solid;
+    background-color: var(--bsc-bg);
+    border-color: var(--bsc-control-border);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"]:where(:focus-visible) {
+    border-color: var(--bsc-ring);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryTrigger"] :where(img) {
+    width: auto;
+    max-width: none;
+    height: 16px;
+}
+
+/* The portalled dropdown is its own boundary, outside the root: no aliases
+ * there, so each value names its token and the dark default. It stacks above
+ * the cart root (999999, earlier in the DOM). */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryDropdown"],
+[data-bitsnap-checkout-slot="countryDropdown"][data-bitsnap-checkout] {
+    z-index: 999999;
+    font-family: var(--bitsnap-checkout-font-family, inherit);
+    background-color: var(--bitsnap-checkout-surface, #262626);
+    color: var(--bitsnap-checkout-foreground, #e5e5e5);
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--bitsnap-checkout-border, #404040);
+    border-radius: 6px;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] {
+    background-color: var(--bitsnap-checkout-surface, #262626);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countrySearch"] :where(input) {
+    color: var(--bitsnap-checkout-muted-foreground, #a3a3a3);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where(:hover, [data-highlighted]) {
+    background-color: var(--bitsnap-checkout-hover-surface, #404040);
+}
+
+/* After `:hover` / `[data-highlighted]`, so the selected option keeps its surface. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="countryOption"]:where([data-state="checked"]) {
+    background-color: var(--bitsnap-checkout-hover-surface, #404040);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] {
+    margin: 16px 8px 8px;
+    padding: 0;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethods"] :where(legend) {
+    margin-bottom: 4px;
+    padding: 0 4px;
+    color: var(--bsc-fg);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] {
+    border-color: var(--bsc-control-border);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:hover) {
+    border-color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where([data-selected]) {
+    border-color: var(--bsc-fg);
+    background-color: var(--bsc-surface);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"]:where(:has(input:focus-visible)) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+/* Drawn by hand: a native unchecked radio is a white disc on the dark panel. */
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]) {
+    appearance: none;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    padding: 0;
+    border-radius: 9999px;
+    border: 1.5px solid var(--bsc-muted);
+    background-color: transparent;
+    outline: none;
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-slot="paymentMethodOption"] :where(input[type="radio"]:checked) {
+    border: 5px solid var(--bsc-fg);
+}
+
+[data-bitsnap-checkout] [data-bitsnap-checkout-payment-method-description] {
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] :where([data-bitsnap-checkout-slot="paymentMethods"]:disabled) [data-bitsnap-checkout-slot="paymentMethodOption"] {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* ---- Cart trigger (D20) ---------------------------------------------------
+ * The button lives in the host page, outside the root: the firewall and the
+ * reset never reach it. Styled only without a merchant `className`
+ * (`data-bitsnap-checkout-trigger="default"`); a "custom" trigger gets no rule,
+ * so a merchant class never fights the SDK. */
+[data-bitsnap-checkout-trigger="default"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout-trigger="default"]:where(:hover) {
+    background: rgb(127 127 127 / 0.25);
+}
+
+[data-bitsnap-checkout-trigger="default"]:where(:focus-visible) {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+/* ---- Reduced motion (R20) -------------------------------------------------
+ * No slide, a fade of at most 120 ms; the skeleton pulse stops. The skeleton's
+ * delayed show is not motion: no rule here touches `.bsc-skeleton`. */
+@media (prefers-reduced-motion: reduce) {
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="open"]) {
+        animation-name: bitsnap-checkout-panel-fade-in;
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="closed"]) {
+        animation-name: bitsnap-checkout-fade-out;
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
+    }
+
+    [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"], [data-state="closed"]) {
+        animation-duration: min(var(--bitsnap-checkout-motion-duration, 240ms), 120ms);
+    }
+
+    [data-bitsnap-checkout] .bsc-pulse {
+        animation: none;
+    }
+
+    [data-bitsnap-checkout] .bsc-icon-btn,
+    [data-bitsnap-checkout-trigger="default"] {
+        transition: none;
+    }
+}
+
+/* ---- Motion off (R21) -----------------------------------------------------
+ * The resolver sets `data-bitsnap-checkout-motion="off"` on the root when the
+ * `motionDuration` token is zero (CSS cannot test a variable's value). The
+ * cart's own animations and transitions stop, so Radix unmounts at once. Kept
+ * running: the express widgets (`paymentButtons` and everything in it) and the
+ * skeleton (its pulse is a status; the wrapper's delayed show must never stay
+ * at opacity 0, N03). `!important` also beats an inline animation. */
+[data-bitsnap-checkout="root"][data-bitsnap-checkout-motion="off"] :where(*):not(:where([data-bitsnap-checkout-slot="paymentButtons"], [data-bitsnap-checkout-slot="paymentButtons"] *, [data-bitsnap-checkout-slot="skeleton"], .bsc-skeleton)) {
+    animation: none !important;
+    transition: none !important;
+}

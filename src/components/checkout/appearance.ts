@@ -19,7 +19,7 @@ import {
  * Backward compatibility: the resolver never invents values. A token is only
  * present in the resolved output when the caller provided it or when the
  * caller explicitly selected a theme preset, so every unset token keeps falling
- * back to the value the checkout renders today (see `checkout.css`).
+ * back to the default in `cart.css`.
  */
 
 export type CheckoutTheme = "dark" | "light";
@@ -51,7 +51,7 @@ export type CheckoutAppearanceTokens = {
   focusRing?: string;
   /** Error and unavailable state color. */
   error?: string;
-  /** Drawer backdrop color. */
+  /** Backdrop color behind the cart. */
   overlay?: string;
   /** Corner radius, applied through `--radius`. */
   radius?: string;
@@ -83,6 +83,8 @@ export const CHECKOUT_SLOT_NAMES = [
   "title",
   "closeButton",
   "productList",
+  /** The scroll region: lines and the options under them. */
+  "lines",
   "product",
   "productImage",
   "productName",
@@ -141,7 +143,10 @@ export type ResolvedCheckoutAppearance = {
   elements: CheckoutAppearanceElements;
   /** Theme marker class for the theme boundaries. */
   boundaryClassName: string;
-  /** Inline custom properties applied to the drawer root. */
+  /**
+   * Inline custom properties applied to the drawer root, plus `color-scheme`
+   * when the effective `background` token is a hex colour.
+   */
   boundaryStyle: CSSProperties;
   /**
    * Data attributes for the drawer root. `data-bitsnap-checkout-motion="off"`
@@ -205,7 +210,8 @@ export const CHECKOUT_THEME_PRESETS: Record<
     hoverSurface: "#e4e4e7",
     focusRing: "#71717a",
     error: "#dc2626",
-    overlay: "rgb(0 0 0 / 0.35)",
+    // No `overlay`: `cart.css` keeps the light overlay as a per-theme literal,
+    // so the preset cannot replace a stronger one (N01).
     sale: "#b91c1c",
   },
 };
@@ -263,6 +269,33 @@ function resolveDropdownStyle(tokens: CheckoutAppearanceTokens): CSSProperties {
 }
 
 /**
+ * `color-scheme` for the root from the effective `background` token (N10):
+ * `dark` when white text reads better on it, `light` otherwise. Only `#rgb`
+ * and `#rrggbb` are read; any other value (`rgb()`, `var()`, a name) or no
+ * `background` gives `undefined`, and the theme class decides in `cart.css`.
+ * Scrollbars, the native select popup and form controls follow it.
+ */
+export function colorSchemeFor(
+  background: string | undefined,
+): "dark" | "light" | undefined {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(background?.trim() ?? "");
+  if (match == null) {
+    return undefined;
+  }
+  const hex = match[1].length === 3 ? match[1].replace(/./g, "$&$&") : match[1];
+  // WCAG relative luminance, then the rule of `onColor` (consent/core/contrast.ts):
+  // dark when white text contrasts at least as well as #111111 (luminance 0.0056054).
+  const [r, g, b] = [0, 2, 4].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05;
+  return 1.05 / light >= light / 0.0556054 ? "dark" : "light";
+}
+
+/**
  * `true` for a zero duration (`0`, `0ms`, `0s`, `0.0s`, ...). Any other value,
  * including `var(--host-duration)`, keeps motion on: the token passes through
  * unvalidated and CSS decides.
@@ -272,6 +305,13 @@ export function isMotionOff(duration: string | undefined): boolean {
     return false;
   }
   return /^[+-]?(0+(\.0*)?|\.0+)(ms|s)?$/i.test(duration.trim());
+}
+
+function withColorScheme(
+  style: CSSProperties,
+  colorScheme: "dark" | "light" | undefined,
+): CSSProperties {
+  return colorScheme == null ? style : { ...style, colorScheme };
 }
 
 export function resolveCheckoutAppearance(
@@ -294,7 +334,10 @@ export function resolveCheckoutAppearance(
     tokens: resolved.tokens,
     elements: resolved.elements,
     boundaryClassName: resolved.theme,
-    boundaryStyle: resolved.boundaryStyle,
+    boundaryStyle: withColorScheme(
+      resolved.boundaryStyle,
+      colorSchemeFor(resolved.tokens.background),
+    ),
     boundaryAttributes: isMotionOff(resolved.tokens.motionDuration)
       ? { "data-bitsnap-checkout-motion": "off" }
       : {},
