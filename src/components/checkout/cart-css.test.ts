@@ -499,6 +499,16 @@ describe("checkout.css drawer enter and exit", () => {
     assert.doesNotMatch(expected[0][1], /\b(forwards|both)\b/);
   });
 
+  it("lets the closing panel and overlay take no clicks, over Radix's inline pointer-events (review N2)", () => {
+    for (const element of [panel, overlay]) {
+      const closed = topLevel(`${element}:where([data-state="closed"])`);
+      assert.ok(closed, `no closed rule for ${element}`);
+      // Radix writes `style="pointer-events: auto"` on both: only !important wins.
+      assert.equal(closed.declarations.get("pointer-events"), "none !important");
+      assert.equal(topLevel(`${element}:where([data-state="open"])`)?.declarations.has("pointer-events"), false);
+    }
+  });
+
   it("drops the slide and shortens the fade under prefers-reduced-motion", () => {
     const short = `min(${DURATION}, 120ms)`;
     const open = reduced(`${panel}:where([data-state="open"])`);

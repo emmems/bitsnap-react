@@ -55,6 +55,7 @@ let Bitsnap: typeof import("./methods.ts").Bitsnap;
 let useCheckoutStore: typeof import("./state.ts").useCheckoutStore;
 let snapshotModule: typeof import("./cart-snapshot.ts");
 let walletAvailability: typeof import("./CartProvider.tsx").walletAvailability;
+let cartCheckoutModule: typeof import("./CartCheckout.tsx");
 let HOST: string;
 
 before(async () => {
@@ -67,6 +68,7 @@ before(async () => {
   ({ useCheckoutStore } = await import("./state.ts"));
   snapshotModule = await import("./cart-snapshot.ts");
   ({ walletAvailability } = await import("./CartProvider.tsx"));
+  cartCheckoutModule = await import("./CartCheckout.tsx");
   ({ HOST } = await import("./constants.ts"));
 });
 
@@ -1484,6 +1486,44 @@ describe("request graph and wallet availability (slice 5)", () => {
     assert.ok(doc().querySelector('[data-bitsnap-checkout-notice="wallets-updating"]'));
     await releaseProducts();
     assert.equal(area.hasAttribute("inert"), false);
+  });
+
+  it("a chunk that failed to load is asked for again at the next open, and the buttons show (review N1)", async () => {
+    enableApplePay(true);
+    oneClick = { applePay: true };
+    const { expressAreaChunk, forgetExpressArea } = cartCheckoutModule;
+    const realLoad = expressAreaChunk.load;
+    let failing = true;
+    let loads = 0;
+    expressAreaChunk.load = () => {
+      loads += 1;
+      return failing ? Promise.reject(new TypeError("Failed to fetch dynamically imported module")) : realLoad();
+    };
+    // Earlier tests loaded the chunk; start this page without it.
+    forgetExpressArea();
+    const button = () => wallets()?.querySelector<HTMLElement>("button, apple-pay-button, [role=button]") ?? null;
+    try {
+      await mount();
+      await add("pa");
+      await open();
+      await settle(60);
+      assert.ok(wallets(), "the wallets container is there");
+      assert.equal(button(), null, "no buttons while the chunk cannot load");
+      const failedLoads = loads;
+      assert.ok(failedLoads >= 1);
+
+      failing = false;
+      await close();
+      await open();
+      await settle(60);
+      assert.ok(loads > failedLoads, "the reopened drawer asks for the chunk again");
+      const area = wallets()!;
+      assert.ok(button(), "the buttons show after the retry");
+      assert.equal(button()!.closest("[data-bitsnap-checkout-wallets]"), area, "inside the wallets container");
+      assert.equal(area.hasAttribute("inert"), false);
+    } finally {
+      expressAreaChunk.load = realLoad;
+    }
   });
 });
 

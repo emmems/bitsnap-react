@@ -14,19 +14,36 @@ type ExpressAreaModule = {
     props: React.ComponentProps<typeof import("./CartExpressArea").default>,
   ) => React.ReactNode;
 };
+/** The express chunk's import. An object so a test can make it fail. */
+export const expressAreaChunk = {
+  load: (): Promise<ExpressAreaModule> => import("./CartExpressArea"),
+};
 let expressArea: Promise<ExpressAreaModule> | undefined;
+let expressAreaLazy: React.LazyExoticComponent<ExpressAreaModule["default"]> | undefined;
 /**
  * The express buttons' chunk, asked for once per page. A chunk that cannot
- * load leaves the express buttons out for the page; the cart and its "Next
- * step" button keep working.
+ * load (a 404 after a host deploy, a dropped network) leaves the express
+ * buttons out of this drawer and is forgotten, so the next open asks again;
+ * the cart and its "Next step" button keep working.
  */
 function loadExpressArea(): Promise<ExpressAreaModule> {
-  expressArea ??= import("./CartExpressArea").catch(() => ({
-    default: () => null,
-  }));
+  expressArea ??= expressAreaChunk.load().catch((error: unknown) => {
+    forgetExpressArea();
+    console.warn("cannot load the express buttons", error);
+    return { default: () => null };
+  });
   return expressArea;
 }
-const CartExpressArea = React.lazy(loadExpressArea);
+/** Drops the cached chunk and its lazy component (`React.lazy` keeps its result). */
+export function forgetExpressArea() {
+  expressArea = undefined;
+  expressAreaLazy = undefined;
+}
+/** One lazy component per page, a new one after a failed load. */
+function expressAreaComponent() {
+  expressAreaLazy ??= React.lazy(loadExpressArea);
+  return expressAreaLazy;
+}
 
 /**
  * Everything under the lines: the total, the country, the express buttons, the
@@ -66,6 +83,9 @@ export function CartCheckout() {
   } = useCartController();
 
   const [isCountryOpen, setIsCountryOpen] = React.useState(false);
+  // Taken once per mount: the drawer mounts this at each open, so a failed
+  // chunk is retried at the next open, not at every render.
+  const [CartExpressArea] = React.useState(expressAreaComponent);
 
   // The express chunk loads while `/products` is asked, not after it: the
   // buttons mount once the server confirmed the cart (slice 5).

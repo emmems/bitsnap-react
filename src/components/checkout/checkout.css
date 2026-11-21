@@ -153,8 +153,14 @@
     animation: bitsnap-checkout-panel-in var(--bitsnap-checkout-motion-duration, 240ms) ease-out;
 }
 
+/*
+ * A closing drawer takes no clicks during its exit. Radix writes an inline
+ * `pointer-events: auto` on the overlay and on the modal content, so only
+ * `!important` beats it; focus goes back by `focus()`, which this does not stop.
+ */
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="panel"]:where([data-state="closed"]) {
     animation: bitsnap-checkout-panel-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+    pointer-events: none !important;
 }
 
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="open"]) {
@@ -163,6 +169,7 @@
 
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="overlay"]:where([data-state="closed"]) {
     animation: bitsnap-checkout-fade-out var(--bitsnap-checkout-motion-duration, 240ms) ease-in forwards;
+    pointer-events: none !important;
 }
 
 /* Reduced motion: no slide, a fade of at most 120 ms. */
