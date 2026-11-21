@@ -343,3 +343,103 @@ describe("1.31.0 tokens: sale, panelWidth, motionDuration", () => {
     );
   });
 });
+
+describe("1.32.0 tokens: the cart follows the site's look (step 19a, D22)", () => {
+  const NEW_TOKENS = {
+    controlBorder: "--bitsnap-checkout-control-border",
+    skeleton: "--bitsnap-checkout-skeleton",
+    colorScheme: "--bitsnap-checkout-color-scheme",
+    panelRadius: "--bitsnap-checkout-panel-radius",
+    controlRadius: "--bitsnap-checkout-control-radius",
+    buttonRadius: "--bitsnap-checkout-button-radius",
+    buttonFontSize: "--bitsnap-checkout-button-font-size",
+    panelShadow: "--bitsnap-checkout-panel-shadow",
+  } as const;
+
+  it("maps each new token to its variable and writes only that one", () => {
+    for (const [token, variable] of Object.entries(NEW_TOKENS)) {
+      assert.equal(CHECKOUT_TOKEN_VARIABLES[token as keyof typeof NEW_TOKENS], variable, token);
+      const style = resolveCheckoutAppearance({ tokens: { [token]: "1px" } }).boundaryStyle as Record<string, string>;
+      assert.deepEqual(Object.keys(style), [variable], token);
+      assert.equal(style[variable], "1px", token);
+    }
+  });
+
+  it("keeps the default and both themes' output as it was: no preset writes a new token", () => {
+    for (const theme of [undefined, "dark", "light"] as const) {
+      const resolved = resolveCheckoutAppearance(theme == null ? undefined : { theme });
+      const style = resolved.boundaryStyle as Record<string, string>;
+      for (const variable of Object.values(NEW_TOKENS)) {
+        assert.equal(style[variable], undefined, `${theme} writes ${variable}`);
+      }
+    }
+    // The light preset is exactly the 1.32.0 one (098d01f).
+    assert.deepEqual(CHECKOUT_THEME_PRESETS.light, {
+      background: "#ffffff",
+      surface: "#f9fafb",
+      foreground: "#18181b",
+      mutedForeground: "#71717a",
+      border: "#e4e4e7",
+      buttonBackground: "#18181b",
+      buttonForeground: "#fafafa",
+      buttonHoverBackground: "#000000",
+      hoverSurface: "#e4e4e7",
+      focusRing: "#71717a",
+      error: "#dc2626",
+      sale: "#b91c1c",
+    });
+    assert.deepEqual(CHECKOUT_THEME_PRESETS.dark, {});
+    assert.equal(
+      (resolveCheckoutAppearance({ theme: "light" }).boundaryStyle as Record<string, string>).colorScheme,
+      "light",
+    );
+  });
+
+  it("passes var(...) values through, so the host's variables and dark switch drive the cart", () => {
+    const tokens = {
+      background: "var(--site-bg)",
+      foreground: "var(--site-fg)",
+      controlBorder: "var(--site-input, #8a8a8a)",
+      skeleton: "color-mix(in srgb, var(--site-fg) 15%, transparent)",
+      colorScheme: "var(--site-scheme)",
+      controlRadius: "var(--site-radius)",
+      buttonRadius: "calc(var(--site-radius) * 2)",
+      panelShadow: "var(--site-shadow)",
+    };
+    const style = resolveCheckoutAppearance({ tokens }).boundaryStyle as Record<string, string>;
+    for (const [token, value] of Object.entries(tokens)) {
+      assert.equal(style[CHECKOUT_TOKEN_VARIABLES[token as keyof typeof tokens]], value, token);
+    }
+  });
+
+  it("lets a colorScheme token decide instead of the hex background's guess", () => {
+    const guessed = resolveCheckoutAppearance({ tokens: { background: "#ffffff" } });
+    assert.equal((guessed.boundaryStyle as Record<string, string>).colorScheme, "light");
+    const chosen = resolveCheckoutAppearance({ tokens: { background: "#ffffff", colorScheme: "dark" } });
+    const style = chosen.boundaryStyle as Record<string, string>;
+    assert.equal(style.colorScheme, undefined, "an inline color-scheme would beat the token");
+    assert.equal(style["--bitsnap-checkout-color-scheme"], "dark");
+    // The light preset's background no longer writes it either once the token is set.
+    assert.equal(
+      (resolveCheckoutAppearance({ theme: "light", tokens: { colorScheme: "var(--s)" } }).boundaryStyle as Record<string, string>)
+        .colorScheme,
+      undefined,
+    );
+  });
+
+  it("drops a value with a `;`, which would add a declaration in server-rendered HTML", () => {
+    const resolved = resolveCheckoutAppearance({
+      tokens: { background: "red; position: static", buttonRadius: "4px" },
+    });
+    const style = resolved.boundaryStyle as Record<string, string>;
+    assert.equal(style["--bitsnap-checkout-background"], undefined);
+    assert.equal(style["--background"], undefined);
+    assert.equal(resolved.tokens.background, undefined);
+    assert.equal(style["--bitsnap-checkout-button-radius"], "4px");
+    assert.equal(
+      resolveCheckoutAppearance({ tokens: { background: "a;b" } }).isCustomized,
+      false,
+      "a dropped value is not a customisation",
+    );
+  });
+});

@@ -271,6 +271,15 @@ Rules:
   around it (it would cover the overlay and swallow outside clicks). Keep
   `onPointerDownOutside` prevented: only the overlay's click closes. Tests
   loop over both presentations (`cart-a11y.test.tsx`, `cart-presentation.test.tsx`).
+- Cart look (D22, since 1.32.0): every colour, radius, shadow and text size in
+  `cart.css` reads a `--bitsnap-checkout-*` token variable (`CHECKOUT_TOKEN_VARIABLES`)
+  or a `--bsc-*` alias of one. A per-theme literal (control border, skeleton,
+  overlay, `color-scheme`) is the fallback of its own variable, which no theme
+  preset may write (a preset value cannot be told apart from a merchant's).
+  Font sizes come from the `--bsc-t*` scale on `fontSize`, never px. Token
+  values pass through as written (`var(--site-x)` works); only a value with a
+  `;` is dropped (`omitUndefined`). Tests: the "follows the site's look"
+  blocks in `cart-css.test.ts` and `appearance.test.ts`.
 - `data-bitsnap-cart-open` on `<html>` while a cart is open is a contract with
   the consent module (`src/consent/core/ui.ts` mirrors it and hides its
   banner); the literal is repeated on both sides because consent must not

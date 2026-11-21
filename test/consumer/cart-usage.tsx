@@ -48,6 +48,20 @@ const appearance: CheckoutAppearance = {
   tokens: { buttonBackground: "#111827", panelWidth: "480px", paymentLogoHeight: "24px" },
   elements: { checkoutButton: { className: "shop-checkout" } },
 };
+// D22: the cart follows the host's own variables.
+export const followSite: CheckoutAppearance = {
+  tokens: {
+    background: "var(--site-bg)",
+    controlBorder: "var(--site-input)",
+    skeleton: "var(--site-skeleton)",
+    colorScheme: "var(--site-scheme)",
+    panelRadius: "0px",
+    controlRadius: "4px",
+    buttonRadius: "9999px",
+    buttonFontSize: "15px",
+    panelShadow: "none",
+  },
+};
 const texts: Partial<CheckoutTexts> = { checkoutFailed: "Payment failed" };
 const presentation: CartPresentation = "dialog";
 const slot: CheckoutSlotName = CHECKOUT_SLOT_NAMES[0];

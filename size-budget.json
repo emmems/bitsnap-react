@@ -62,9 +62,9 @@
     }
   },
   "css": {
-    "dist/cart.css": 4.3,
-    "dist/index.css": 23.8
+    "dist/cart.css": 4.5,
+    "dist/index.css": 24.0
   },
   "maxDependencies": 27,
-  "tarballBytes": 1880000
+  "tarballBytes": 1888000
 }

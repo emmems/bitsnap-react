@@ -4,6 +4,12 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import { JSDOM } from "jsdom";
 import { contrastRatio } from "@/src/consent/core/contrast";
+import {
+  CHECKOUT_THEME_PRESETS,
+  CHECKOUT_TOKEN_VARIABLES,
+  resolveCheckoutAppearance,
+  type CheckoutAppearance,
+} from "./appearance.ts";
 
 /*
  * Static guard for the cart stylesheet `cart.css` (F-01 regression guard,
@@ -181,6 +187,8 @@ const styleRules = rules.filter(
 const topLevel = styleRules.filter((rule) => rule.atRules.length === 0);
 const findTop = (selector: string) => topLevel.find((rule) => rule.selectors.includes(selector));
 const slot = (name: string) => `[data-bitsnap-checkout] [data-bitsnap-checkout-slot="${name}"]`;
+/** The literal fallback of `var(--name, literal)`. */
+const fallbackOf = (value: string) => /^var\(--[\w-]+, (.+)\)$/.exec(value)?.[1] ?? value;
 const PAYMENT_BUTTONS_EXCLUSION = ':not(:where([data-bitsnap-checkout-slot="paymentButtons"] *))';
 
 describe("specificity helper", () => {
@@ -264,9 +272,18 @@ describe("cart.css isolation", () => {
 
   it("sets color-scheme per theme after the firewall, with the per-theme literals (R09, N01)", () => {
     const firewall = topLevel.findIndex((rule) => rule.declarations.has("all"));
+    // Each literal is the fallback of its own token's variable (D22), which no preset writes.
     const expected = {
-      dark: { "color-scheme": "dark", "--bsc-control-border": "#737373", "--bsc-skeleton": "#333333" },
-      light: { "color-scheme": "light", "--bsc-control-border": "#8a8a8a", "--bsc-skeleton": "#d4d4d8" },
+      dark: {
+        "color-scheme": "var(--bitsnap-checkout-color-scheme, dark)",
+        "--bsc-control-border": "var(--bitsnap-checkout-control-border, #737373)",
+        "--bsc-skeleton": "var(--bitsnap-checkout-skeleton, #333333)",
+      },
+      light: {
+        "color-scheme": "var(--bitsnap-checkout-color-scheme, light)",
+        "--bsc-control-border": "var(--bitsnap-checkout-control-border, #8a8a8a)",
+        "--bsc-skeleton": "var(--bitsnap-checkout-skeleton, #d4d4d8)",
+      },
     };
     for (const [theme, values] of Object.entries(expected)) {
       const selector = `[data-bitsnap-checkout="root"]:where(.${theme})`;
@@ -284,8 +301,8 @@ describe("cart.css isolation", () => {
     const panels = { dark: ["#171717", "#262626"], light: ["#ffffff", "#f9fafb"] } as const;
     for (const [theme, [panel, surface]] of Object.entries(panels)) {
       const block = findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
-      const control = block.declarations.get("--bsc-control-border")!;
-      const skeleton = block.declarations.get("--bsc-skeleton")!;
+      const control = fallbackOf(block.declarations.get("--bsc-control-border")!);
+      const skeleton = fallbackOf(block.declarations.get("--bsc-skeleton")!);
       assert.ok(contrastRatio(control, panel) >= 3, `${theme} control border on the panel`);
       assert.ok(contrastRatio(control, surface) >= 3, `${theme} control border on the surface`);
       assert.ok(contrastRatio(skeleton, panel) >= 1.3, `${theme} skeleton on the panel`);
@@ -861,8 +878,8 @@ describe("cart.css options and footer (step 16)", () => {
   it("keeps the footer in its grid row with the safe area, total larger than its label, a 52 px CTA (F-07, D8, D10)", () => {
     const footer = findTop("[data-bitsnap-checkout] .bsc-footer");
     assert.equal(footer?.declarations.get("padding"), "12px 16px calc(16px + env(safe-area-inset-bottom))");
-    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-label")?.declarations.get("font-size"), "14px");
-    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-value")?.declarations.get("font-size"), "20px");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-label")?.declarations.get("font-size"), "var(--bsc-t14)");
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-total-value")?.declarations.get("font-size"), "var(--bsc-t20)");
     const cta = findTop("[data-bitsnap-checkout] .bsc-cta");
     assert.equal(cta?.declarations.get("min-height"), "52px");
     assert.equal(cta?.declarations.get("width"), "100%");
@@ -1000,7 +1017,8 @@ describe("cart.css standalone express parts (S2, S4)", () => {
       <p id="cart" class="bsc-express-status bsc-express-status-alert" data-bitsnap-express-status="failed" data-bitsnap-checkout-part="status">x</p></div></div>`);
     const alone = cascade(window.document.getElementById("alone")!);
     assert.equal(alone.get("text-align"), "center");
-    assert.equal(alone.get("font-size"), "13px");
+    // Outside the root `--bsc-t13` is not defined: the fallback is the size.
+    assert.equal(alone.get("font-size"), "var(--bsc-t13, 13px)");
     assert.equal(alone.get("margin"), "6px 0 0");
     const cart = cascade(window.document.getElementById("cart")!);
     assert.equal(cart.get("color"), "var(--bsc-error)");
@@ -1043,5 +1061,202 @@ describe("cart.css standalone express parts (S2, S4)", () => {
     assert.equal(rule.declarations.get("border"), "0");
     assert.equal(rule.declarations.get("overflow"), "hidden");
     assert.deepEqual(specificity(rule.selectors[0]), [0, 1, 0], "the specificity rule holds; only !important is the exception");
+  });
+});
+
+describe("cart.css follows the site's look (step 19a, D22)", () => {
+  const COMPACT = "@media (max-width: 639.98px), (max-height: 500px)";
+  const DIALOG = `${slot("panel")}:where([data-bitsnap-checkout-presentation="dialog"])`;
+  const root = findTop('[data-bitsnap-checkout="root"]')!;
+  const sheet = styleRules.find((rule) => rule.atRules.length === 1 && rule.atRules[0] === COMPACT && rule.selectors.includes(DIALOG))!;
+  const themeBlock = (theme: "dark" | "light") => findTop(`[data-bitsnap-checkout="root"]:where(.${theme})`)!;
+  const NEW_TOKENS = [
+    "controlBorder",
+    "skeleton",
+    "colorScheme",
+    "panelRadius",
+    "controlRadius",
+    "buttonRadius",
+    "buttonFontSize",
+    "panelShadow",
+  ] as const;
+
+  /** Replaces every `var(--x, fallback)` with the value in `env`, else its fallback; then `calc()` of px. */
+  function computed(value: string, env: Map<string, string>, depth = 0): string {
+    assert.ok(depth < 10, `variable cycle in ${value}`);
+    let out = value;
+    for (let at = out.indexOf("var("); at !== -1; at = out.indexOf("var(")) {
+      const { argument, end } = readArgument(out, at + 3);
+      const comma = argument.indexOf(",");
+      const name = (comma === -1 ? argument : argument.slice(0, comma)).trim();
+      const fallback = comma === -1 ? "" : argument.slice(comma + 1).trim();
+      const raw = env.get(name);
+      const replacement = raw == null ? computed(fallback, env, depth + 1) : computed(raw, env, depth + 1);
+      out = out.slice(0, at) + replacement + out.slice(end);
+    }
+    return out.replace(/calc\(\s*([\d.]+)px\s*([*+])\s*([\d.]+)(px)?\s*\)/g, (_, a, op, b) =>
+      `${op === "*" ? Number(a) * Number(b) : Number(a) + Number(b)}px`,
+    );
+  }
+
+  /** The custom properties in effect on the root for an appearance, then one rule's own. */
+  function envFor(appearance: CheckoutAppearance | undefined, rule?: StyleRule) {
+    const resolved = resolveCheckoutAppearance(appearance);
+    const env = new Map<string, string>();
+    for (const [name, value] of Object.entries(resolved.boundaryStyle)) {
+      if (name.startsWith("--")) env.set(name, String(value));
+    }
+    for (const block of [root, themeBlock(resolved.theme), rule]) {
+      for (const [name, value] of block?.declarations ?? []) {
+        if (name.startsWith("--bsc-")) env.set(name, value);
+      }
+    }
+    return env;
+  }
+
+  const read = (appearance: CheckoutAppearance | undefined, rule: StyleRule, property: string) =>
+    computed(rule.declarations.get(property)!, envFor(appearance, rule));
+  const top = (selector: string) => {
+    const rule = findTop(selector.startsWith("[") ? selector : `[data-bitsnap-checkout] ${selector}`);
+    assert.ok(rule, `no rule ${selector}`);
+    return rule;
+  };
+
+  // The 1.32.0 values (098d01f) every rule had as a literal, per property.
+  const BEFORE: [string | StyleRule, string, string][] = [
+    [".bsc-title", "font-size", "16px"],
+    [".bsc-line-name", "font-size", "15px"],
+    [".bsc-line-meta", "font-size", "13px"],
+    [".bsc-price-amount", "font-size", "15px"],
+    [".bsc-price-regular", "font-size", "13px"],
+    [".bsc-line-omnibus", "font-size", "12px"],
+    [".bsc-label", "font-size", "13px"],
+    [".bsc-select", "font-size", "15px"],
+    [".bsc-method-title", "font-size", "15px"],
+    [".bsc-method-desc", "font-size", "13px"],
+    [".bsc-total-label", "font-size", "14px"],
+    [".bsc-total-value", "font-size", "20px"],
+    [".bsc-note", "font-size", "13px"],
+    [".bsc-cta", "font-size", "16px"],
+    [".bsc-continue", "font-size", "15px"],
+    [".bsc-btn-secondary", "font-size", "15px"],
+    [".bsc-state-text", "font-size", "15px"],
+    [".bsc-cta", "border-radius", "8px"],
+    [".bsc-continue", "border-radius", "8px"],
+    [".bsc-btn-secondary", "border-radius", "8px"],
+    [".bsc-skeleton-cta", "border-radius", "8px"],
+    [".bsc-select", "border-radius", "8px"],
+    [".bsc-method", "border-radius", "8px"],
+    [".bsc-notice", "border-radius", "8px"],
+    [".bsc-icon-btn", "border-radius", "8px"],
+    [".bsc-stepper", "border-radius", "9999px"],
+    [".bsc-stepper-btn", "border-radius", "9999px"],
+    [".bsc-skeleton-stepper", "border-radius", "9999px"],
+    [DIALOG, "border-radius", "12px"],
+    [DIALOG, "box-shadow", "0 24px 64px rgb(0 0 0 / 0.3)"],
+    [sheet, "border-radius", "16px 16px 0 0"],
+    [sheet, "box-shadow", "0 -8px 32px rgb(0 0 0 / 0.25)"],
+  ];
+
+  it("maps each new token to a --bitsnap-checkout-* variable that cart.css reads", () => {
+    for (const token of NEW_TOKENS) {
+      assert.match(CHECKOUT_TOKEN_VARIABLES[token], /^--bitsnap-checkout-[a-z-]+$/, token);
+    }
+    // Every token reaches the stylesheet (none is a dead name).
+    for (const [token, variable] of Object.entries(CHECKOUT_TOKEN_VARIABLES)) {
+      assert.ok(css.includes(`var(${variable},`) || css.includes(`var(${variable})`), `${token}: ${variable} is not read by cart.css`);
+    }
+  });
+
+  it("renders the 1.32.0 values in both themes when no merchant value is set", () => {
+    for (const theme of [undefined, "dark", "light"] as const) {
+      const appearance = theme == null ? undefined : { theme };
+      for (const [rule, property, value] of BEFORE) {
+        const found = typeof rule === "string" ? top(rule) : rule;
+        assert.equal(read(appearance, found, property), value, `${theme ?? "default"} ${found.selectors[0]} ${property}`);
+      }
+    }
+    const literals = {
+      dark: { "--bsc-control-border": "#737373", "--bsc-skeleton": "#333333", "color-scheme": "dark" },
+      light: { "--bsc-control-border": "#8a8a8a", "--bsc-skeleton": "#d4d4d8", "color-scheme": "light" },
+    };
+    for (const theme of ["dark", "light"] as const) {
+      for (const [property, value] of Object.entries(literals[theme])) {
+        assert.equal(read({ theme }, themeBlock(theme), property), value, `${theme} ${property}`);
+      }
+    }
+  });
+
+  it("never lets a theme preset write a per-theme literal's variable (N01)", () => {
+    for (const theme of ["dark", "light"] as const) {
+      for (const token of ["controlBorder", "skeleton", "colorScheme", "overlay"] as const) {
+        assert.equal(CHECKOUT_THEME_PRESETS[theme][token], undefined, `${theme} preset writes ${token}`);
+      }
+      // `border` from the light preset (1.27:1 on white) does not reach the control outline.
+      assert.notEqual(read({ theme }, themeBlock(theme), "--bsc-control-border"), "#e4e4e7");
+    }
+  });
+
+  it("lets a merchant value beat the per-theme literal in both themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const appearance: CheckoutAppearance = {
+        theme,
+        tokens: { controlBorder: "#0050ff", skeleton: "#ffd6e0", colorScheme: "light" },
+      };
+      const block = themeBlock(theme);
+      assert.equal(read(appearance, block, "--bsc-control-border"), "#0050ff", theme);
+      assert.equal(read(appearance, block, "--bsc-skeleton"), "#ffd6e0", theme);
+      assert.equal(read(appearance, block, "color-scheme"), "light", theme);
+    }
+  });
+
+  it("shapes radii, shadows and type from their tokens", () => {
+    const square: CheckoutAppearance = {
+      tokens: { radius: "2px", controlRadius: "0", buttonRadius: "9999px", panelRadius: "0", panelShadow: "none" },
+    };
+    assert.equal(read(square, top(".bsc-select"), "border-radius"), "0");
+    assert.equal(read(square, top(".bsc-method"), "border-radius"), "0");
+    assert.equal(read(square, top(".bsc-stepper"), "border-radius"), "0");
+    assert.equal(read(square, top(".bsc-stepper-btn"), "border-radius"), "0");
+    assert.equal(read(square, top(".bsc-cta"), "border-radius"), "9999px");
+    assert.equal(read(square, top(".bsc-btn-secondary"), "border-radius"), "9999px");
+    assert.equal(read(square, top(".bsc-notice"), "border-radius"), "2px", "a notice follows `radius`");
+    assert.equal(read(square, top(DIALOG), "border-radius"), "0");
+    assert.equal(read(square, top(DIALOG), "box-shadow"), "none");
+    assert.equal(read(square, sheet, "border-radius"), "0 0 0 0");
+    assert.equal(read(square, sheet, "box-shadow"), "none");
+    // Only `radius`: controls and buttons follow it, the stepper stays a pill.
+    const rounded: CheckoutAppearance = { tokens: { radius: "4px" } };
+    assert.equal(read(rounded, top(".bsc-select"), "border-radius"), "4px");
+    assert.equal(read(rounded, top(".bsc-cta"), "border-radius"), "4px");
+    assert.equal(read(rounded, top(".bsc-stepper"), "border-radius"), "9999px");
+    assert.equal(read(rounded, top(DIALOG), "border-radius"), "8px");
+
+    const large: CheckoutAppearance = { tokens: { fontSize: "18px" } };
+    assert.equal(read(large, top(".bsc-line-name"), "font-size"), "16.875px");
+    assert.equal(read(large, top(".bsc-total-value"), "font-size"), "22.5px");
+    assert.equal(read(large, top(".bsc-cta"), "font-size"), "18px");
+    assert.equal(read({ tokens: { buttonFontSize: "14px" } }, top(".bsc-cta"), "font-size"), "14px");
+  });
+
+  it("passes a host variable through, so the site's own dark switch reaches the cart", () => {
+    const host: CheckoutAppearance = { tokens: { controlBorder: "var(--site-input)", buttonRadius: "var(--site-radius)" } };
+    const env = envFor(host);
+    env.set("--site-input", "#445566");
+    env.set("--site-radius", "6px");
+    assert.equal(computed(themeBlock("dark").declarations.get("--bsc-control-border")!, env), "#445566");
+    assert.equal(computed(top(".bsc-cta").declarations.get("border-radius")!, env), "6px");
+  });
+
+  it("sets every font size from the scale: no px size outside the root and the standalone status", () => {
+    for (const rule of styleRules) {
+      const size = rule.declarations.get("font-size");
+      if (size == null || rule === root) continue;
+      if (rule.selectors.includes('[data-bitsnap-checkout-part="status"]')) {
+        assert.equal(size, "var(--bsc-t13, 13px)", "renders outside the root too");
+        continue;
+      }
+      assert.doesNotMatch(size, /^\d/, `${rule.selectors[0]} has a fixed font size`);
+    }
   });
 });

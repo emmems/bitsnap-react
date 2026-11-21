@@ -17,7 +17,14 @@ import { installCheckoutMocks, seedCart } from "./mocks";
 //   ?presentation=dialog -> the centred dialog (a bottom sheet on phones)
 //   ?locale=pl -> the cart's locale (texts and country names)
 //   ?open=1 -> opens the cart after the first render (screenshots)
+//   ?theme=host -> a host page with its own variables; the cart follows them
+//   ?theme=host&dark=1 -> the same page in its dark mode (class on <html>)
 const params = new URLSearchParams(window.location.search);
+const hostTheme = params.get("theme") === "host";
+if (hostTheme) {
+  document.documentElement.classList.add("host-site");
+  document.documentElement.classList.toggle("dark", params.get("dark") === "1");
+}
 
 installCheckoutMocks({
   unavailableProducts: params.get("unavailable") === "1",
@@ -39,7 +46,7 @@ if (params.get("cart") === "empty") {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App
-      initialScenario={(params.get("scenario") as never) ?? "default"}
+      initialScenario={hostTheme ? "host" : ((params.get("scenario") as never) ?? "default")}
       initialPresentation={params.get("presentation") === "dialog" ? "dialog" : "drawer"}
       locale={params.get("locale") ?? undefined}
       openOnLoad={params.get("open") === "1"}

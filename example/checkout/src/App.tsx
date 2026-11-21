@@ -14,7 +14,9 @@ type Scenario =
   | "light"
   | "tokens"
   | "elements"
-  | "external-css";
+  | "external-css"
+  | "custom"
+  | "host";
 
 const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
   default: undefined,
@@ -50,6 +52,46 @@ const scenarios: Record<Scenario, CheckoutAppearance | undefined> = {
     elements: {
       checkoutButton: { className: "external-checkout-button" },
       countryOption: { className: "external-country-option" },
+    },
+  },
+  // Square corners, a brand button, a darker control outline, no panel shadow.
+  custom: {
+    theme: "light",
+    tokens: {
+      radius: "0px",
+      panelRadius: "0px",
+      controlRadius: "0px",
+      buttonRadius: "0px",
+      buttonBackground: "#c2410c",
+      buttonHoverBackground: "#9a3412",
+      buttonForeground: "#ffffff",
+      buttonFontSize: "15px",
+      controlBorder: "#3f3f46",
+      panelShadow: "none",
+    },
+  },
+  // `?theme=host`: every value is one of the host page's own variables
+  // (`styles.css`, `html.host-site`), so the cart follows the page's dark
+  // mode, switched by a class on <html>, with no JS.
+  host: {
+    tokens: {
+      fontFamily: "var(--site-font)",
+      background: "var(--site-bg)",
+      surface: "var(--site-surface)",
+      foreground: "var(--site-fg)",
+      mutedForeground: "var(--site-muted)",
+      border: "var(--site-border)",
+      controlBorder: "var(--site-input)",
+      hoverSurface: "var(--site-hover)",
+      buttonBackground: "var(--site-brand)",
+      buttonForeground: "var(--site-brand-fg)",
+      buttonHoverBackground: "var(--site-brand-hover)",
+      focusRing: "var(--site-ring)",
+      skeleton: "var(--site-skeleton)",
+      sale: "var(--site-sale)",
+      error: "var(--site-error)",
+      radius: "var(--site-radius)",
+      colorScheme: "var(--site-scheme)",
     },
   },
 };
@@ -137,6 +179,17 @@ export default function App({
           </label>
         ))}
       </fieldset>
+
+      {scenario === "host" && (
+        <button
+          type="button"
+          className="host-toggle"
+          // The host's own switch: a class on <html>, nothing passed to the cart.
+          onClick={() => document.documentElement.classList.toggle("dark")}
+        >
+          Toggle site dark mode
+        </button>
+      )}
 
       <label style={{ display: "flex", gap: 8 }}>
         <input

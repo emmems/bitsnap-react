@@ -97,6 +97,13 @@ defaults, overridable through `texts`).
   (default, unchanged) or as a centred dialog; on phones, also in landscape,
   the dialog is a bottom sheet. Adding to the cart opens it in the chosen
   presentation. See [Cart presentation](#cart-presentation).
+- **The cart follows your site's look.** New tokens `controlBorder`,
+  `skeleton`, `colorScheme`, `panelRadius`, `controlRadius`, `buttonRadius`,
+  `buttonFontSize` and `panelShadow`; `fontSize` now scales every text size of
+  the cart (before, most sizes were fixed). Token values may be
+  `var(--your-variable)`, so the cart follows your design-system variables and
+  your own dark-mode switch. See [Follow your site's theme](#follow-your-sites-theme).
+  Without these tokens nothing changes.
 - **New token `panelMaxHeight`** caps the dialog's height (default
   `min(100dvh - 48px, 704px)`); `panelWidth` is the dialog's width in the
   dialog (default 480 px).
@@ -494,7 +501,7 @@ cart: one store, one `setProjectID`.
   `require("bitsnap-react/cart")` loads the shared CommonJS chunks the cart needs
   and shares its state with `require("bitsnap-react")`.
 - **Stylesheet.** `bitsnap-react/cart/cart.css` (also served as
-  `bitsnap-react/dist/cart.css`) holds every rule the cart uses, 4.3 KB gzip. It
+  `bitsnap-react/dist/cart.css`) holds every rule the cart uses, 4.4 KB gzip. It
   is already part of `bitsnap-react/dist/index.css`: import one of them (both
   together only repeat the rules). `cart.css` does not include the product list, returns or panel styles.
 - **Product list.** `ProductList` is in `bitsnap-react/catalog`; its "Add to cart"
@@ -572,6 +579,71 @@ and a click on the backdrop close it. Everything that opens the cart
 
 `theme` accepts `"dark"` (the default presentation) and `"light"`. There is no
 automatic system theme selection.
+
+### Follow your site's theme
+
+Every token accepts any CSS value, also `var(--your-variable)`. Point the
+tokens at your site's own variables and the cart takes your colours, and when
+your page switches dark mode (here a `dark` class on `<html>`), the cart
+switches with it, with no JavaScript.
+
+```css
+/* your site */
+:root {
+  --site-bg: #ffffff; --site-surface: #f6f6f4; --site-fg: #1f2328; --site-muted: #5f6670;
+  --site-border: #e3e3e0; --site-input: #8b8b85; --site-hover: #ececea;
+  --site-brand: #0f766e; --site-brand-fg: #ffffff; --site-brand-hover: #115e59;
+  --site-skeleton: #dcdcd8; --site-radius: 6px; --site-scheme: light;
+}
+html.dark {
+  --site-bg: #14171a; --site-surface: #1d2125; --site-fg: #e8eaed; --site-muted: #9aa3ad;
+  --site-border: #2c3238; --site-input: #6b7580; --site-hover: #2a3036;
+  --site-brand: #2dd4bf; --site-brand-fg: #042f2e; --site-brand-hover: #5eead4;
+  --site-skeleton: #343a40; --site-scheme: dark;
+}
+```
+
+```tsx
+<BitsnapCheckout
+  projectID="your-project-id"
+  appearance={{
+    tokens: {
+      background: "var(--site-bg)",
+      surface: "var(--site-surface)",
+      foreground: "var(--site-fg)",
+      mutedForeground: "var(--site-muted)",
+      border: "var(--site-border)",
+      controlBorder: "var(--site-input)",
+      hoverSurface: "var(--site-hover)",
+      buttonBackground: "var(--site-brand)",
+      buttonForeground: "var(--site-brand-fg)",
+      buttonHoverBackground: "var(--site-brand-hover)",
+      focusRing: "var(--site-brand)",
+      skeleton: "var(--site-skeleton)",
+      radius: "var(--site-radius)",
+      colorScheme: "var(--site-scheme)",
+    },
+  }}
+/>
+```
+
+- **Map these first:** `background`, `foreground`, `mutedForeground` and the
+  three `button*` tokens set most of what a shopper sees. Then `controlBorder`,
+  `skeleton` and `colorScheme`: without them the cart keeps the default theme's
+  values for the control outlines, the loading bars, the scrollbars and the
+  country list, which are the dark ones, wrong on a light page.
+- Leave `theme` out: a theme only fills in the tokens you do not pass.
+- Keep `mutedForeground` at 4.5:1 and `controlBorder` at 3:1 against
+  `background` in both of your modes; the cart does not check your values.
+- Only a value with a `;` is dropped. Anything else is written as you pass it;
+  a `var()` your page does not define gives that token's default.
+- Your font comes through already (the cart inherits it); `fontFamily` and
+  `fontSize` change it. The cart's root is where you mount `BitsnapCheckout`,
+  so your variables must be defined there or on an ancestor (`:root` is fine).
+- The same works without React props: set the cart's variables in your CSS,
+  for example `[data-bitsnap-checkout] { --bitsnap-checkout-control-border: var(--site-input); }`.
+  A token passed in `appearance` wins over it.
+- Try it: `example/checkout`, `?theme=host` (and `&dark=1`).
 
 ### Individual elements
 
@@ -731,7 +803,7 @@ reset on the elements listed above):
 | Token                     | Applies to                                              |
 | ------------------------- | ------------------------------------------------------- |
 | `fontFamily`              | The whole checkout                                      |
-| `fontSize`                | The whole checkout                                      |
+| `fontSize`                | The whole checkout: every text size scales from it (default `16px`; 12 to 20 px). Touch targets keep 44 px |
 | `background`              | Panel, country trigger                                  |
 | `surface`                 | Country dropdown, search bar, selected payment method   |
 | `foreground`              | Titles, prices, total, country list                                   |
@@ -742,9 +814,17 @@ reset on the elements listed above):
 | `buttonHoverBackground`   | "Next step" button on hover                             |
 | `hoverSurface`            | Close button, country options                           |
 | `focusRing`               | Focus rings of the shared controls                      |
+| `controlBorder`           | Outline of the quantity stepper, country select, payment method cards and radios, notices, retry and empty-cart buttons (default `#737373`; `#8a8a8a` in the light theme; keep 3:1 on `background`) |
+| `skeleton`                | Loading placeholders (default `#333333`; `#d4d4d8` in the light theme) |
+| `colorScheme`             | `color-scheme` of the cart: scrollbars and the native country list (`"light"` / `"dark"`; default: from a hex `background`, else the theme) |
 | `error`                   | Error message, unavailable product outline              |
 | `overlay`                 | Backdrop of the drawer and the dialog (default: 30 % black, 35 % in the light theme, 45 % behind the dialog) |
-| `radius`                  | Radius of the rounded elements                          |
+| `radius`                  | Radius of the rounded elements; the defaults of the three below follow it |
+| `panelRadius`             | Corners of the dialog (default `radius` + 4 px) and the top corners of the bottom sheet (default `radius` + 8 px) |
+| `controlRadius`           | Country select, payment method cards and the quantity stepper (default `radius`; the stepper is a pill) |
+| `buttonRadius`            | Checkout, "Continue shopping", retry and empty-cart buttons (default `radius`; `"9999px"` for pills) |
+| `buttonFontSize`          | Text of the checkout button (default `fontSize`) |
+| `panelShadow`             | Shadow of the dialog and the bottom sheet (`"none"` removes it) |
 | `sale`                    | Sale price of a discounted line (default `#f87171`; `#b91c1c` in the light theme) |
 | `panelWidth`              | Drawer width from 640 px (default 380 px, 420 px from 1200 px), or the dialog's width (default 480 px, at most the screen minus 32 px); the compact layout stays full width |
 | `panelMaxHeight`          | Height cap of the dialog (default `min(100dvh - 48px, 704px)`); the bottom sheet also stays under 92 % of the screen. The drawer ignores it |
@@ -752,7 +832,12 @@ reset on the elements listed above):
 | `paymentLogoHeight`       | Height of the logos in the payment method cards (default `20px`); the width follows each logo's aspect ratio |
 
 Every token accepts any CSS value and is written as-is, so
-`tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site.
+`tokens: { sale: "var(--brand-sale)" }` follows a variable of your own site
+(see [Follow your site's theme](#follow-your-sites-theme)). A value with a `;`
+is dropped. What no token changes: the select's chevron (`#8a8a8a`, an image),
+the white tile behind payment logos drawn for white, the default cart
+trigger's hover (it sits in your page; pass `className` to style it), focus
+ring widths, icon sizes and font weights.
 
 ### What stays untouched
 

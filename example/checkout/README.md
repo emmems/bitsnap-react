@@ -31,6 +31,9 @@ pnpm dev
 | `?locale=pl`                        | Polish texts and country names                 |
 | `?logos=1`                          | Payment choice with cash on delivery and logos in every card (open on `localhost`) |
 | `?open=1`                           | Opens the cart on load                         |
+| `/?scenario=custom`                 | Square corners, brand button, darker control outline (19a tokens) |
+| `?theme=host`                       | Host page with its own CSS variables; the cart follows them |
+| `?theme=host&dark=1`                | The same page in its dark mode (`dark` class on `<html>`; the button toggles it) |
 
 The radio buttons switch the appearance while the cart is open, which is part of
 the supported behaviour.

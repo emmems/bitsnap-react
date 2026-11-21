@@ -59,14 +59,21 @@ export type ResolvedAppearanceCore<
   boundaryStyle: CSSProperties;
 };
 
-/** Drops `undefined`/`null` tokens so unset values keep the stylesheet default. */
+/**
+ * Drops `undefined`/`null` tokens so unset values keep the stylesheet default,
+ * and values with a `;`. Any other CSS value passes through as written
+ * (`var(--host-x)`, `calc()`, ...). The browser writes a token with
+ * `style.setProperty`, which ignores a value with a `;`; React's server
+ * renderer writes the style attribute as text, where `red; color: blue` would
+ * add a declaration to the root. Dropping it keeps both the same.
+ */
 export function omitUndefined<Token extends string>(
   tokens: Partial<Record<Token, string>>,
 ): Partial<Record<Token, string>> {
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(tokens)) {
-    if (value != null) {
+    if (value != null && !String(value).includes(";")) {
       result[key] = value;
     }
   }

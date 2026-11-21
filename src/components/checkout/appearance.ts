@@ -27,7 +27,11 @@ export type CheckoutTheme = "dark" | "light";
 export type CheckoutAppearanceTokens = {
   /** Checkout wide font family. The library never loads fonts. */
   fontFamily?: string;
-  /** Base font size of the checkout. */
+  /**
+   * Base font size of the checkout (default `16px`). Every text size scales
+   * from it (12, 13, 14, 15, 16 and 20 px at the default); controls keep their
+   * 44 px touch targets.
+   */
   fontSize?: string;
   /** Panel background. */
   background?: string;
@@ -49,12 +53,44 @@ export type CheckoutAppearanceTokens = {
   hoverSurface?: string;
   /** Focus ring color. Also applied to shared UI primitives through `--ring`. */
   focusRing?: string;
+  /**
+   * Outline of the controls: quantity stepper, country select, payment-method
+   * cards and radios, the retry and empty-cart buttons, notices. Default
+   * `#737373` (dark), `#8a8a8a` (light): keep it at 3:1 against the panel.
+   */
+  controlBorder?: string;
+  /** Fill of the loading placeholders. Default `#333333` (dark), `#d4d4d8` (light). */
+  skeleton?: string;
+  /**
+   * `color-scheme` of the cart (`"light"` or `"dark"`): scrollbars and the
+   * native country list. Default: from a hex `background` token, else the theme.
+   */
+  colorScheme?: string;
   /** Error and unavailable state color. */
   error?: string;
   /** Backdrop color behind the cart. */
   overlay?: string;
   /** Corner radius, applied through `--radius`. */
   radius?: string;
+  /**
+   * Corners of the dialog (default `radius` + 4 px) and the top corners of the
+   * bottom sheet (default `radius` + 8 px). The drawer has none.
+   */
+  panelRadius?: string;
+  /**
+   * Corners of the controls: country select, payment-method cards and the
+   * quantity stepper. Default `radius`; the stepper is a pill (`9999px`).
+   */
+  controlRadius?: string;
+  /**
+   * Corners of the buttons: checkout, "Continue shopping", retry and the empty
+   * cart's button. Default `radius`; `"9999px"` makes them pills.
+   */
+  buttonRadius?: string;
+  /** Font size of the checkout button. Default: `fontSize` (`16px`). */
+  buttonFontSize?: string;
+  /** Shadow of the dialog and the bottom sheet; `"none"` removes it. */
+  panelShadow?: string;
   /** Sale price of a discounted line. Default `#f87171` (dark), `#b91c1c` (light). */
   sale?: string;
   /**
@@ -183,7 +219,8 @@ export type ResolvedCheckoutAppearance = {
   boundaryClassName: string;
   /**
    * Inline custom properties applied to the drawer root, plus `color-scheme`
-   * when the effective `background` token is a hex colour.
+   * when the effective `background` token is a hex colour and no
+   * `colorScheme` token is set.
    */
   boundaryStyle: CSSProperties;
   /**
@@ -208,9 +245,17 @@ export const CHECKOUT_TOKEN_VARIABLES = {
   buttonHoverBackground: "--bitsnap-checkout-button-hover-background",
   hoverSurface: "--bitsnap-checkout-hover-surface",
   focusRing: "--bitsnap-checkout-focus-ring",
+  controlBorder: "--bitsnap-checkout-control-border",
+  skeleton: "--bitsnap-checkout-skeleton",
+  colorScheme: "--bitsnap-checkout-color-scheme",
   error: "--bitsnap-checkout-error",
   overlay: "--bitsnap-checkout-overlay",
   radius: "--bitsnap-checkout-radius",
+  panelRadius: "--bitsnap-checkout-panel-radius",
+  controlRadius: "--bitsnap-checkout-control-radius",
+  buttonRadius: "--bitsnap-checkout-button-radius",
+  buttonFontSize: "--bitsnap-checkout-button-font-size",
+  panelShadow: "--bitsnap-checkout-panel-shadow",
   sale: "--bitsnap-checkout-sale",
   panelWidth: "--bitsnap-checkout-panel-width",
   panelMaxHeight: "--bitsnap-checkout-panel-max-height",
@@ -243,8 +288,9 @@ export const CHECKOUT_THEME_PRESETS: Record<
     hoverSurface: "#e4e4e7",
     focusRing: "#71717a",
     error: "#dc2626",
-    // No `overlay`: `cart.css` keeps the light overlay as a per-theme literal,
-    // so the preset cannot replace a stronger one (N01).
+    // No `overlay`, `controlBorder`, `skeleton` or `colorScheme`: `cart.css`
+    // keeps them as per-theme literals behind their own variables, so only a
+    // merchant value replaces them (N01, D22).
     sale: "#b91c1c",
   },
 };
@@ -335,9 +381,12 @@ export function resolveCheckoutAppearance(
     tokens: resolved.tokens,
     elements: resolved.elements,
     boundaryClassName: resolved.theme,
+    // A `colorScheme` token decides in `cart.css`; the inline value would beat it.
     boundaryStyle: withColorScheme(
       resolved.boundaryStyle,
-      colorSchemeFor(resolved.tokens.background),
+      resolved.tokens.colorScheme == null
+        ? colorSchemeFor(resolved.tokens.background)
+        : undefined,
     ),
     boundaryAttributes: isMotionOff(resolved.tokens.motionDuration)
       ? { "data-bitsnap-checkout-motion": "off" }
