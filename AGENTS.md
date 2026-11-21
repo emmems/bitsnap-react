@@ -258,7 +258,7 @@ Rules:
   theme. The reset skips their DOM. A Google Pay that stays `.not-ready` (the
   buyer has no saved card) and an `<inpost-izi-button>` its script never
   defined take no space (`cart.css`).
-- Visual QA: `example/checkout` (its README lists the URL parameters;
+- Visual QA: `example/checkout` (repository only, not in the npm package; its README lists the URL parameters;
   `?express=1` answers every express provider as available, `?host=preflight`
   is a hostile host page, `?cart=many` a long cart).
 - Warm-up (`cart-warmup.ts`, since 1.31.0): the inner `CartComponent` registers

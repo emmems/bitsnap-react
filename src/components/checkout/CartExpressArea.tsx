@@ -6,6 +6,7 @@ import ApplePayButton from "./ApplePay";
 import type { WalletItem } from "./cart-view";
 import { getProjectID } from "./CartProvider";
 import GooglePayButton from "./GooglePay";
+import { walletArtworkFor } from "./wallet-artwork";
 
 /**
  * The express buttons of the cart: Apple Pay, Google Pay, InPost Pay and
@@ -28,8 +29,9 @@ export default function CartExpressArea({
 }) {
   const paymentButtons = useCheckoutSlot("paymentButtons");
   const projectID = getProjectID() ?? "";
-  // White artwork on the dark panel, black on the light one (PLAN §5 item 13).
-  const light = useCheckoutAppearance().theme === "light";
+  // Light artwork on a dark panel, dark on a light one, outlined when the
+  // panel colour cannot be read (a `var()` background): `wallet-artwork.ts`.
+  const artwork = walletArtworkFor(useCheckoutAppearance());
   // One height for the wallet row (Apple Pay's default is 30px, Google Pay's 40px).
   const walletStyle = { width: "100%", height: "48px" };
 
@@ -42,7 +44,7 @@ export default function CartExpressArea({
           style={paymentButtons.style}
         >
           <ApplePayButton
-            colorType={light ? "black" : "white"}
+            colorType={artwork.applePay}
             style={walletStyle}
             items={items}
           />
@@ -56,7 +58,7 @@ export default function CartExpressArea({
         >
           <GooglePayButton
             buttonSizeMode="fill"
-            buttonColor={light ? "black" : "white"}
+            buttonColor={artwork.googlePay}
             style={walletStyle}
             items={items}
           />
@@ -68,13 +70,13 @@ export default function CartExpressArea({
         style={paymentButtons.style}
       >
         <InPostPayButtonInner projectID={projectID} locale={locale} />
-        {/* As the wallets: light artwork on the dark panel, 48px. Its frame
+        {/* Artwork as the wallets, 48px. Its frame
             is 5px wider than its box (Revolut's `min-width: calc(100% + 5px)`):
             the padding keeps it inside the panel. */}
         <RevolutPayButtonInner
           projectID={projectID}
           locale={locale}
-          buttonStyle={{ variant: light ? "dark" : "light", height: "48px" }}
+          buttonStyle={{ variant: artwork.revolutPay, height: "48px" }}
           style={{ paddingRight: 5 }}
         />
       </div>

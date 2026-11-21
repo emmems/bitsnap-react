@@ -22,7 +22,7 @@ It uses modern React patterns and libraries like:
 - Protocol Buffers for data serialization
 - Tailwind CSS for styling (the cart has its own hand-written stylesheet, `cart.css`)
 
-## Express checkout: InPost Pay and Revolut Pay (unreleased)
+## Express checkout: InPost Pay and Revolut Pay (since 1.29.0)
 
 The cart-aware express buttons are additive: a shop that does not enable the
 providers sees no change, older SDK versions keep working with the new backend,
@@ -112,7 +112,13 @@ new. Most shops need no change; read **Upgrading from 1.29** first.
   (style it with `countryTrigger`); `countrySearch`, `countryOption` and
   `countryDropdown` are accepted and do nothing. `quantityButton` and
   `removeButton` lose the shadcn button look. `checkoutButton` no longer styles
-  "Try again" (new slot `retryButton`).
+  "Try again" (new slot `retryButton`). `deliveryText` is accepted and renders
+  nothing (1.29 showed a delivery line there).
+- **Scroll region.** The lines and options now scroll inside the new `lines`
+  slot; in 1.29 `productList` itself scrolled with a max height. A max height
+  or `overflow` on `productList` now nests a second scroller: move it to `lines`.
+- **New slots:** `lines`, `options`, `footer`, `productVariant`,
+  `productUnitPrice`, `emptyAction`, `continueShopping`.
 - **New requests (Content Security Policy).** With items in the cart the SDK
   asks bitsnap.pl (or your `host`) for their products and the shop's countries
   after the page loads, and payment logos load from the same origin: allow it
@@ -174,10 +180,12 @@ new. Most shops need no change; read **Upgrading from 1.29** first.
   both themes; before as low as 2.29:1). A light look built from tokens
   without `theme: "light"` should also set `mutedForeground` and `sale`, and
   gets a light `color-scheme` from its `background`.
-- **Express buttons.** Apple Pay, Google Pay and Revolut Pay are 48 px high and
-  use their dark artwork on `theme: "light"`, their light artwork on the dark
-  panel. Apple Pay and Google Pay are hidden while the cart has a
-  pay-what-you-want line.
+- **Express buttons.** Apple Pay, Google Pay and Revolut Pay are 48 px high,
+  with dark artwork on a light panel and light on a dark one (from a hex
+  `background`, else `colorScheme: "light"`/`"dark"`, else the theme). On a
+  `var()` background Apple Pay and Revolut Pay take their outlined artwork,
+  which reads on both. Apple Pay and Google Pay are hidden while the cart has
+  a pay-what-you-want line.
 - **The consent banner (`bitsnap-react/consent`) hides while the cart is
   open** and comes back when it closes; `<html>` carries
   `data-bitsnap-cart-open` meanwhile.
@@ -881,8 +889,8 @@ ring widths, icon sizes and font weights.
   and does not reuse the panel's `setTheme`.
 - The express buttons (Apple Pay, Google Pay, InPost Pay, Revolut Pay) keep
   their own artwork and fonts. The cart sets their height (48 px; InPost's is
-  its own), the artwork colour for the theme and the space around them; its
-  reset skips their DOM.
+  its own), the artwork colour for the panel (see **Express buttons** under
+  1.32.0) and the space around them; its reset skips their DOM.
 - The drawer is full width in the compact layout (below 640 px, or at most
   500 px high), 380 px from 640 px and 420 px from 1200 px. To change the
   width outside the compact layout, pass the `panelWidth`
