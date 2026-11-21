@@ -15,7 +15,7 @@
         "node_modules/hls.js/",
         "node_modules/dompurify/"
       ],
-      "jsGzipKB": 368.3
+      "jsGzipKB": 368.8
     },
     "catalog": {
       "jsGzipKB": 26.5
@@ -46,8 +46,8 @@
     }
   },
   "css": {
-    "dist/index.css": 21.1
+    "dist/index.css": 21.9
   },
   "maxDependencies": 28,
-  "tarballBytes": 1812000
+  "tarballBytes": 1858000
 }

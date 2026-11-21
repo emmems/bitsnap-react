@@ -13,6 +13,8 @@ import {
   type ChatSendResult,
   type ChatThreadState,
   type ChatThreadSummary,
+  type VisitorThread,
+  type VisitorMessageInput,
 } from "./types";
 
 /**
@@ -97,13 +99,10 @@ export type ChatClient = {
   realtimeToken(options?: { fresh?: boolean }): Promise<ChatRealtimeToken>;
 };
 
-export function createChatClient(options: ChatClientOptions): ChatClient {
-  const baseUrl = (options.baseUrl || DEFAULT_CHAT_API_URL).replace(/\/+$/, "");
-  const localOrigin = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname) ? window.location.origin : undefined;
-  const attachmentBase = (options.attachmentsUrl ?? localOrigin ?? DEFAULT_CHAT_ATTACHMENTS_URL).replace(/\/+$/, "");
+function chatTransport(baseUrl: string, options: ChatClientOptions) {
   const doFetch = options.fetch ?? ((...args) => fetch(...args));
 
-  async function call(
+  return async function call(
     method: string,
     path: string,
     body?: unknown,
@@ -135,7 +134,71 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
       throw new ChatError(code, response.status, data);
     }
     return { status: response.status, json };
-  }
+  };
+}
+
+async function getMessagePage(
+  call: ReturnType<typeof chatTransport>,
+  threadId: string,
+  opts: { before?: string; limit?: number },
+): Promise<ChatMessagePage> {
+  const query = new URLSearchParams();
+  if (opts.before) query.set("before", opts.before);
+  if (opts.limit) query.set("limit", String(opts.limit));
+  const qs = query.toString();
+  const suffix = qs ? `?${qs}` : "";
+  const { json } = await call(
+    "GET",
+    `/v1/threads/${encodeURIComponent(threadId)}/messages${suffix}`,
+  );
+  const page = isRecord(json) ? json : {};
+  return {
+    messages: arr(page.messages).map(mapMessage),
+    hasMore: page.has_more === true,
+  };
+}
+
+export function createVisitorChatClient(options: ChatClientOptions) {
+  const call = chatTransport((options.baseUrl || DEFAULT_CHAT_API_URL).replace(/\/+$/, ""), options);
+  return {
+    async getVisitorThread(peek = false, limit = 100): Promise<VisitorThread> {
+      const { json } = await call("GET", `/v1/visitor/thread?limit=${limit}${peek ? "&peek=1" : ""}`);
+      const result = isRecord(json) ? json : {};
+      const thread = isRecord(result.thread) ? result.thread : null;
+      const limits = isRecord(result.limits) ? result.limits : {};
+      const left = thread && isRecord(thread.limits_left) ? thread.limits_left : {};
+      return {
+        thread: thread ? {
+          id: str(thread.id),
+          composerLocked: thread.composer_locked === true,
+          unread: typeof thread.unread === "number" ? thread.unread : undefined,
+          limitsLeft: {
+            consecutive: typeof left.consecutive === "number" ? left.consecutive : undefined,
+            hour: typeof left.hour === "number" ? left.hour : undefined,
+            thread: typeof left.thread === "number" ? left.thread : undefined,
+          },
+        } : null,
+        messages: arr(result.messages).map(mapMessage),
+        hasMore: result.has_more === true,
+        messageMax: num(limits.max_runes),
+      };
+    },
+    getOlderMessages: (threadId: string, before: string) => getMessagePage(call, threadId, { before, limit: 50 }),
+    async sendVisitorMessage(input: VisitorMessageInput): Promise<ChatMessage> {
+      const { json } = await call("POST", "/v1/visitor/messages", {
+        body: input.body, client_id: input.clientId, page_url: input.pageUrl,
+      });
+      return mapMessage(isRecord(json) ? json.message : undefined);
+    },
+  };
+}
+
+export function createChatClient(options: ChatClientOptions): ChatClient {
+  const baseUrl = (options.baseUrl || DEFAULT_CHAT_API_URL).replace(/\/+$/, "");
+  const localOrigin = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname) ? window.location.origin : undefined;
+  const attachmentBase = (options.attachmentsUrl ?? localOrigin ?? DEFAULT_CHAT_ATTACHMENTS_URL).replace(/\/+$/, "");
+  const doFetch = options.fetch ?? ((...args) => fetch(...args));
+  const call = chatTransport(baseUrl, options);
 
   const id = encodeURIComponent;
   let cachedToken: ChatRealtimeToken | undefined;
@@ -154,20 +217,7 @@ export function createChatClient(options: ChatClientOptions): ChatClient {
       return mapThread(json);
     },
     async messages(threadId, opts = {}) {
-      const query = new URLSearchParams();
-      if (opts.before) query.set("before", opts.before);
-      if (opts.limit) query.set("limit", String(opts.limit));
-      const qs = query.toString();
-      const suffix = qs ? `?${qs}` : "";
-      const { json } = await call(
-        "GET",
-        `/v1/threads/${id(threadId)}/messages${suffix}`,
-      );
-      const page = isRecord(json) ? json : {};
-      return {
-        messages: arr(page.messages).map(mapMessage),
-        hasMore: page.has_more === true,
-      };
+      return getMessagePage(call, threadId, opts);
     },
     async send(threadId, input) {
       const { json } = await call(

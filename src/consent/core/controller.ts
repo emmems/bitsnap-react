@@ -256,6 +256,7 @@ export function createConsent(options: ConsentOptions = {}): BitsnapConsentApi {
     scope: options.scope === "project" && projectKey ? "project" : "global",
     projectKey,
     get: () => copy(state),
+    inset: () => state ? 0 : ui?.inset() ?? 0,
     // A choice made on an older banner version has no `get()`, but a refusal in it still holds.
     denied: (category) => (state ?? stale)?.c[category] === false,
     on(event, fn) {

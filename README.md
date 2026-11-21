@@ -110,6 +110,16 @@ defaults, overridable through `texts`).
   the page loads, so opening it needs no wait. See
   [Performance](#performance). `prefetch={false}` turns it off.
 
+## 1.29.3
+
+Feature release numbered as a patch (`1.30`–`1.32` are reserved for another branch).
+
+- **Global customer panel (`projectID === ""`) sessions, all-shops orders and shop pills.**
+  - **Per-scope sessions:** `session-storage` maps an empty or missing `projectID` to the `"*"` scope (`bitsnap-panel-session:<host>:*`) while keeping real project ID keys byte-identical. Sessions are per scope: a buyer logged in at bare `bitsnap.pl/panel` is not logged in at `/panel/<name>`, and the reverse.
+  - **All-shops Orders & Library filtering:** On the global panel, Orders lists purchases across every shop with each shop's avatar and name (card layout below `lg`, flexible column from `lg`, hidden while filtered to a single shop), and both Orders and Library render horizontal shop filter pills (`role="group"` + `aria-pressed`, hidden when fewer than 2 shops exist) backed by a shared `shop` URL param using `replaceState`. Older servers without `shops[]` or `OrderSummary.project_id` are tolerated gracefully (no pills, no shop marks).
+  - **Per-order shop scope & global routing:** Opening an order from the global list passes `orderProject` in the URL and forwards it as `orderProjectID` only to `GetPublicOrderDetails` and `GetOrderHistory` (session storage and analytics keep the panel's own `projectID`). On the global panel, Returns is hidden in navigation and `?state=returns` / `return-details` map to `products`.
+  - **Scoped products RPC:** Both `PanelProductGrid` and `usePanelChat` send `projectId` on `UserPanelGetProducts` with identical query keys while keeping client-side `productsOfShop` filtering as a fallback.
+
 ## 1.29.0
 
 - **Panel ticket as a tall stub.** The ticket card is one centred column
