@@ -64,4 +64,9 @@ describe("walletArtworkFor", () => {
     );
     assert.deepEqual(artwork({ tokens: { background: "white" } }), OUTLINED);
   });
+
+  it("follows the theme when no background token says otherwise", () => {
+    assert.deepEqual(artwork({ tokens: { colorScheme: "var(--site-scheme)" } }), ON_DARK);
+    assert.deepEqual(artwork({ tokens: { foreground: "#111111" } }), ON_DARK);
+  });
 });

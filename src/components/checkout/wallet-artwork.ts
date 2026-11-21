@@ -9,9 +9,10 @@ import { colorSchemeFor, type ResolvedCheckoutAppearance } from "./appearance";
  * - else a literal `colorScheme` token, `"light"` or `"dark"`;
  * - else, with no `background` token at all, the theme (default dark).
  *
- * Anything else (a `var()` or `rgb()` background, a host's
- * `--bitsnap-checkout-background` in CSS read through `var()`) can be light or
- * dark, so the buttons take their outlined variants, which read on both.
+ * Any other background token (`var()`, `rgb()`, a colour name) can be light
+ * or dark, so the buttons take their outlined variants, which read on both.
+ * A background set only in host CSS (no token) is invisible here and follows
+ * the theme. A `colorScheme` such as `"light dark"` is not read as literal.
  * Google Pay has no outlined variant: its white button keeps a thin border of
  * its own, so it stays white there as on the dark panel.
  */

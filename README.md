@@ -75,7 +75,7 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
-## 1.32.0 (unreleased)
+## 1.32.0
 
 The cart opens at once, is smaller, has a new look and can open as a dialog.
 1.30 and 1.31 were never published, so coming from 1.29 everything below is
@@ -182,9 +182,9 @@ new. Most shops need no change; read **Upgrading from 1.29** first.
   gets a light `color-scheme` from its `background`.
 - **Express buttons.** Apple Pay, Google Pay and Revolut Pay are 48 px high,
   with dark artwork on a light panel and light on a dark one (from a hex
-  `background`, else `colorScheme: "light"`/`"dark"`, else the theme). On a
-  `var()` background Apple Pay and Revolut Pay take their outlined artwork,
-  which reads on both. Apple Pay and Google Pay are hidden while the cart has
+  `background`, else `colorScheme: "light"`/`"dark"`, else the theme). On any
+  other background (`var()`, `rgb()`, a colour name) Apple Pay and Revolut Pay
+  take their outlined artwork, which reads on both. Apple Pay and Google Pay are hidden while the cart has
   a pay-what-you-want line.
 - **The consent banner (`bitsnap-react/consent`) hides while the cart is
   open** and comes back when it closes; `<html>` carries
@@ -678,7 +678,8 @@ html.dark {
   `BitsnapCheckout`, so define your variables on `:root`, `html` or `body`.
 - The same works without React props: set the cart's variables in your CSS,
   for example `[data-bitsnap-checkout] { --bitsnap-checkout-control-border: var(--site-input); }`.
-  A token passed in `appearance` wins over it.
+  A token passed in `appearance` wins over it. Express buttons can't read a
+  background set only in CSS: pass `colorScheme` (or `theme`) too.
 - Try it: `example/checkout`, `?theme=host` (and `&dark=1`).
 
 ### Individual elements
