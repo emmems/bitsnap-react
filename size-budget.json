@@ -46,7 +46,7 @@
     }
   },
   "css": {
-    "dist/cart.css": 2.3,
+    "dist/cart.css": 3.0,
     "dist/index.css": 23.0
   },
   "maxDependencies": 28,

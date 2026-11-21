@@ -28,23 +28,7 @@ const EXPECTED_OFFENDERS: Record<string, string> = {
   // expected to remove it.
   // Step 15, line items: CartLines list, SingleProduct, ProductPrice,
   // ui/button, ui/button-group, lucide icons.
-  ...removedBy("step 15", [
-      "mt-5", "mb-3", "h-1", "mx-3", "flex", "items-center", "gap-3", "aspect-auto", "max-w-32", "max-h-32",
-      "py-2", "overflow-hidden", "font-medium", "w-fit", "items-stretch", "[&>*]:focus-visible:z-10",
-      "[&>*]:focus-visible:relative", "[&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit",
-      "[&>input]:flex-1",
-      "has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-md",
-      "has-[>[data-slot=button-group]]:gap-2", "[&>*:not(:first-child)]:rounded-l-none",
-      "[&>*:not(:first-child)]:border-l-0", "[&>*:not(:last-child)]:rounded-r-none", "inline-flex",
-      "shrink-0", "justify-center", "gap-2", "rounded-md", "whitespace-nowrap", "transition-all",
-      "outline-none", "focus-visible:border-ring", "focus-visible:ring-[3px]", "focus-visible:ring-ring/50",
-      "disabled:pointer-events-none", "disabled:opacity-50", "aria-invalid:border-destructive",
-      "aria-invalid:ring-destructive/20", "dark:aria-invalid:ring-destructive/40",
-      "[&_svg]:pointer-events-none", "[&_svg]:shrink-0", "[&_svg:not([class*='size-'])]:size-4", "bg-primary",
-      "text-primary-foreground", "hover:bg-primary/90", "h-9", "px-4", "has-[>svg]:px-3", "lucide",
-      "lucide-minus", "lucide-plus", "w-8", "bg-transparent", "text-center", "hover:bg-accent",
-      "hover:text-accent-foreground", "dark:hover:bg-accent/50", "h-8", "gap-1.5", "has-[>svg]:px-2.5",
-  ]),
+  ...removedBy("step 15", []),
   // Step 16, options and footer: CartCheckout summary, CountrySelector and
   // ui/select (native select, D4), PaymentMethodChoice, the Spinner.
   ...removedBy("step 16", [
@@ -58,10 +42,14 @@ const EXPECTED_OFFENDERS: Record<string, string> = {
       "mt-4", "mb-2", "min-w-0", "border-0", "p-0", "mb-1", "px-1", "cursor-pointer", "py-2.5",
       "transition-colors", "mt-0.5", "gap-0.5", "font-semibold", "leading-snug", "text-xs", "my-2",
       "disabled:opacity-40",
+      // Moved from step 15: still rendered by the summary, the Radix select and the payment cards.
+      "mx-3", "font-medium", "focus-visible:border-ring", "focus-visible:ring-ring/50", "aria-invalid:ring-destructive/20", "dark:aria-invalid:ring-destructive/40", "aria-invalid:border-destructive", "items-center", "gap-2", "whitespace-nowrap", "outline-none", "focus-visible:ring-[3px]", "disabled:opacity-50", "[&_svg]:pointer-events-none", "[&_svg]:shrink-0", "[&_svg:not([class*='size-'])]:size-4", "lucide", "mb-3", "shrink-0",
   ]),
   // Step 17, states: skeleton layout, empty state, error with retryButton.
   ...removedBy("step 17", [
       "items-start", "transition", "font-bold", "relative", "gap-4", "h-32", "p-4", "px-3",
+      // Moved from step 15: still rendered by the loading, failed and empty states.
+      "flex", "gap-3", "py-2", "rounded-md", "justify-center",
   ]),
 };
 

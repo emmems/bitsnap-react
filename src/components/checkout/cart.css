@@ -300,22 +300,151 @@
     animation: bitsnap-cart-pulse 1.5s ease-in-out infinite;
 }
 
-/* ---- Content (1.31.0 rules, literal values; steps 15-17 replace them) ----- */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(ul) {
-    margin-top: 20px;
+/* ---- Lines (plan part 3 §3.3) ---------------------------------------------
+ * Grid `72px 1fr auto`: tile, name block, line total; the stepper row, the
+ * price mark and the Omnibus line span the two text columns. The inset divider
+ * is a background line on every row but the first (no pseudo-element: it would
+ * pass the (0,2,0) cap). */
+[data-bitsnap-checkout] .bsc-lines {
+    list-style: none;
 }
 
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="productList"] :where(hr) {
-    height: 4px;
-    margin: 0;
-    border-width: 1px 0 0;
-    border-style: solid;
-    border-color: var(--bsc-border);
+[data-bitsnap-checkout] .bsc-line-item:where(:not(:first-child)) {
+    background: linear-gradient(var(--bsc-border), var(--bsc-border)) 16px 0 / calc(100% - 32px) 1px no-repeat;
 }
 
-/* Only rendered with an outline when the product is unavailable. */
-[data-bitsnap-checkout] [data-bitsnap-checkout-slot="product"]:where([data-bitsnap-checkout-unavailable]) {
-    outline-color: var(--bitsnap-checkout-error, #dc2626);
+[data-bitsnap-checkout] .bsc-line {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 6px;
+    padding: 16px;
+}
+
+/* Not on the line: an outline in the error colour and an inline message (S15). */
+[data-bitsnap-checkout] .bsc-line:where([data-bitsnap-checkout-unavailable]) {
+    outline: 1px solid var(--bsc-error);
+    outline-offset: -4px;
+    border-radius: calc(var(--bsc-radius) + 4px);
+}
+
+[data-bitsnap-checkout] .bsc-line-thumb-link {
+    display: contents;
+}
+
+[data-bitsnap-checkout] .bsc-line-thumb {
+    grid-row: 1 / span 3;
+    display: block;
+    width: 72px;
+    height: 72px;
+    max-width: none;
+    object-fit: cover;
+    border-radius: var(--bsc-radius);
+    background-color: var(--bsc-surface);
+    overflow: hidden;
+}
+
+/* A missing or broken image: a surface tile with an image icon (PLAN §5 item 12). */
+[data-bitsnap-checkout] .bsc-line-thumb-empty {
+    display: grid;
+    place-items: center;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-line-info {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+[data-bitsnap-checkout] .bsc-line-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+[data-bitsnap-checkout] .bsc-line-link {
+    color: inherit;
+    text-decoration: none;
+    border-radius: 2px;
+}
+
+[data-bitsnap-checkout] .bsc-line-link:where(:hover) {
+    text-decoration: underline;
+}
+
+[data-bitsnap-checkout] .bsc-line-link:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: 2px;
+}
+
+[data-bitsnap-checkout] .bsc-line-meta {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--bsc-muted);
+}
+
+[data-bitsnap-checkout] .bsc-num {
+    font-variant-numeric: tabular-nums;
+}
+
+[data-bitsnap-checkout] .bsc-line-unavailable {
+    color: var(--bsc-error);
+}
+
+[data-bitsnap-checkout] .bsc-line-price {
+    display: grid;
+    justify-items: end;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+}
+
+[data-bitsnap-checkout] .bsc-price-amount {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+[data-bitsnap-checkout] .bsc-price-regular {
+    font-size: 13px;
+    text-decoration: line-through;
+}
+
+[data-bitsnap-checkout] .bsc-price-omnibus,
+[data-bitsnap-checkout] .bsc-line-omnibus {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+[data-bitsnap-checkout] .bsc-line-omnibus {
+    grid-column: 2 / -1;
+}
+
+/* The price changed while the cart was open (price gate, D18). Foreground text,
+ * so it passes 4.5:1 on any panel a token-only look builds. */
+[data-bitsnap-checkout] .bsc-line-mark {
+    grid-column: 2 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+[data-bitsnap-checkout] .bsc-line-controls {
+    grid-column: 2 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 /* Sale line: muted #a3a3a3 is 7.11:1 and sale #f87171 6.48:1 on #171717; the
@@ -329,6 +458,103 @@
     color: var(--bitsnap-checkout-sale, #f87171);
 }
 
+/* ---- Stepper: one pill, 44 / 40 / 44 px, 44 px high (R14) -----------------
+ * The pill outline is an inset shadow in the control-border literal (3.78:1 on
+ * the dark panel, 3.45:1 on white), so the buttons keep their full 44 px. */
+[data-bitsnap-checkout] .bsc-stepper {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    height: 44px;
+    border-radius: 9999px;
+    box-shadow: inset 0 0 0 1px var(--bsc-control-border);
+}
+
+[data-bitsnap-checkout] .bsc-stepper-btn {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 9999px;
+    color: var(--bsc-fg);
+    cursor: pointer;
+    transition: background-color 150ms;
+}
+
+[data-bitsnap-checkout] .bsc-stepper-btn:where(:hover) {
+    background-color: var(--bsc-hover);
+}
+
+[data-bitsnap-checkout] .bsc-stepper-btn:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: -2px;
+}
+
+[data-bitsnap-checkout] .bsc-stepper-input {
+    width: 40px;
+    height: 44px;
+    text-align: center;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    border-radius: 4px;
+}
+
+[data-bitsnap-checkout] .bsc-stepper-input:where(:focus-visible) {
+    outline: 2px solid var(--bsc-ring);
+    outline-offset: -2px;
+}
+
+[data-bitsnap-checkout] .bsc-icon-sm {
+    width: 16px;
+    height: 16px;
+}
+
+[data-bitsnap-checkout] .bsc-icon-lg {
+    width: 28px;
+    height: 28px;
+}
+
+/* A line-shaped placeholder: the line grid with pulsing bars. */
+[data-bitsnap-checkout] .bsc-skeleton-line {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 16px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-thumb {
+    grid-row: 1 / span 3;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--bsc-radius);
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-bar {
+    height: 14px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-name {
+    width: 80%;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-price {
+    width: 56px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-meta {
+    grid-column: 2;
+    width: 45%;
+    height: 12px;
+}
+
+[data-bitsnap-checkout] .bsc-skeleton-stepper {
+    grid-column: 2 / -1;
+    width: 128px;
+    height: 36px;
+    border-radius: 9999px;
+}
+
+/* ---- Content (1.31.0 rules, literal values; steps 16-17 replace them) ----- */
 [data-bitsnap-checkout] [data-bitsnap-checkout-slot="checkoutButton"] {
     margin: 8px;
     padding: 8px 12px;
@@ -532,6 +758,7 @@
     }
 
     [data-bitsnap-checkout] .bsc-icon-btn,
+    [data-bitsnap-checkout] .bsc-stepper-btn,
     [data-bitsnap-checkout-trigger="default"] {
         transition: none;
     }

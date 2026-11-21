@@ -88,6 +88,11 @@ export const CHECKOUT_SLOT_NAMES = [
   "product",
   "productImage",
   "productName",
+  /** The variant under the name; not rendered when it equals the name. */
+  "productVariant",
+  /** "49,90 zł × 2" under the name, for a quantity above 1. */
+  "productUnitPrice",
+  /** The line total block (struck regular price and sale price when on sale). */
   "productPrice",
   "quantityControl",
   "quantityInput",

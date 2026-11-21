@@ -3,7 +3,7 @@ import { cn } from "@/src/lib/utils";
 import { useCartController } from "./cart-controller";
 import { useCheckoutSlot } from "./appearance.context";
 import SingleProduct from "./SingleProduct";
-import { Skeleton } from "./Skeleton";
+import { LineSkeleton, Skeleton } from "./Skeleton";
 import { useCheckoutText } from "./texts.context";
 
 /** The lines of the cart, and the loading, failed and empty states that stand in for them. */
@@ -113,9 +113,9 @@ export function CartLines() {
         style={productList.style}
       >
         {status === "ready" && (
-          <ul className={"mt-5"}>
+          <ul className="bsc-lines">
             {lines.map((item) => (
-              <li key={item.line.id} className={"mb-3"}>
+              <li key={item.line.id} className="bsc-line-item">
                 {item.details != null ? (
                   <SingleProduct
                     isNotAvailable={missingItemIds.includes(
@@ -141,18 +141,16 @@ export function CartLines() {
                   />
                 ) : (
                   // A line the server has not described yet (another tab added it).
-                  <Skeleton
-                    data-bitsnap-checkout-slot="skeleton"
-                    className={cn("mx-3 h-20", skeleton.className)}
+                  <LineSkeleton
+                    className={skeleton.className}
                     style={skeleton.style}
                   />
                 )}
-                <hr className="h-1" />
               </li>
             ))}
             {unavailable.map(({ line, details }) => (
               // Not returned by the server: kept until the buyer removes it (S15).
-              <li key={line.id} className={"mb-3"}>
+              <li key={line.id} className="bsc-line-item">
                 <SingleProduct
                   isNotAvailable
                   quantity={line.quantity}
@@ -170,7 +168,6 @@ export function CartLines() {
                     setQuantity(line.id, newQuantity)
                   }
                 />
-                <hr className="h-1" />
               </li>
             ))}
           </ul>

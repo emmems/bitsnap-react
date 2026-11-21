@@ -218,7 +218,14 @@ describe(`cart accessibility (${presentation})`, () => {
     // The title carries the item count from the store (PLAN §5 item 8).
     assert.equal(doc().getElementById(panel.getAttribute("aria-labelledby")!)?.textContent, "Cart (2)");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
-    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productName"] + p')?.textContent, "Blue");
+    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productVariant"]')?.textContent, "Blue");
+    assert.equal(
+      panel.querySelector('[data-bitsnap-checkout-slot="productUnitPrice"]')?.textContent?.replace(/\s/g, " "),
+      "PLN 25.00 × 2",
+      "the unit price for a quantity above 1",
+    );
+    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="quantityControl"]')?.getAttribute("role"), "group");
+    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="removeButton"]')?.getAttribute("title"), "Remove");
     assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="removeButton"]')?.getAttribute("aria-label"), "Remove: Mug Blue");
     assert.deepEqual(
       Array.from(panel.querySelectorAll('[data-bitsnap-checkout-slot="quantityButton"]')).map((el) =>
@@ -229,7 +236,11 @@ describe(`cart accessibility (${presentation})`, () => {
     const input = panel.querySelector<HTMLInputElement>('[data-bitsnap-checkout-slot="quantityInput"]')!;
     assert.equal(input.getAttribute("inputmode"), "numeric");
     assert.equal(input.getAttribute("aria-label"), "Quantity");
-    assert.equal(panel.querySelector('[data-bitsnap-checkout-slot="productImage"]'), null, "no broken image without a URL");
+    assert.equal(panel.querySelector("img"), null, "no broken image without a URL");
+    const tile = panel.querySelector('[data-bitsnap-checkout-slot="productImage"]');
+    assert.equal(tile?.tagName, "SPAN", "a placeholder tile instead");
+    assert.equal(tile?.getAttribute("aria-hidden"), "true");
+    assert.ok(tile?.querySelector("svg"), "the tile shows an image icon");
     assert.equal(
       panel.querySelector('[data-bitsnap-checkout-slot="summaryNote"]')?.textContent,
       "Discounts, shipping and taxes are calculated at the next step",
@@ -259,6 +270,23 @@ describe("cart trigger", () => {
     await openCart();
     const panel = dialog()!;
     assert.equal(doc().getElementById(panel.getAttribute("aria-labelledby")!)?.textContent, "Cart (3)");
+  });
+});
+
+describe("cart line details", () => {
+  it("hides a variant equal to the name and the unit price for one item (F-09)", async () => {
+    product.variants[0].name = " mug ";
+    try {
+      await mount();
+      await React.act(async () => void (await Bitsnap.addProductToCart("var1", 1)));
+      await openCart();
+      const line = dialog()!.querySelector('[data-bitsnap-checkout-slot="product"]')!;
+      assert.equal(line.querySelector('[data-bitsnap-checkout-slot="productName"]')?.textContent, "Mug");
+      assert.equal(line.querySelector('[data-bitsnap-checkout-slot="productVariant"]'), null);
+      assert.equal(line.querySelector('[data-bitsnap-checkout-slot="productUnitPrice"]'), null);
+    } finally {
+      product.variants[0].name = "Blue";
+    }
   });
 });
 

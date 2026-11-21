@@ -588,3 +588,35 @@ describe("CartComponent.tsx and CartFrame.tsx", () => {
     }
   });
 });
+
+describe("cart.css lines (step 15)", () => {
+  it("lays a line out on a 72 px tile column, the tile filled when the image is missing", () => {
+    const line = findTop("[data-bitsnap-checkout] .bsc-line");
+    assert.equal(line?.declarations.get("grid-template-columns"), "72px minmax(0, 1fr) auto");
+    const thumb = findTop("[data-bitsnap-checkout] .bsc-line-thumb");
+    assert.equal(thumb?.declarations.get("width"), "72px");
+    assert.equal(thumb?.declarations.get("height"), "72px");
+    assert.equal(thumb?.declarations.get("object-fit"), "cover");
+    assert.equal(thumb?.declarations.get("background-color"), "var(--bsc-surface)");
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-line-thumb-empty"), "no placeholder tile rule");
+  });
+
+  it("gives the stepper a 3:1 control-border pill and 44 px buttons, the remove button 44 px (R14)", () => {
+    const stepper = findTop("[data-bitsnap-checkout] .bsc-stepper");
+    assert.equal(stepper?.declarations.get("height"), "44px");
+    assert.equal(stepper?.declarations.get("box-shadow"), "inset 0 0 0 1px var(--bsc-control-border)");
+    const button = findTop("[data-bitsnap-checkout] .bsc-stepper-btn");
+    assert.equal(button?.declarations.get("min-width"), "44px");
+    assert.equal(button?.declarations.get("min-height"), "44px");
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-stepper-btn:where(:focus-visible)")?.declarations.has("outline"));
+    assert.ok(findTop("[data-bitsnap-checkout] .bsc-stepper-input:where(:focus-visible)")?.declarations.has("outline"));
+    assert.equal(findTop("[data-bitsnap-checkout] .bsc-stepper-input")?.declarations.get("width"), "40px");
+  });
+
+  it("imports no ui/button, button group, lucide or cva in the line components", () => {
+    for (const file of ["SingleProduct.tsx", "ProductPrice.tsx", "CartLines.tsx", "Skeleton.tsx", "icons.tsx"]) {
+      const source = readFileSync(resolve(process.cwd(), "src/components/checkout", file), "utf8");
+      assert.doesNotMatch(source, /ui\/button|lucide-react|class-variance-authority/, file);
+    }
+  });
+});
