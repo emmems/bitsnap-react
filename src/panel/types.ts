@@ -29,6 +29,7 @@ export type PanelScreen =
   | "order-details"
   | "returns"
   | "return-details"
+  | "loyalty"
   | "course"
   | "messages";
 

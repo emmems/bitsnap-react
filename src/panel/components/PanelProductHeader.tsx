@@ -17,6 +17,8 @@ interface PanelProductHeaderComponentProps {
   showMessages?: boolean;
   /** Shows "Zwroty": hidden on the global all-shops panel until returns are shop-aware. */
   showReturns?: boolean;
+  /** Shows "Lojalność": hidden on the global all-shops panel. */
+  showLoyalty?: boolean;
 }
 
 export default function PanelProductHeaderComponent({
@@ -29,6 +31,7 @@ export default function PanelProductHeaderComponent({
   projectID,
   showMessages = false,
   showReturns = projectID !== "",
+  showLoyalty = projectID !== "",
 }: PanelProductHeaderComponentProps) {
   const texts = getPanelTexts();
   const { data: branding } = useLoginBranding(projectID ?? "", Boolean(projectID));
@@ -43,7 +46,8 @@ export default function PanelProductHeaderComponent({
           .filter(
             ({ screen }) =>
               (screen !== "messages" || showMessages) &&
-              (screen !== "returns" || showReturns),
+              (screen !== "returns" || showReturns) &&
+              (screen !== "loyalty" || showLoyalty),
           )
           .map(({ screen, label, icon: Icon }) => {
           const active = navScreen(activeScreen) === screen;

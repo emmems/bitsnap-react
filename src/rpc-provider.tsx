@@ -14,6 +14,7 @@ import { HOST, setCustomHost } from "./components/checkout/constants";
 import * as notificationsRouter from "./gen/proto/dashboard/v1/notifications-NotificationsService_connectquery";
 import * as publicApiRouter from "./gen/proto/public/v1/public_api-PublicApiService_connectquery";
 import * as returnsRouter from "./gen/proto/public/v1/returns-ReturnsService_connectquery";
+import * as loyaltyRouter from "./gen/proto/public/v1/loyalty-LoyaltyCustomerService_connectquery";
 
 let currentFinalTransportHost: string | undefined;
 let finalTransport: Transport | undefined;
@@ -27,6 +28,7 @@ export const rpcProvider = {
   publicApi: publicApiRouter,
   notifications: notificationsRouter,
   returns: returnsRouter,
+  loyalty: loyaltyRouter,
 };
 
 export const useQuery = uq;

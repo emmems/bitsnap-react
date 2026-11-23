@@ -4,6 +4,7 @@ import { pickLocaleTable, type LocaleTables } from "../lib/texts";
 /** Panel strings that are not part of the returns views. */
 export type PanelTexts = {
   returnsNavLabel: string;
+  loyaltyNavLabel: string;
   openCourse: string;
   libraryNavLabel: string;
   messagesNavLabel: string;
@@ -121,11 +122,22 @@ export type PanelTexts = {
   returnsLinesFew: string;
   returnsLinesMany: string;
   returnsUnavailableTitle: string;
+  loyaltyHeading: string;
+  loyaltyAvailablePoints: string;
+  loyaltyPendingPoints: string;
+  loyaltyClubsHeading: string;
+  loyaltyQrHeading: string;
+  loyaltyQrHint: string;
+  loyaltyHistoryHeading: string;
+  loyaltyHistoryEmpty: string;
+  loyaltyUnavailable: string;
+  loyaltyError: string;
 };
 
 const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
   pl: {
     "returnsNavLabel": "Zwroty",
+    "loyaltyNavLabel": "Lojalność",
     "openCourse": "Otwórz kurs",
     "libraryNavLabel": "Biblioteka",
     "messagesNavLabel": "Wiadomości",
@@ -242,10 +254,21 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "returnsLinesOne": "{count} produkt do zwrotu",
     "returnsLinesFew": "{count} produkty do zwrotu",
     "returnsLinesMany": "{count} produktów do zwrotu",
-    "returnsUnavailableTitle": "Nie udało się otworzyć zwrotów"
+    "returnsUnavailableTitle": "Nie udało się otworzyć zwrotów",
+    "loyaltyHeading": "Program lojalnościowy",
+    "loyaltyAvailablePoints": "Dostępne punkty",
+    "loyaltyPendingPoints": "Oczekujące",
+    "loyaltyClubsHeading": "Twoje kluby",
+    "loyaltyQrHeading": "Karta klienta (QR)",
+    "loyaltyQrHint": "Pokaż kod przy kasie — odświeża się automatycznie co 3 minuty.",
+    "loyaltyHistoryHeading": "Historia punktów",
+    "loyaltyHistoryEmpty": "Brak operacji punktowych.",
+    "loyaltyUnavailable": "Ten sklep nie ma obecnie włączonego programu lojalnościowego.",
+    "loyaltyError": "Nie udało się pobrać danych programu lojalnościowego."
   },
   en: {
     "returnsNavLabel": "Returns",
+    "loyaltyNavLabel": "Loyalty",
     "openCourse": "Open the course",
     "libraryNavLabel": "Library",
     "messagesNavLabel": "Messages",
@@ -362,7 +385,17 @@ const PANEL_TEXT_TABLES: LocaleTables<keyof PanelTexts> = {
     "returnsLinesOne": "{count} product to return",
     "returnsLinesFew": "{count} products to return",
     "returnsLinesMany": "{count} products to return",
-    "returnsUnavailableTitle": "Could not open returns"
+    "returnsUnavailableTitle": "Could not open returns",
+    "loyaltyHeading": "Loyalty programme",
+    "loyaltyAvailablePoints": "Available points",
+    "loyaltyPendingPoints": "Pending",
+    "loyaltyClubsHeading": "Your clubs",
+    "loyaltyQrHeading": "Customer card (QR)",
+    "loyaltyQrHint": "Show this code at checkout — it refreshes automatically every 3 minutes.",
+    "loyaltyHistoryHeading": "Points history",
+    "loyaltyHistoryEmpty": "No point transactions yet.",
+    "loyaltyUnavailable": "This shop does not currently have a loyalty programme enabled.",
+    "loyaltyError": "Could not load loyalty programme data."
   },
 };
 

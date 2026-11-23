@@ -485,8 +485,35 @@ export function ReturnsConfirmation({
   useReturnsContext("ReturnsConfirmation");
   const text = useReturnsText();
   const locale = useReturnsLocale();
-  const { order, isLoading, errorKey: orderErrorKey, refetch } =
+  const { order, data: orderData, isLoading, errorKey: orderErrorKey, refetch } =
     useReturnableOrder(orderId);
+  const refundPolicy = orderData?.refundMethodPolicy || "money_only";
+  const loyaltyEnabled =
+    Boolean(orderData?.loyaltyPointsEnabled) &&
+    Number(orderData?.loyaltyRedeemPointsPerCurrency ?? 0) > 0;
+  const [preferredMethod, setPreferredMethod] = useState<"money" | "loyalty_points">("money");
+  const effectivePreferredMethod: "money" | "loyalty_points" =
+    refundPolicy === "loyalty_points_only" && loyaltyEnabled
+      ? "loyalty_points"
+      : refundPolicy === "customer_choice" && loyaltyEnabled
+        ? preferredMethod
+        : "money";
+  const isEn = locale.toLowerCase().startsWith("en");
+  const loyaltyUnit =
+    orderData?.loyaltyPointsShortLabel || orderData?.loyaltyPointsName || "pkt";
+  const estimatedMinor = items.reduce((sum, item) => {
+    const line = order?.lines.find((c) => c.lineId === item.lineId);
+    return sum + Number(line?.paidUnitMinor ?? 0n) * item.quantity;
+  }, 0);
+  const estimatedPoints =
+    loyaltyEnabled && estimatedMinor > 0
+      ? Math.max(
+          1,
+          Math.ceil(
+            (estimatedMinor / 100) * Number(orderData?.loyaltyRedeemPointsPerCurrency ?? 0),
+          ),
+        )
+      : 0;
   const create = useCreateReturn();
   const summary = useReturnsSlot("summary");
   const lineSlot = useReturnsSlot("line");
@@ -506,6 +533,7 @@ export function ReturnsConfirmation({
         quantity: item.quantity,
       })),
       note,
+      preferredRefundMethod: effectivePreferredMethod,
     });
     if (request != null) {
       onSubmitted?.(request.id, request);
@@ -533,6 +561,42 @@ export function ReturnsConfirmation({
             <h3 className="text-sm font-medium">
               {text("confirmationSummary")}
             </h3>
+            {loyaltyEnabled && refundPolicy === "customer_choice" && (
+              <fieldset className="flex flex-col gap-2 rounded-md border p-3">
+                <legend className="px-1 text-xs font-medium">
+                  {isEn ? "Preferred refund method" : "Preferowana forma zwrotu"}
+                </legend>
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="bitsnap-return-refund-method"
+                    checked={preferredMethod === "money"}
+                    onChange={() => setPreferredMethod("money")}
+                  />
+                  <span>{isEn ? "Money refund" : "Zwrot pieniędzy"}</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="bitsnap-return-refund-method"
+                    checked={preferredMethod === "loyalty_points"}
+                    onChange={() => setPreferredMethod("loyalty_points")}
+                  />
+                  <span>
+                    {isEn
+                      ? `Loyalty points (${estimatedPoints} ${loyaltyUnit})`
+                      : `Punkty lojalnościowe (${estimatedPoints} ${loyaltyUnit})`}
+                  </span>
+                </label>
+              </fieldset>
+            )}
+            {loyaltyEnabled && refundPolicy === "loyalty_points_only" && (
+              <p className="rounded-md border p-3 text-sm">
+                {isEn
+                  ? `This refund will be credited as loyalty points (approx. ${estimatedPoints} ${loyaltyUnit}).`
+                  : `Ten zwrot zostanie rozliczony w punktach lojalnościowych (ok. ${estimatedPoints} ${loyaltyUnit}).`}
+              </p>
+            )}
             <ul className="flex flex-col gap-3">
               {items.map((item) => {
                 const line = order?.lines.find(
