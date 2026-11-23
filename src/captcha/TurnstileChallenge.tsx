@@ -47,7 +47,9 @@ export function TurnstileChallenge({ action, locale = "pl", host, formContext, a
   // there is the one whose page report the server trusts), and only that origin's messages count:
   // never the API origin beside it, never a wildcard. Other actions use the API origin as before.
   // Once known, the origin is fixed for this mount: a re-render never reads a different one, so the
-  // iframe, the popup and the token expiry are not torn down in the middle of a challenge.
+  // iframe, the popup and the token expiry are not torn down in the middle of a challenge. A failed
+  // request fixes "" (the API origin) for this mount only; it is not kept for the page, so the next
+  // mount asks again.
   const fixedOrigin = useRef<{ api: string; action: string; panel: string } | undefined>(undefined);
   if (fixedOrigin.current && (fixedOrigin.current.api !== apiOrigin || fixedOrigin.current.action !== action)) fixedOrigin.current = undefined;
   if (!fixedOrigin.current) {
@@ -60,9 +62,13 @@ export function TurnstileChallenge({ action, locale = "pl", host, formContext, a
   useEffect(() => {
     if (!waiting) return;
     let live = true;
-    void loadPanelOrigin(apiOrigin).then(() => { if (live) askedPanelOrigin((n) => n + 1); });
+    void loadPanelOrigin(apiOrigin).then((answer) => {
+      if (!live) return;
+      if (!fixedOrigin.current) fixedOrigin.current = { api: apiOrigin, action, panel: answer };
+      askedPanelOrigin((n) => n + 1);
+    });
     return () => { live = false; };
-  }, [waiting, apiOrigin]);
+  }, [waiting, apiOrigin, action]);
   const origin = panelOrigin || apiOrigin;
   const src = useMemo(() => challengeUrl(origin, action, language, window.location.origin, { formContext, attempt }), [action, language, origin, formContext, attempt]);
   useEffect(() => {

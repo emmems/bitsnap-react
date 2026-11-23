@@ -99,18 +99,35 @@ describe("the panel login's challenge origin", () => {
     assert.equal(parsePanelOrigin({ panelOrigin: "http://localhost:4322" }, "http://localhost:4321"), "http://localhost:4322");
   });
 
-  it("asks once per API origin and remembers any answer for the life of the page", async () => {
+  it("asks once per API origin, shares a request in flight, and keeps a successful answer for the page", async () => {
     resetPanelOriginCache();
     let calls = 0;
-    let answer: () => Response = () => new Response(JSON.stringify({ panelOrigin: PANEL }));
-    const fetchImpl = (async (input: string) => { calls += 1; assert.equal(input, `${API}/api/panel-origin`); return answer(); }) as unknown as typeof fetch;
+    const fetchImpl = (async (input: string) => { calls += 1; assert.equal(input, `${API}/api/panel-origin`); return new Response(JSON.stringify({ panelOrigin: PANEL })); }) as unknown as typeof fetch;
     assert.equal(knownPanelOrigin(API), undefined);
-    await Promise.all([loadPanelOrigin(API, fetchImpl), loadPanelOrigin(API, fetchImpl)]);
-    assert.equal(calls, 1);
+    const both = await Promise.all([loadPanelOrigin(API, fetchImpl), loadPanelOrigin(API, fetchImpl)]);
+    assert.deepEqual(both, [PANEL, PANEL]);
+    assert.equal(calls, 1, "concurrent lookups share one request");
     assert.equal(knownPanelOrigin(API), PANEL);
-    await loadPanelOrigin(API, fetchImpl);
-    assert.equal(calls, 1);
+    assert.equal(await loadPanelOrigin(API, fetchImpl), PANEL);
+    assert.equal(calls, 1, "a kept answer is not asked again");
+    resetPanelOriginCache();
+  });
 
+  it("keeps a valid empty answer (the server has no panel origin) for the page", async () => {
+    resetPanelOriginCache();
+    let calls = 0;
+    const fetchImpl = (async () => { calls += 1; return new Response(JSON.stringify({ panelOrigin: "" })); }) as unknown as typeof fetch;
+    assert.equal(await loadPanelOrigin(API, fetchImpl), "");
+    assert.equal(knownPanelOrigin(API), "");
+    assert.equal(await loadPanelOrigin(API, fetchImpl), "");
+    assert.equal(calls, 1);
+    resetPanelOriginCache();
+  });
+
+  it("does not keep a failed answer: the lookup is \"\" and the next lookup asks again", async () => {
+    let answer: () => Response = () => { throw new TypeError("offline"); };
+    let calls = 0;
+    const fetchImpl = (async () => { calls += 1; return answer(); }) as unknown as typeof fetch;
     const failures: Array<[string, () => Response]> = [
       ["a network error", () => { throw new TypeError("offline"); }],
       ["a 404 from an older server", () => new Response("not found", { status: 404 })],
@@ -121,21 +138,16 @@ describe("the panel login's challenge origin", () => {
       resetPanelOriginCache();
       calls = 0;
       answer = failure;
-      await loadPanelOrigin(API, fetchImpl);
+      assert.equal(await loadPanelOrigin(API, fetchImpl), "", `${name} frames the API origin`);
       assert.equal(calls, 1, name);
-      assert.equal(knownPanelOrigin(API), "", `${name} falls back to the API origin`);
-    }
-    // The fallback is final for the page: nothing asks again, and the answer never flips back to "unknown".
-    const realNow = Date.now;
-    Date.now = () => realNow() + 10 * 60_000;
-    try {
-      calls = 0;
+      assert.equal(knownPanelOrigin(API), undefined, `${name} is not kept`);
       answer = () => new Response(JSON.stringify({ panelOrigin: PANEL }));
-      assert.equal(knownPanelOrigin(API), "", "still the API origin long after the failure");
+      assert.equal(await loadPanelOrigin(API, fetchImpl), PANEL, `${name}: the next lookup asks again`);
+      assert.equal(calls, 2, name);
+      assert.equal(knownPanelOrigin(API), PANEL);
       await loadPanelOrigin(API, fetchImpl);
-      assert.equal(calls, 0);
-      assert.equal(knownPanelOrigin(API), "");
-    } finally { Date.now = realNow; }
+      assert.equal(calls, 2, `${name}: the later success is kept`);
+    }
     resetPanelOriginCache();
   });
 });

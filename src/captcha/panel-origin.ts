@@ -7,16 +7,20 @@
  * has none. The `panel_login` challenge is then framed from that origin, and its message is accepted
  * from exactly that origin (see `TurnstileChallenge`).
  *
- * The answer is final for the life of the page, whatever it is: a 404 from an older server, a 503 or a
- * network error all mean "" (frame the API origin). A later change of answer would swap the iframe's
- * origin in the middle of a challenge, which closes the popup and drops the token expiry.
+ * Only a successful answer (2xx with valid JSON, an empty `panelOrigin` included) is kept for the life
+ * of the page. A failure (a 404 from an older server, a 503, a network error, the timeout, a body that
+ * is not JSON) resolves that one lookup to "" (frame the API origin) and is not kept: the next lookup,
+ * a new login attempt or a remount, asks again, so one network blip does not leave sign-in unavailable
+ * until a reload. Security does not depend on this cache: the server decides which origin it trusts.
+ * A mounted challenge never switches origin (see `TurnstileChallenge`), whatever a later lookup says.
  */
 
 const REQUEST_TIMEOUT_MS = 5_000;
 
-/** API origin -> panel origin ("" = the server has none, or could not be asked). Kept for the life of the page. */
+/** API origin -> panel origin ("" = the server has none), for successful answers only. Kept for the life of the page. */
 const known = new Map<string, string>();
-const pending = new Map<string, Promise<void>>();
+/** Lookups in flight, so concurrent callers share one request. */
+const pending = new Map<string, Promise<string>>();
 
 /**
  * The origin in a `/api/panel-origin` answer, or "" when it is not one we may use: not an exact
@@ -36,31 +40,34 @@ export function parsePanelOrigin(body: unknown, apiOrigin: string): string {
   }
 }
 
-/**
- * What is known without asking: the panel origin, "" (none, or it could not be read: use the API
- * origin), or undefined (not asked yet, or being asked). Once defined it never changes.
- */
+/** The server's answer for this API origin when it was asked successfully, else undefined (not asked, being asked, or the last ask failed). */
 export function knownPanelOrigin(apiOrigin: string): string | undefined {
   return known.get(apiOrigin);
 }
 
-/** Asks the API once per page, whatever the answer. Never rejects. */
-export function loadPanelOrigin(apiOrigin: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  if (known.has(apiOrigin)) return Promise.resolve();
+/**
+ * The panel origin for this API origin: the kept answer, or one request shared by concurrent callers.
+ * Resolves to "" (frame the API origin) when the request fails; that failure is not kept. Never rejects.
+ */
+export function loadPanelOrigin(apiOrigin: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const kept = known.get(apiOrigin);
+  if (kept !== undefined) return Promise.resolve(kept);
   const running = pending.get(apiOrigin);
   if (running) return running;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const request = (async () => {
-    let origin = "";
     try {
       const response = await fetchImpl(`${apiOrigin}/api/panel-origin`, { signal: controller.signal });
-      if (response.ok) origin = parsePanelOrigin(await response.json(), apiOrigin);
+      if (!response.ok) return "";
+      const origin = parsePanelOrigin(await response.json(), apiOrigin);
+      known.set(apiOrigin, origin);
+      return origin;
     } catch {
-      // Network error, timeout or a body that is not JSON: the API origin, for the rest of the page.
+      // Network error, timeout or a body that is not JSON: the API origin for this lookup only.
+      return "";
     } finally {
       clearTimeout(timer);
-      known.set(apiOrigin, origin);
       pending.delete(apiOrigin);
     }
   })();

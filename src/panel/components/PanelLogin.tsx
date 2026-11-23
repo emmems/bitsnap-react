@@ -87,7 +87,8 @@ const PanelLoginForm = ({
 }) => {
   const [challengeVisible, setChallengeVisible] = useState(false);
   // Learn where the security check is framed from before the buyer asks for a code, so it opens at once.
-  useEffect(() => { void loadPanelOrigin(challengeOrigin()); }, []);
+  // The same origin the challenge below is given (its `host`), so the preload answers the challenge's lookup.
+  useEffect(() => { void loadPanelOrigin(challengeOrigin(host)); }, [host]);
   const challengeWaiter = useRef<((token: string | null) => void) | undefined>(undefined);
   const captchaToken = useRef("");
   const beforeSend = useMemo(() => () => new Promise<boolean>((resolve) => {
@@ -203,7 +204,7 @@ const PanelLoginForm = ({
             emailInputId="email"
             codeInputId="verify-code"
           />
-          {challengeVisible && <TurnstileChallenge action="panel_login" locale={locale} onToken={(token) => challengeWaiter.current?.(token)} onFailure={() => challengeWaiter.current?.(null)} />}
+          {challengeVisible && <TurnstileChallenge action="panel_login" locale={locale} host={host} onToken={(token) => challengeWaiter.current?.(token)} onFailure={() => challengeWaiter.current?.(null)} />}
         </CardContent>
       </Card>
     </main>

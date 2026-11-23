@@ -617,6 +617,31 @@ describe("PanelLogin: where the security check is framed from", () => {
     });
   }
 
+  it("asks again on the next login attempt after a failed request, and frames the panel origin then", async () => {
+    panelOriginAnswer = "fail";
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`), "the failed lookup frames the API origin");
+    const first = frame();
+    // The network is back and the server has a panel origin; the open challenge does not move.
+    panelOriginAnswer = { panelOrigin: PANEL };
+    await type(emailInput(), "other@example.com");
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+    assert.equal(frame(), first, "the mounted challenge keeps its frame");
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+    loginRequests = [];
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    doc().body.innerHTML = "";
+    page.win.localStorage.clear();
+    page.win.sessionStorage.clear();
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${PANEL}/challenge?action=panel_login&`), "a new attempt asks again");
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 1);
+  });
+
   it("fixes the origin of a mounted challenge: a later server answer does not move the frame", async () => {
     await mount();
     await askForCode();
