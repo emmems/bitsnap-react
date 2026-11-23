@@ -21,6 +21,13 @@ export type FailureKind =
   | "deliveryUnavailable"
   | "captchaRequired"
   | "captchaInvalid"
+  /** The code belongs to another shop, or this shop refused the sign-in. */
+  | "wrongShop"
+  /**
+   * The server refused to send a code at all: this page may not sign in for
+   * this shop. Asking again fails the same way, so there is no new-code loop.
+   */
+  | "sendRefused"
   | "network"
   | "unknown";
 
@@ -119,6 +126,10 @@ function describeFailure(
       return { kind: "error", text: texts.captchaRequired };
     case "captchaInvalid":
       return { kind: "error", text: texts.captchaInvalid };
+    case "wrongShop":
+      return { kind: "error", text: texts.wrongShop };
+    case "sendRefused":
+      return { kind: "error", text: texts.sendRefused };
     case "network":
       return { kind: "error", text: texts.network };
     default:
@@ -161,7 +172,9 @@ export function useEmailCodeLogin<T = void>(
   const [resendAt, setResendAt] = useState<number>();
   const [needsEmail, setNeedsEmail] = useState(false);
   /** The code can no longer be used; only a new one helps. */
-  const [dead, setDead] = useState<"expired" | "tooManyAttempts">();
+  const [dead, setDead] = useState<"expired" | "tooManyAttempts" | "wrongShop">();
+  /** The server refused to send a code to this page: resending cannot help. */
+  const [resendBlocked, setResendBlocked] = useState(false);
   const [notice, setNotice] = useState<LoginNotice>();
   const [busy, setBusy] = useState<"send" | "resend" | "verify">();
   const [done, setDone] = useState(false);
@@ -331,6 +344,9 @@ export function useEmailCodeLogin<T = void>(
       if (outcome.retryIn != null && mode === "resend") {
         setResendAt(Date.now() + outcome.retryIn * 1000);
       }
+      if (outcome.kind === "sendRefused" && mode === "resend") {
+        setResendBlocked(true);
+      }
       setNotice(message);
       if (mode === "send") requestFocus("email");
     },
@@ -382,6 +398,7 @@ export function useEmailCodeLogin<T = void>(
       switch (outcome.kind) {
         case "expired":
         case "tooManyAttempts":
+        case "wrongShop":
           setDead(outcome.kind);
           setCodeState("");
           if (storageKey != null) clearPendingLogin(storageKey);
@@ -433,6 +450,7 @@ export function useEmailCodeLogin<T = void>(
     setChallengeId(undefined);
     setResendAt(undefined);
     setDead(undefined);
+    setResendBlocked(false);
     setNotice(undefined);
     if (storageKey != null) clearPendingLogin(storageKey);
     requestFocus("email");
@@ -446,6 +464,7 @@ export function useEmailCodeLogin<T = void>(
     setChallengeId(undefined);
     setResendAt(undefined);
     setDead(undefined);
+    setResendBlocked(false);
     setNotice(undefined);
     requestFocus("email");
   }, [requestFocus]);
@@ -464,6 +483,8 @@ export function useEmailCodeLogin<T = void>(
     done,
     notice,
     dead,
+    /** A resend was refused by the server for this page; the button stays off. */
+    resendBlocked,
     /** Seconds until a new code may be requested, `0` when it may. */
     secondsLeft,
     announcement,

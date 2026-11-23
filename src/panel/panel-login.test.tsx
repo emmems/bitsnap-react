@@ -16,6 +16,7 @@ import {
   UserPanelLoginWithCodeRequestSchema,
   UserPanelLoginWithCodeResponseSchema,
 } from "../gen/proto/public/v1/public_api_pb";
+import { resetPanelOriginCache } from "../captcha/panel-origin.ts";
 import { setPanelConfig } from "./config.ts";
 import { panelFailureKind } from "./login-adapter.ts";
 import { resolvePanelLoginTexts } from "./login-texts.ts";
@@ -47,6 +48,8 @@ let codeResult: CodeResult;
 let loginRequests: Array<ReturnType<typeof readLogin>>;
 let codeRequests: Array<ReturnType<typeof readCode>>;
 let throwOnCode = false;
+/** What `GET /api/panel-origin` answers: a body, or "fail" for a network error. */
+let panelOriginAnswer: unknown = { panelOrigin: "" };
 
 const readLogin = (body: Uint8Array) => fromBinary(UserPanelLoginRequestSchema, body);
 const readCode = (body: Uint8Array) => fromBinary(UserPanelLoginWithCodeRequestSchema, body);
@@ -66,10 +69,19 @@ beforeEach(() => {
   loginRequests = [];
   codeRequests = [];
   throwOnCode = false;
+  panelOriginAnswer = { panelOrigin: "" };
+  resetPanelOriginCache();
   loginResult = { case: "success", value: { retryIn: 60, challengeId: "challenge-7" } };
   codeResult = { case: "accessToken", value: "panel-token" };
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/api/panel-origin")) {
+      if (panelOriginAnswer === "fail") throw new TypeError("Failed to fetch");
+      if (panelOriginAnswer === "404" || panelOriginAnswer === "503") {
+        return new Response("no", { status: Number(panelOriginAnswer) });
+      }
+      return new Response(JSON.stringify(panelOriginAnswer), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     if (url.endsWith("/UserPanelLogin")) {
       loginRequests.push(readLogin(init!.body as Uint8Array));
       return proto(UserPanelLoginResponseSchema, { result: loginResult });
@@ -157,10 +169,17 @@ describe("panel failure mapping", () => {
       [FailureMessage.RATE_LIMITED]: "rateLimited",
       [FailureMessage.CODE_EXPIRED]: "expired",
       [FailureMessage.TOO_MANY_ATTEMPTS]: "tooManyAttempts",
+      [FailureMessage.UNAUTHORIZED]: "wrongShop",
     };
     for (const [value, kind] of Object.entries(expected)) {
       assert.equal(panelFailureKind(Number(value)), kind, FailureMessage[Number(value)]);
     }
+  });
+
+  it("tells a refusal at send time from a refusal of a code", () => {
+    assert.equal(panelFailureKind(FailureMessage.UNAUTHORIZED, "send"), "sendRefused");
+    assert.equal(panelFailureKind(FailureMessage.UNAUTHORIZED, "verify"), "wrongShop");
+    assert.equal(panelFailureKind(FailureMessage.RATE_LIMITED, "send"), "rateLimited");
   });
 });
 
@@ -235,6 +254,83 @@ describe("PanelLogin", () => {
       await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
       doc().body.innerHTML = "";
     }
+  });
+
+  it("sends the shop's project id with the code request and with the code", async () => {
+    await mount();
+    await requestCode();
+    assert.equal(loginRequests[0]!.projectId, TEST_KEY);
+    await type(codeInput(), "012345");
+    await settle();
+    assert.equal(codeRequests.length, 1);
+    assert.equal(codeRequests[0]!.projectId, TEST_KEY);
+  });
+
+  it("sends no project id from the all-shops panel", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    await mount();
+    await requestCode();
+    await type(codeInput(), "012345");
+    await settle();
+    assert.equal(loginRequests.length, 1);
+    assert.equal(loginRequests[0]!.projectId, undefined);
+    assert.equal(codeRequests.length, 1);
+    assert.equal(codeRequests[0]!.projectId, undefined);
+  });
+
+  it("says the code is for another shop when the server refuses it, and offers a new code", async () => {
+    codeResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount();
+    await requestCode();
+    await type(codeInput(), "123456");
+    await settle();
+    assert.equal(
+      alertText(),
+      "Ten kod logowania jest do innego sklepu. Poproś o nowy kod na tej stronie.",
+    );
+    assert.equal(alertText(), texts.wrongShop);
+    assert.notEqual(alertText(), texts.generic);
+    assert.ok(buttonWith(texts.resendNew), "a new code can be requested");
+    assert.equal(codeInput().disabled, true);
+  });
+
+  it("says sign-in is unavailable when the code request itself is refused, with no new-code offer", async () => {
+    loginResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount();
+    await requestCode();
+    assert.equal(
+      alertText(),
+      "Logowanie na tej stronie jest teraz niedostępne. Skontaktuj się ze sklepem.",
+    );
+    assert.equal(alertText(), texts.sendRefused);
+    assert.notEqual(alertText(), texts.wrongShop);
+    assert.equal(buttonWith(texts.resendNew), undefined);
+    assert.ok(emailInput(), "still on the e-mail step");
+    assert.equal(codeRequests.length, 0);
+  });
+
+  it("says both in English with an English locale", async () => {
+    loginResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount({ locale: "en" });
+    await requestCode();
+    assert.equal(
+      alertText(),
+      "Signing in on this page is not available right now. Please contact the shop.",
+    );
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    doc().body.innerHTML = "";
+    page.win.sessionStorage.clear();
+
+    loginResult = { case: "success", value: { retryIn: 60, challengeId: "challenge-7" } };
+    codeResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount({ locale: "en" });
+    await requestCode();
+    await type(codeInput(), "123456");
+    await settle();
+    assert.equal(
+      alertText(),
+      "This sign-in code is for another shop. Request a new code on this page.",
+    );
   });
 
   it("tells the customer when the request does not get through", async () => {
@@ -417,5 +513,147 @@ describe("PanelLogin", () => {
     } finally {
       (globalThis as { window: unknown }).window = savedWindow;
     }
+  });
+});
+
+describe("PanelLogin: where the security check is framed from", () => {
+  const PANEL = "https://konto.bitsnap.pl";
+  const API = "https://bitsnap.pl";
+  const frame = () => doc().querySelector("iframe");
+  const frameFrom = (origin: string, message: Record<string, unknown> = { disabled: true }) =>
+    React.act(async () => {
+      page.win.dispatchEvent(new page.win.MessageEvent("message", {
+        origin,
+        source: frame()?.contentWindow ?? null,
+        data: { type: "bitsnap:turnstile", action: "panel_login", ...message },
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+  async function askForCode() {
+    await type(emailInput(), "jane@example.com");
+    await submit(doc().querySelector("form")!);
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+  }
+
+  it("frames the panel origin and takes the widget's message from that origin only", async () => {
+    panelOriginAnswer = { panelOrigin: PANEL };
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${PANEL}/challenge?action=panel_login&`), frame()?.getAttribute("src") ?? "no iframe");
+    await frameFrom(API);
+    await frameFrom("https://evil.example");
+    await frameFrom("*");
+    assert.equal(loginRequests.length, 0, "a message from the API origin or any other origin is ignored");
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 1, "the panel origin's message goes through");
+  });
+
+  it("frames the API origin as before while the server has no panel origin", async () => {
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 0);
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+  });
+
+  it("falls back to the API origin when the panel origin cannot be read", async () => {
+    panelOriginAnswer = "fail";
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+  });
+
+  it("ignores an answer that is not an exact http(s) origin", async () => {
+    panelOriginAnswer = { panelOrigin: "javascript:alert(1)" };
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+  });
+
+  it("frames the API origin when an older server answers 404, and when it answers 503", async () => {
+    for (const answer of ["404", "503"]) {
+      panelOriginAnswer = answer;
+      resetPanelOriginCache();
+      await mount();
+      await askForCode();
+      assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`), answer);
+      await frameFrom(API);
+      assert.equal(loginRequests.length, 1, answer);
+      loginRequests = [];
+      await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+      doc().body.innerHTML = "";
+      page.win.localStorage.clear();
+      page.win.sessionStorage.clear();
+    }
+  });
+
+  for (const answer of ["fail", "404", "503"]) {
+    it(`keeps the same challenge frame across re-renders long after a failed origin request (${answer})`, async () => {
+      panelOriginAnswer = answer;
+      await mount();
+      await askForCode();
+      const first = frame();
+      assert.ok(first, "the challenge is open");
+      const src = first.getAttribute("src");
+      assert.ok(src?.startsWith(`${API}/challenge?action=panel_login&`));
+      const realNow = Date.now;
+      let offset = 0;
+      Date.now = () => realNow() + offset;
+      try {
+        for (const later of [31_000, 120_000, 600_000]) {
+          offset = later;
+          await type(emailInput(), `jane${later}@example.com`);
+          await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+          assert.equal(frame(), first, `the same iframe element after ${later} ms`);
+          assert.equal(frame()?.getAttribute("src"), src);
+        }
+      } finally { Date.now = realNow; }
+      await frameFrom(API);
+      assert.equal(loginRequests.length, 1, "the challenge still completes");
+    });
+  }
+
+  it("asks again on the next login attempt after a failed request, and frames the panel origin then", async () => {
+    panelOriginAnswer = "fail";
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`), "the failed lookup frames the API origin");
+    const first = frame();
+    // The network is back and the server has a panel origin; the open challenge does not move.
+    panelOriginAnswer = { panelOrigin: PANEL };
+    await type(emailInput(), "other@example.com");
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+    assert.equal(frame(), first, "the mounted challenge keeps its frame");
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+    loginRequests = [];
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    doc().body.innerHTML = "";
+    page.win.localStorage.clear();
+    page.win.sessionStorage.clear();
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${PANEL}/challenge?action=panel_login&`), "a new attempt asks again");
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 1);
+  });
+
+  it("fixes the origin of a mounted challenge: a later server answer does not move the frame", async () => {
+    await mount();
+    await askForCode();
+    const first = frame();
+    const src = first?.getAttribute("src");
+    assert.ok(src?.startsWith(`${API}/challenge?action=panel_login&`));
+    // Even if the page-wide answer were replaced, this mount keeps its origin.
+    panelOriginAnswer = { panelOrigin: PANEL };
+    resetPanelOriginCache();
+    await type(emailInput(), "other@example.com");
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+    assert.equal(frame(), first);
+    assert.equal(frame()?.getAttribute("src"), src);
   });
 });

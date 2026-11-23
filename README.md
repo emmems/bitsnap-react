@@ -75,6 +75,31 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
+## 1.34.0
+
+`PanelLogin` tells the server which shop it signs the customer in to: it sends
+the shop's project id (`projectID` of the panel) with the code request and with
+the code, so the buyer token is scoped to that shop. The all-shops panel
+(`bitsnap.pl/panel`, no project) sends none, as before. A code that belongs to
+another shop, or a shop that refuses the sign-in, now shows a clear message
+(new text `wrongShop`, Polish and English, overridable through `texts`: "Ten
+kod logowania jest do innego sklepu. Poproś o nowy kod na tej stronie.") and
+offers a new code, instead of the generic one. A shop that refuses the code
+request itself shows another new text, `sendRefused` ("Logowanie na tej
+stronie jest teraz niedostępne. Skontaktuj się ze sklepem."), and no new-code
+button, since asking again would fail the same way. The shared texts of the other
+e-mail-code logins (`BitsnapReturns`, notifications) gain the same key. No
+change is needed in a shop's code.
+
+The panel login's security check (Cloudflare Turnstile) is now framed from the
+panel origin the server reports at `GET <host>/api/panel-origin` (for example
+`https://konto.bitsnap.pl`, a host that never runs a seller's code), so the
+server can tell which shop's page asked for the code. The widget's message is
+accepted from exactly that origin and no other. While the server reports none
+(or the request fails), the check is framed from the API host, as in 1.32; a
+failed request is not remembered, so the next login attempt asks again. No
+change is needed in a shop's code.
+
 ## 1.32.0
 
 The cart opens at once, is smaller, has a new look and can open as a dialog.

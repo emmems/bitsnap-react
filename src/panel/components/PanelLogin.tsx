@@ -1,6 +1,7 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TurnstileChallenge } from "../../captcha/TurnstileChallenge";
+import { challengeOrigin, TurnstileChallenge } from "../../captcha/TurnstileChallenge";
+import { loadPanelOrigin } from "../../captcha/panel-origin";
 import {
   InstrumentProvider,
   useInstrument,
@@ -85,6 +86,9 @@ const PanelLoginForm = ({
   logo: LoginLogoOptions;
 }) => {
   const [challengeVisible, setChallengeVisible] = useState(false);
+  // Learn where the security check is framed from before the buyer asks for a code, so it opens at once.
+  // The same origin the challenge below is given (its `host`), so the preload answers the challenge's lookup.
+  useEffect(() => { void loadPanelOrigin(challengeOrigin(host)); }, [host]);
   const challengeWaiter = useRef<((token: string | null) => void) | undefined>(undefined);
   const captchaToken = useRef("");
   const beforeSend = useMemo(() => () => new Promise<boolean>((resolve) => {
@@ -93,6 +97,9 @@ const PanelLoginForm = ({
     challengeWaiter.current = (token) => { window.clearTimeout(timer); challengeWaiter.current = undefined; setChallengeVisible(false); captchaToken.current = token ?? ""; resolve(token !== null); };
   }), []);
   const instrument = useInstrumentContext();
+  // The hashed id of the shop, so the server scopes the buyer token to it. The
+  // all-shops panel (no project, stored under `*`) sends none.
+  const shopID = projectID || undefined;
   const { mutateAsync: loginUserAsync } = useMutation(
     rpcProvider.publicApi.userPanelLogin,
   );
@@ -104,7 +111,7 @@ const PanelLoginForm = ({
     () => ({
       async send(email) {
         try {
-          const response = await loginUserAsync({ email, turnstileToken: captchaToken.current });
+          const response = await loginUserAsync({ email, turnstileToken: captchaToken.current, projectId: shopID });
           captchaToken.current = "";
           if (response.result.case === "success") {
             return {
@@ -117,6 +124,7 @@ const PanelLoginForm = ({
             ok: false,
             kind: panelFailureKind(
               response.result.case === "failure" ? response.result.value : 0,
+              "send",
             ),
           };
         } catch (cause) {
@@ -129,6 +137,7 @@ const PanelLoginForm = ({
             code: parseInt(code, 10),
             email,
             challengeId,
+            projectId: shopID,
           });
           if (response.result.case === "accessToken" && response.result.value) {
             return { ok: true, value: { accessToken: response.result.value } };
@@ -144,7 +153,7 @@ const PanelLoginForm = ({
         }
       },
     }),
-    [loginUserAsync, verifyCodeAsync],
+    [loginUserAsync, verifyCodeAsync, shopID],
   );
 
   const login = useEmailCodeLogin<PanelLoginResult>({
@@ -195,7 +204,7 @@ const PanelLoginForm = ({
             emailInputId="email"
             codeInputId="verify-code"
           />
-          {challengeVisible && <TurnstileChallenge action="panel_login" locale={locale} onToken={(token) => challengeWaiter.current?.(token)} onFailure={() => challengeWaiter.current?.(null)} />}
+          {challengeVisible && <TurnstileChallenge action="panel_login" locale={locale} host={host} onToken={(token) => challengeWaiter.current?.(token)} onFailure={() => challengeWaiter.current?.(null)} />}
         </CardContent>
       </Card>
     </main>

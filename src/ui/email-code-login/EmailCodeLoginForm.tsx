@@ -253,7 +253,9 @@ export function EmailCodeLoginForm({
         <Button
           type="button"
           variant={dead ? "default" : "outline"}
-          disabled={login.isBusy || (!dead && login.secondsLeft > 0)}
+          disabled={
+            login.isBusy || login.resendBlocked || (!dead && login.secondsLeft > 0)
+          }
           aria-busy={resending}
           className={dead ? buttonBase : "h-11 w-full"}
           onClick={() => void login.resend()}
