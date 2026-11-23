@@ -16,6 +16,7 @@ import {
   UserPanelLoginWithCodeRequestSchema,
   UserPanelLoginWithCodeResponseSchema,
 } from "../gen/proto/public/v1/public_api_pb";
+import { resetPanelOriginCache } from "../captcha/panel-origin.ts";
 import { setPanelConfig } from "./config.ts";
 import { panelFailureKind } from "./login-adapter.ts";
 import { resolvePanelLoginTexts } from "./login-texts.ts";
@@ -47,6 +48,8 @@ let codeResult: CodeResult;
 let loginRequests: Array<ReturnType<typeof readLogin>>;
 let codeRequests: Array<ReturnType<typeof readCode>>;
 let throwOnCode = false;
+/** What `GET /api/panel-origin` answers: a body, or "fail" for a network error. */
+let panelOriginAnswer: unknown = { panelOrigin: "" };
 
 const readLogin = (body: Uint8Array) => fromBinary(UserPanelLoginRequestSchema, body);
 const readCode = (body: Uint8Array) => fromBinary(UserPanelLoginWithCodeRequestSchema, body);
@@ -66,10 +69,16 @@ beforeEach(() => {
   loginRequests = [];
   codeRequests = [];
   throwOnCode = false;
+  panelOriginAnswer = { panelOrigin: "" };
+  resetPanelOriginCache();
   loginResult = { case: "success", value: { retryIn: 60, challengeId: "challenge-7" } };
   codeResult = { case: "accessToken", value: "panel-token" };
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/api/panel-origin")) {
+      if (panelOriginAnswer === "fail") throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(panelOriginAnswer), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     if (url.endsWith("/UserPanelLogin")) {
       loginRequests.push(readLogin(init!.body as Uint8Array));
       return proto(UserPanelLoginResponseSchema, { result: loginResult });
@@ -501,5 +510,64 @@ describe("PanelLogin", () => {
     } finally {
       (globalThis as { window: unknown }).window = savedWindow;
     }
+  });
+});
+
+describe("PanelLogin: where the security check is framed from", () => {
+  const PANEL = "https://konto.bitsnap.pl";
+  const API = "https://bitsnap.pl";
+  const frame = () => doc().querySelector("iframe");
+  const frameFrom = (origin: string, message: Record<string, unknown> = { disabled: true }) =>
+    React.act(async () => {
+      page.win.dispatchEvent(new page.win.MessageEvent("message", {
+        origin,
+        source: frame()?.contentWindow ?? null,
+        data: { type: "bitsnap:turnstile", action: "panel_login", ...message },
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+  async function askForCode() {
+    await type(emailInput(), "jane@example.com");
+    await submit(doc().querySelector("form")!);
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+  }
+
+  it("frames the panel origin and takes the widget's message from that origin only", async () => {
+    panelOriginAnswer = { panelOrigin: PANEL };
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${PANEL}/challenge?action=panel_login&`), frame()?.getAttribute("src") ?? "no iframe");
+    await frameFrom(API);
+    await frameFrom("https://evil.example");
+    await frameFrom("*");
+    assert.equal(loginRequests.length, 0, "a message from the API origin or any other origin is ignored");
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 1, "the panel origin's message goes through");
+  });
+
+  it("frames the API origin as before while the server has no panel origin", async () => {
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+    await frameFrom(PANEL);
+    assert.equal(loginRequests.length, 0);
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+  });
+
+  it("falls back to the API origin when the panel origin cannot be read", async () => {
+    panelOriginAnswer = "fail";
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+    await frameFrom(API);
+    assert.equal(loginRequests.length, 1);
+  });
+
+  it("ignores an answer that is not an exact http(s) origin", async () => {
+    panelOriginAnswer = { panelOrigin: "javascript:alert(1)" };
+    await mount();
+    await askForCode();
+    assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
   });
 });

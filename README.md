@@ -91,6 +91,14 @@ button, since asking again would fail the same way. The shared texts of the othe
 e-mail-code logins (`BitsnapReturns`, notifications) gain the same key. No
 change is needed in a shop's code.
 
+The panel login's security check (Cloudflare Turnstile) is now framed from the
+panel origin the server reports at `GET <host>/api/panel-origin` (for example
+`https://konto.bitsnap.pl`, a host that never runs a seller's code), so the
+server can tell which shop's page asked for the code. The widget's message is
+accepted from exactly that origin and no other. While the server reports none
+(or the request fails), the check is framed from the API host, as in 1.32. No
+change is needed in a shop's code.
+
 ## 1.32.0
 
 The cart opens at once, is smaller, has a new look and can open as a dialog.

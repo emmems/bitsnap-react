@@ -1,6 +1,7 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TurnstileChallenge } from "../../captcha/TurnstileChallenge";
+import { challengeOrigin, TurnstileChallenge } from "../../captcha/TurnstileChallenge";
+import { loadPanelOrigin } from "../../captcha/panel-origin";
 import {
   InstrumentProvider,
   useInstrument,
@@ -85,6 +86,8 @@ const PanelLoginForm = ({
   logo: LoginLogoOptions;
 }) => {
   const [challengeVisible, setChallengeVisible] = useState(false);
+  // Learn where the security check is framed from before the buyer asks for a code, so it opens at once.
+  useEffect(() => { void loadPanelOrigin(challengeOrigin()); }, []);
   const challengeWaiter = useRef<((token: string | null) => void) | undefined>(undefined);
   const captchaToken = useRef("");
   const beforeSend = useMemo(() => () => new Promise<boolean>((resolve) => {

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getPanelConfig } from "../panel/config";
 
+import { knownPanelOrigin, loadPanelOrigin } from "./panel-origin";
+
 import { challengeUrl, parseTurnstileMessage as parseMessage, type TurnstileAction, type TurnstileBinding } from "./protocol";
 
 export { challengeUrl, type TurnstileAction, type TurnstileBinding } from "./protocol";
@@ -40,9 +42,24 @@ export function TurnstileChallenge({ action, locale = "pl", host, formContext, a
   const [refresh, setRefresh] = useState(0);
   const [expired, setExpired] = useState(false);
   const language = locale.toLowerCase().startsWith("en") ? "en" : "pl";
-  const origin = challengeOrigin(host);
+  const apiOrigin = challengeOrigin(host);
+  // The panel login is framed from the server's panel origin when it has one (its Turnstile page
+  // there is the one whose page report the server trusts), and only that origin's messages count:
+  // never the API origin beside it, never a wildcard. Other actions use the API origin as before.
+  const panelOrigin = action === "panel_login" ? knownPanelOrigin(apiOrigin) : "";
+  const waiting = panelOrigin === undefined;
+  const [, askedPanelOrigin] = useState(0);
+  useEffect(() => {
+    if (!waiting) return;
+    let live = true;
+    void loadPanelOrigin(apiOrigin).then(() => { if (live) askedPanelOrigin((n) => n + 1); });
+    return () => { live = false; };
+  }, [waiting, apiOrigin]);
+  const origin = panelOrigin || apiOrigin;
   const src = useMemo(() => challengeUrl(origin, action, language, window.location.origin, { formContext, attempt }), [action, language, origin, formContext, attempt]);
   useEffect(() => {
+    // Nothing is framed until the origin is known, so no message can be for this page yet.
+    if (waiting) return;
     const onMessage = (event: MessageEvent) => {
       if (!event.source || (event.source !== iframe.current?.contentWindow && event.source !== popup.current)) return;
       const result = parseTurnstileMessage(event.origin, event.data, action, origin, { formContext, attempt });
@@ -58,7 +75,8 @@ export function TurnstileChallenge({ action, locale = "pl", host, formContext, a
     };
     window.addEventListener("message", onMessage);
     return () => { window.removeEventListener("message", onMessage); clearExpiry(); popup.current?.close(); popup.current = null; };
-  }, [action, refresh, origin, formContext, attempt]);
+  }, [action, refresh, origin, formContext, attempt, waiting]);
+  if (waiting) return <section className="grid gap-2" aria-live="polite" aria-busy="true"><div className="min-h-24 w-full" /></section>;
   return <section className="grid gap-2" aria-live="polite">
     <iframe ref={iframe} key={refresh} title={language === "en" ? "Turnstile security check" : "Weryfikacja bezpieczeństwa Turnstile"} src={src} className="min-h-24 w-full rounded-md border bg-background text-foreground" />
     <button type="button" className="text-sm underline" onClick={() => { popup.current = window.open(src, "bitsnap-turnstile", "popup,width=520,height=680"); }}>{language === "en" ? "Open in a new window" : "Otwórz w nowym oknie"}</button>

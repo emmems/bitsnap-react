@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { setHost } from "../panel/config";
+import { knownPanelOrigin, loadPanelOrigin, parsePanelOrigin, resetPanelOriginCache } from "./panel-origin";
 import { challengeOrigin, challengeUrl, parseTurnstileMessage } from "./TurnstileChallenge";
 
 describe("Turnstile challenge protocol", () => {
@@ -58,3 +59,68 @@ describe("Turnstile challenge protocol", () => {
     assert.deepEqual(parseTurnstileMessage("https://bitsnap.pl", { type: "bitsnap:turnstile", action: "panel_login", token: "p", formContext: "x", attempt: "y" }, "panel_login"), { kind: "token", token: "p" });
   });
 });
+
+describe("the panel login's challenge origin", () => {
+  const API = "https://bitsnap.pl";
+  const PANEL = "https://konto.bitsnap.pl";
+  const message = { type: "bitsnap:turnstile", action: "panel_login", token: "t" };
+
+  it("takes the widget's message from the panel origin only, once the server has one", () => {
+    assert.deepEqual(parseTurnstileMessage(PANEL, message, "panel_login", PANEL), { kind: "token", token: "t" });
+    assert.equal(parseTurnstileMessage(API, message, "panel_login", PANEL), null);
+    assert.equal(parseTurnstileMessage("https://evil.example", message, "panel_login", PANEL), null);
+    assert.equal(parseTurnstileMessage("*", message, "panel_login", PANEL), null);
+    assert.equal(parseTurnstileMessage("https://konto.bitsnap.pl.evil.example", message, "panel_login", PANEL), null);
+  });
+
+  it("keeps today's origin when there is no panel origin", () => {
+    assert.deepEqual(parseTurnstileMessage(API, message, "panel_login", API), { kind: "token", token: "t" });
+    assert.equal(parseTurnstileMessage(PANEL, message, "panel_login", API), null);
+  });
+
+  it("builds the challenge URL on the panel origin", () => {
+    const url = new URL(challengeUrl(PANEL, "panel_login", "pl", "https://shop.example"));
+    assert.equal(url.origin, PANEL);
+    assert.equal(url.pathname, "/challenge");
+    assert.equal(url.searchParams.get("action"), "panel_login");
+    assert.equal(url.searchParams.get("origin"), "https://shop.example");
+  });
+
+  it("accepts only an exact origin from the API", () => {
+    assert.equal(parsePanelOrigin({ panelOrigin: PANEL }, API), PANEL);
+    assert.equal(parsePanelOrigin({ panelOrigin: "" }, API), "");
+    assert.equal(parsePanelOrigin({}, API), "");
+    assert.equal(parsePanelOrigin(null, API), "");
+    assert.equal(parsePanelOrigin({ panelOrigin: 5 }, API), "");
+    assert.equal(parsePanelOrigin({ panelOrigin: `${PANEL}/path` }, API), "");
+    assert.equal(parsePanelOrigin({ panelOrigin: `${PANEL}/` }, API), "");
+    assert.equal(parsePanelOrigin({ panelOrigin: "javascript:alert(1)" }, API), "");
+    assert.equal(parsePanelOrigin({ panelOrigin: "http://konto.bitsnap.pl" }, API), "", "no downgrade from an https API");
+    assert.equal(parsePanelOrigin({ panelOrigin: "http://localhost:4322" }, "http://localhost:4321"), "http://localhost:4322");
+  });
+
+  it("asks once per API origin, remembers the answer, and retries a failure only after a while", async () => {
+    resetPanelOriginCache();
+    let calls = 0;
+    let answer: () => Response = () => new Response(JSON.stringify({ panelOrigin: PANEL }));
+    const fetchImpl = (async (input: string) => { calls += 1; assert.equal(input, `${API}/api/panel-origin`); return answer(); }) as unknown as typeof fetch;
+    assert.equal(knownPanelOrigin(API), undefined);
+    await Promise.all([loadPanelOrigin(API, fetchImpl), loadPanelOrigin(API, fetchImpl)]);
+    assert.equal(calls, 1);
+    assert.equal(knownPanelOrigin(API), PANEL);
+    await loadPanelOrigin(API, fetchImpl);
+    assert.equal(calls, 1);
+
+    resetPanelOriginCache();
+    answer = () => { throw new TypeError("offline"); };
+    await loadPanelOrigin(API, fetchImpl);
+    assert.equal(knownPanelOrigin(API), "", "a failure falls back to the API origin");
+    assert.equal(knownPanelOrigin(API, Date.now() + 31_000), undefined, "and is asked again later");
+    resetPanelOriginCache();
+    answer = () => new Response("nope", { status: 503 });
+    await loadPanelOrigin(API, fetchImpl);
+    assert.equal(knownPanelOrigin(API), "");
+    resetPanelOriginCache();
+  });
+});
+
