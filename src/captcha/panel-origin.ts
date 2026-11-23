@@ -6,16 +6,17 @@
  * code. `GET <api>/api/panel-origin` answers `{"panelOrigin": "<origin>"}`, or `""` while the server
  * has none. The `panel_login` challenge is then framed from that origin, and its message is accepted
  * from exactly that origin (see `TurnstileChallenge`).
+ *
+ * The answer is final for the life of the page, whatever it is: a 404 from an older server, a 503 or a
+ * network error all mean "" (frame the API origin). A later change of answer would swap the iframe's
+ * origin in the middle of a challenge, which closes the popup and drops the token expiry.
  */
 
-const FAILURE_RETRY_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 5_000;
 
-/** API origin -> panel origin ("" = the server has none). Kept for the life of the page. */
+/** API origin -> panel origin ("" = the server has none, or could not be asked). Kept for the life of the page. */
 const known = new Map<string, string>();
 const pending = new Map<string, Promise<void>>();
-/** API origin -> when the last request failed: the API origin is used until the retry delay passes. */
-const failedAt = new Map<string, number>();
 
 /**
  * The origin in a `/api/panel-origin` answer, or "" when it is not one we may use: not an exact
@@ -36,36 +37,30 @@ export function parsePanelOrigin(body: unknown, apiOrigin: string): string {
 }
 
 /**
- * What is known without asking: the panel origin, "" (none, or the request failed a moment ago: use
- * the API origin), or undefined (not asked yet, or being asked).
+ * What is known without asking: the panel origin, "" (none, or it could not be read: use the API
+ * origin), or undefined (not asked yet, or being asked). Once defined it never changes.
  */
-export function knownPanelOrigin(apiOrigin: string, now = Date.now()): string | undefined {
-  const origin = known.get(apiOrigin);
-  if (origin !== undefined) return origin;
-  const failed = failedAt.get(apiOrigin);
-  if (failed !== undefined) {
-    if (now - failed < FAILURE_RETRY_MS) return "";
-    failedAt.delete(apiOrigin);
-  }
-  return undefined;
+export function knownPanelOrigin(apiOrigin: string): string | undefined {
+  return known.get(apiOrigin);
 }
 
-/** Asks the API once per page (a failure is retried after 30 seconds). Never rejects. */
+/** Asks the API once per page, whatever the answer. Never rejects. */
 export function loadPanelOrigin(apiOrigin: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  if (knownPanelOrigin(apiOrigin) !== undefined) return Promise.resolve();
+  if (known.has(apiOrigin)) return Promise.resolve();
   const running = pending.get(apiOrigin);
   if (running) return running;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const request = (async () => {
+    let origin = "";
     try {
       const response = await fetchImpl(`${apiOrigin}/api/panel-origin`, { signal: controller.signal });
-      if (!response.ok) throw new Error(`panel-origin ${response.status}`);
-      known.set(apiOrigin, parsePanelOrigin(await response.json(), apiOrigin));
+      if (response.ok) origin = parsePanelOrigin(await response.json(), apiOrigin);
     } catch {
-      failedAt.set(apiOrigin, Date.now());
+      // Network error, timeout or a body that is not JSON: the API origin, for the rest of the page.
     } finally {
       clearTimeout(timer);
+      known.set(apiOrigin, origin);
       pending.delete(apiOrigin);
     }
   })();
@@ -77,5 +72,4 @@ export function loadPanelOrigin(apiOrigin: string, fetchImpl: typeof fetch = fet
 export function resetPanelOriginCache(): void {
   known.clear();
   pending.clear();
-  failedAt.clear();
 }

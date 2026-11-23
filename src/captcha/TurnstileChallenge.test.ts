@@ -99,7 +99,7 @@ describe("the panel login's challenge origin", () => {
     assert.equal(parsePanelOrigin({ panelOrigin: "http://localhost:4322" }, "http://localhost:4321"), "http://localhost:4322");
   });
 
-  it("asks once per API origin, remembers the answer, and retries a failure only after a while", async () => {
+  it("asks once per API origin and remembers any answer for the life of the page", async () => {
     resetPanelOriginCache();
     let calls = 0;
     let answer: () => Response = () => new Response(JSON.stringify({ panelOrigin: PANEL }));
@@ -111,15 +111,31 @@ describe("the panel login's challenge origin", () => {
     await loadPanelOrigin(API, fetchImpl);
     assert.equal(calls, 1);
 
-    resetPanelOriginCache();
-    answer = () => { throw new TypeError("offline"); };
-    await loadPanelOrigin(API, fetchImpl);
-    assert.equal(knownPanelOrigin(API), "", "a failure falls back to the API origin");
-    assert.equal(knownPanelOrigin(API, Date.now() + 31_000), undefined, "and is asked again later");
-    resetPanelOriginCache();
-    answer = () => new Response("nope", { status: 503 });
-    await loadPanelOrigin(API, fetchImpl);
-    assert.equal(knownPanelOrigin(API), "");
+    const failures: Array<[string, () => Response]> = [
+      ["a network error", () => { throw new TypeError("offline"); }],
+      ["a 404 from an older server", () => new Response("not found", { status: 404 })],
+      ["a 503", () => new Response("nope", { status: 503 })],
+      ["a body that is not JSON", () => new Response("<html>", { status: 200 })],
+    ];
+    for (const [name, failure] of failures) {
+      resetPanelOriginCache();
+      calls = 0;
+      answer = failure;
+      await loadPanelOrigin(API, fetchImpl);
+      assert.equal(calls, 1, name);
+      assert.equal(knownPanelOrigin(API), "", `${name} falls back to the API origin`);
+    }
+    // The fallback is final for the page: nothing asks again, and the answer never flips back to "unknown".
+    const realNow = Date.now;
+    Date.now = () => realNow() + 10 * 60_000;
+    try {
+      calls = 0;
+      answer = () => new Response(JSON.stringify({ panelOrigin: PANEL }));
+      assert.equal(knownPanelOrigin(API), "", "still the API origin long after the failure");
+      await loadPanelOrigin(API, fetchImpl);
+      assert.equal(calls, 0);
+      assert.equal(knownPanelOrigin(API), "");
+    } finally { Date.now = realNow; }
     resetPanelOriginCache();
   });
 });

@@ -77,6 +77,9 @@ beforeEach(() => {
     const url = String(input);
     if (url.endsWith("/api/panel-origin")) {
       if (panelOriginAnswer === "fail") throw new TypeError("Failed to fetch");
+      if (panelOriginAnswer === "404" || panelOriginAnswer === "503") {
+        return new Response("no", { status: Number(panelOriginAnswer) });
+      }
       return new Response(JSON.stringify(panelOriginAnswer), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     if (url.endsWith("/UserPanelLogin")) {
@@ -569,5 +572,63 @@ describe("PanelLogin: where the security check is framed from", () => {
     await mount();
     await askForCode();
     assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`));
+  });
+
+  it("frames the API origin when an older server answers 404, and when it answers 503", async () => {
+    for (const answer of ["404", "503"]) {
+      panelOriginAnswer = answer;
+      resetPanelOriginCache();
+      await mount();
+      await askForCode();
+      assert.ok(frame()?.getAttribute("src")?.startsWith(`${API}/challenge?action=panel_login&`), answer);
+      await frameFrom(API);
+      assert.equal(loginRequests.length, 1, answer);
+      loginRequests = [];
+      await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+      doc().body.innerHTML = "";
+      page.win.localStorage.clear();
+      page.win.sessionStorage.clear();
+    }
+  });
+
+  for (const answer of ["fail", "404", "503"]) {
+    it(`keeps the same challenge frame across re-renders long after a failed origin request (${answer})`, async () => {
+      panelOriginAnswer = answer;
+      await mount();
+      await askForCode();
+      const first = frame();
+      assert.ok(first, "the challenge is open");
+      const src = first.getAttribute("src");
+      assert.ok(src?.startsWith(`${API}/challenge?action=panel_login&`));
+      const realNow = Date.now;
+      let offset = 0;
+      Date.now = () => realNow() + offset;
+      try {
+        for (const later of [31_000, 120_000, 600_000]) {
+          offset = later;
+          await type(emailInput(), `jane${later}@example.com`);
+          await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+          assert.equal(frame(), first, `the same iframe element after ${later} ms`);
+          assert.equal(frame()?.getAttribute("src"), src);
+        }
+      } finally { Date.now = realNow; }
+      await frameFrom(API);
+      assert.equal(loginRequests.length, 1, "the challenge still completes");
+    });
+  }
+
+  it("fixes the origin of a mounted challenge: a later server answer does not move the frame", async () => {
+    await mount();
+    await askForCode();
+    const first = frame();
+    const src = first?.getAttribute("src");
+    assert.ok(src?.startsWith(`${API}/challenge?action=panel_login&`));
+    // Even if the page-wide answer were replaced, this mount keeps its origin.
+    panelOriginAnswer = { panelOrigin: PANEL };
+    resetPanelOriginCache();
+    await type(emailInput(), "other@example.com");
+    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+    assert.equal(frame(), first);
+    assert.equal(frame()?.getAttribute("src"), src);
   });
 });

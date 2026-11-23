@@ -46,7 +46,15 @@ export function TurnstileChallenge({ action, locale = "pl", host, formContext, a
   // The panel login is framed from the server's panel origin when it has one (its Turnstile page
   // there is the one whose page report the server trusts), and only that origin's messages count:
   // never the API origin beside it, never a wildcard. Other actions use the API origin as before.
-  const panelOrigin = action === "panel_login" ? knownPanelOrigin(apiOrigin) : "";
+  // Once known, the origin is fixed for this mount: a re-render never reads a different one, so the
+  // iframe, the popup and the token expiry are not torn down in the middle of a challenge.
+  const fixedOrigin = useRef<{ api: string; action: string; panel: string } | undefined>(undefined);
+  if (fixedOrigin.current && (fixedOrigin.current.api !== apiOrigin || fixedOrigin.current.action !== action)) fixedOrigin.current = undefined;
+  if (!fixedOrigin.current) {
+    const known = action === "panel_login" ? knownPanelOrigin(apiOrigin) : "";
+    if (known !== undefined) fixedOrigin.current = { api: apiOrigin, action, panel: known };
+  }
+  const panelOrigin = fixedOrigin.current?.panel;
   const waiting = panelOrigin === undefined;
   const [, askedPanelOrigin] = useState(0);
   useEffect(() => {
