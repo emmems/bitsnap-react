@@ -15,6 +15,7 @@ import {
 } from "../return-url";
 
 import PanelNotificationsComponent from "./PanelNotifications";
+import PanelLoyaltyComponent from "./PanelLoyalty";
 import PanelOrderHistoryComponent from "./PanelOrderHistory";
 import PanelPlansComponent from "./PanelPlans";
 import PanelReturnsComponent from "./PanelReturns";
@@ -37,6 +38,7 @@ export type PanelScreen =
   | "order-details"
   | "returns"
   | "return-details"
+  | "loyalty"
   | "course"
   | "messages";
 
@@ -159,7 +161,7 @@ const PanelPage = ({
       "plans",
       "orders",
       "order-details",
-      ...(isGlobal ? [] : ["returns", "return-details"]),
+      ...(isGlobal ? [] : ["returns", "return-details", "loyalty"]),
       "course",
       "messages",
     ].includes(value as string);
@@ -343,6 +345,7 @@ useEffect(() => {
         projectID={projectID}
         showMessages={chat.visible || activeScreen === "messages"}
         showReturns={!isGlobal}
+        showLoyalty={!isGlobal}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto w-full p-5 pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-5">
@@ -446,6 +449,13 @@ useEffect(() => {
               openOrders={() => openScreen("orders")}
             />
           )}
+
+        {!isGlobal && activeScreen === "loyalty" && accessToken && (
+          <PanelLoyaltyComponent
+            projectID={projectID ?? ""}
+            accessToken={accessToken}
+          />
+        )}
 
         {activeScreen === "profile" && (
           <PanelProfileComponent

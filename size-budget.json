@@ -55,7 +55,7 @@
       "jsGzipKB": 16.9
     },
     "returns": {
-      "jsGzipKB": 112.1
+      "jsGzipKB": 113.5
     },
     "viewer3d": {
       "jsGzipKB": 16.6
@@ -63,8 +63,8 @@
   },
   "css": {
     "dist/cart.css": 4.5,
-    "dist/index.css": 24.0
+    "dist/index.css": 24.5
   },
   "maxDependencies": 27,
-  "tarballBytes": 1896000
+  "tarballBytes": 1930000
 }

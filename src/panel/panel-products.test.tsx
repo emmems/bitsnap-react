@@ -377,14 +377,14 @@ async function mountPanelView(view: React.ReactNode) {
 }
 
 describe("panel navigation and orders quick wins", () => {
-  it("renders four shared navigation items with lucide icons and an active page", async () => {
+  it("renders five shared navigation items with lucide icons and an active page", async () => {
     const Header = (await import("./components/PanelProductHeader")).default;
     const selected: string[] = [];
     const container = await mountPanelView(<Header activeScreen="orders" setActiveScreen={screen => selected.push(screen)} setParams={() => {}} logout={() => {}} />);
     const nav = container.querySelector("nav")!;
     const buttons = Array.from(nav.querySelectorAll("button"));
-    assert.deepEqual(buttons.map(button => button.textContent), ["Biblioteka", "Zamówienia", "Zwroty", "Konto"]);
-    assert.equal(nav.querySelectorAll("svg.lucide").length, 4);
+    assert.deepEqual(buttons.map(button => button.textContent), ["Biblioteka", "Zamówienia", "Lojalność", "Zwroty", "Konto"]);
+    assert.equal(nav.querySelectorAll("svg.lucide").length, 5);
     assert.equal(nav.querySelector("img"), null);
     assert.equal(nav.querySelector('[aria-current="page"]')?.textContent, "Zamówienia");
     await React.act(async () => buttons[0].click());

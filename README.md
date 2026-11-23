@@ -75,7 +75,7 @@ New texts: `expressPending`, `expressConfirmed`, `expressFailed`,
 `expressCartConflict`, `expressPriceChanged`, `expressProductUnavailable` (EN/PL
 defaults, overridable through `texts`).
 
-## 1.33.0
+## 1.34.0
 
 `PanelLogin` tells the server which shop it signs the customer in to: it sends
 the shop's project id (`projectID` of the panel) with the code request and with
@@ -96,7 +96,8 @@ panel origin the server reports at `GET <host>/api/panel-origin` (for example
 `https://konto.bitsnap.pl`, a host that never runs a seller's code), so the
 server can tell which shop's page asked for the code. The widget's message is
 accepted from exactly that origin and no other. While the server reports none
-(or the request fails), the check is framed from the API host, as in 1.32. No
+(or the request fails), the check is framed from the API host, as in 1.32; a
+failed request is not remembered, so the next login attempt asks again. No
 change is needed in a shop's code.
 
 ## 1.32.0

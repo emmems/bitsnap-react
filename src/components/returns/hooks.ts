@@ -364,6 +364,7 @@ export type CreateReturnInput = {
   orderId: string;
   items: { lineId: string; quantity: number }[];
   note?: string;
+  preferredRefundMethod?: "money" | "loyalty_points";
 };
 
 /** Input of the `bitsnap-react` 1.6.0 `mutateAsync`/`mutate`. */
@@ -431,6 +432,7 @@ export function useCreateReturn(): UseCreateReturnResult {
           items: input.items,
           note: input.note ?? "",
           idempotencyKey: key,
+          preferredRefundMethod: input.preferredRefundMethod ?? "",
         });
         // Quantities and the list of returns changed.
         void queryClient.invalidateQueries({ queryKey: returnsQueryKey() });

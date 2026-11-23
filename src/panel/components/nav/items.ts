@@ -1,4 +1,4 @@
-import { Library, MessageCircle, Receipt, Undo2, User } from "lucide-react";
+import { Award, Library, MessageCircle, Receipt, Undo2, User } from "lucide-react";
 import type { PanelTexts } from "../../texts";
 import type { PanelScreen } from "../../types";
 
@@ -6,6 +6,7 @@ export const panelNavItems = [
   { screen: "products", label: "libraryNavLabel", icon: Library },
   { screen: "messages", label: "messagesNavLabel", icon: MessageCircle },
   { screen: "orders", label: "ordersNavLabel", icon: Receipt },
+  { screen: "loyalty", label: "loyaltyNavLabel", icon: Award },
   { screen: "returns", label: "returnsNavLabel", icon: Undo2 },
   { screen: "profile", label: "accountNavLabel", icon: User },
 ] as const satisfies ReadonlyArray<{ screen: PanelScreen; label: keyof PanelTexts; icon: typeof Library }>;

@@ -98,7 +98,7 @@ For Astro, omit `"use client"`, and mount with `client:load` or `client:visible`
   the client before mounting `<PanelProvider><Panel /></PanelProvider>`.
   Mount `<PanelProvider><PanelLogin /></PanelProvider>` at that login URL.
   `PanelLogin` takes optional `locale` (`"en"`; Polish by default) and `texts`.
-  Since 1.33.0 it sends the shop's project id at login, so the buyer token is
+  Since 1.34.0 it sends the shop's project id at login, so the buyer token is
   scoped to that shop (the all-shops panel sends none). Its security check is
   framed from the panel origin the server reports at `GET <host>/api/panel-origin`
   (the API host when the server has none); the widget's message is accepted from
