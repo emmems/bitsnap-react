@@ -93,6 +93,9 @@ const PanelLoginForm = ({
     challengeWaiter.current = (token) => { window.clearTimeout(timer); challengeWaiter.current = undefined; setChallengeVisible(false); captchaToken.current = token ?? ""; resolve(token !== null); };
   }), []);
   const instrument = useInstrumentContext();
+  // The hashed id of the shop, so the server scopes the buyer token to it. The
+  // all-shops panel (no project, stored under `*`) sends none.
+  const shopID = projectID || undefined;
   const { mutateAsync: loginUserAsync } = useMutation(
     rpcProvider.publicApi.userPanelLogin,
   );
@@ -104,7 +107,7 @@ const PanelLoginForm = ({
     () => ({
       async send(email) {
         try {
-          const response = await loginUserAsync({ email, turnstileToken: captchaToken.current });
+          const response = await loginUserAsync({ email, turnstileToken: captchaToken.current, projectId: shopID });
           captchaToken.current = "";
           if (response.result.case === "success") {
             return {
@@ -129,6 +132,7 @@ const PanelLoginForm = ({
             code: parseInt(code, 10),
             email,
             challengeId,
+            projectId: shopID,
           });
           if (response.result.case === "accessToken" && response.result.value) {
             return { ok: true, value: { accessToken: response.result.value } };
@@ -144,7 +148,7 @@ const PanelLoginForm = ({
         }
       },
     }),
-    [loginUserAsync, verifyCodeAsync],
+    [loginUserAsync, verifyCodeAsync, shopID],
   );
 
   const login = useEmailCodeLogin<PanelLoginResult>({

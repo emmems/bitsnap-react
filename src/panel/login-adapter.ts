@@ -28,6 +28,8 @@ export function panelFailureKind(failure: FailureMessage): FailureKind {
       return "deliveryFailed";
     case FailureMessage.DELIVERY_METHOD_UNAVAILABLE:
       return "deliveryUnavailable";
+    case FailureMessage.UNAUTHORIZED:
+      return "wrongShop";
     default:
       return "unknown";
   }

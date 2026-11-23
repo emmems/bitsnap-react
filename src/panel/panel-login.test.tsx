@@ -157,6 +157,7 @@ describe("panel failure mapping", () => {
       [FailureMessage.RATE_LIMITED]: "rateLimited",
       [FailureMessage.CODE_EXPIRED]: "expired",
       [FailureMessage.TOO_MANY_ATTEMPTS]: "tooManyAttempts",
+      [FailureMessage.UNAUTHORIZED]: "wrongShop",
     };
     for (const [value, kind] of Object.entries(expected)) {
       assert.equal(panelFailureKind(Number(value)), kind, FailureMessage[Number(value)]);
@@ -235,6 +236,54 @@ describe("PanelLogin", () => {
       await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
       doc().body.innerHTML = "";
     }
+  });
+
+  it("sends the shop's project id with the code request and with the code", async () => {
+    await mount();
+    await requestCode();
+    assert.equal(loginRequests[0]!.projectId, TEST_KEY);
+    await type(codeInput(), "012345");
+    await settle();
+    assert.equal(codeRequests.length, 1);
+    assert.equal(codeRequests[0]!.projectId, TEST_KEY);
+  });
+
+  it("sends no project id from the all-shops panel", async () => {
+    setPanelConfig({ projectID: "", host: undefined });
+    await mount();
+    await requestCode();
+    await type(codeInput(), "012345");
+    await settle();
+    assert.equal(loginRequests.length, 1);
+    assert.equal(loginRequests[0]!.projectId, undefined);
+    assert.equal(codeRequests.length, 1);
+    assert.equal(codeRequests[0]!.projectId, undefined);
+  });
+
+  it("says the code is for another shop when the server refuses it, and offers a new code", async () => {
+    codeResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount();
+    await requestCode();
+    await type(codeInput(), "123456");
+    await settle();
+    assert.equal(
+      alertText(),
+      "Ten kod logowania jest do innego sklepu. Poproś o nowy kod na tej stronie.",
+    );
+    assert.equal(alertText(), texts.wrongShop);
+    assert.notEqual(alertText(), texts.generic);
+    assert.ok(buttonWith(texts.resendNew), "a new code can be requested");
+    assert.equal(codeInput().disabled, true);
+  });
+
+  it("says it in English with an English locale, and also for a refused code request", async () => {
+    loginResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount({ locale: "en" });
+    await requestCode();
+    assert.equal(
+      alertText(),
+      "This sign-in code is for another shop. Request a new code on this page.",
+    );
   });
 
   it("tells the customer when the request does not get through", async () => {

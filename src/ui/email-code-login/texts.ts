@@ -57,6 +57,8 @@ export type EmailCodeTexts = {
   deliveryUnavailable: string;
   captchaRequired: string;
   captchaInvalid: string;
+  /** The code was requested for another shop, or this shop refused the sign-in. */
+  wrongShop: string;
   network: string;
   generic: string;
 };
@@ -99,6 +101,8 @@ export const EMAIL_CODE_TEXT_TABLES: LocaleTables<EmailCodeTextKey> = {
       "Nie możemy teraz wysłać kodu na ten adres. Spróbuj później.",
     captchaRequired: "Potwierdź, że jesteś człowiekiem, aby wysłać kod.",
     captchaInvalid: "Nie udało się zweryfikować. Spróbuj ponownie.",
+    wrongShop:
+      "Ten kod logowania jest do innego sklepu. Poproś o nowy kod na tej stronie.",
     network: "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.",
     generic: "Coś poszło nie tak. Spróbuj ponownie.",
   },
@@ -137,6 +141,8 @@ export const EMAIL_CODE_TEXT_TABLES: LocaleTables<EmailCodeTextKey> = {
       "We cannot send a code to this address right now. Try again later.",
     captchaRequired: "Complete the security check before requesting a code.",
     captchaInvalid: "Verification failed. Please try again.",
+    wrongShop:
+      "This sign-in code is for another shop. Request a new code on this page.",
     network: "Cannot reach the server. Check your connection and try again.",
     generic: "Something went wrong. Please try again.",
   },

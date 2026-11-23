@@ -21,6 +21,8 @@ export type FailureKind =
   | "deliveryUnavailable"
   | "captchaRequired"
   | "captchaInvalid"
+  /** The code belongs to another shop, or this shop refused the sign-in. */
+  | "wrongShop"
   | "network"
   | "unknown";
 
@@ -119,6 +121,8 @@ function describeFailure(
       return { kind: "error", text: texts.captchaRequired };
     case "captchaInvalid":
       return { kind: "error", text: texts.captchaInvalid };
+    case "wrongShop":
+      return { kind: "error", text: texts.wrongShop };
     case "network":
       return { kind: "error", text: texts.network };
     default:
@@ -161,7 +165,7 @@ export function useEmailCodeLogin<T = void>(
   const [resendAt, setResendAt] = useState<number>();
   const [needsEmail, setNeedsEmail] = useState(false);
   /** The code can no longer be used; only a new one helps. */
-  const [dead, setDead] = useState<"expired" | "tooManyAttempts">();
+  const [dead, setDead] = useState<"expired" | "tooManyAttempts" | "wrongShop">();
   const [notice, setNotice] = useState<LoginNotice>();
   const [busy, setBusy] = useState<"send" | "resend" | "verify">();
   const [done, setDone] = useState(false);
@@ -382,6 +386,7 @@ export function useEmailCodeLogin<T = void>(
       switch (outcome.kind) {
         case "expired":
         case "tooManyAttempts":
+        case "wrongShop":
           setDead(outcome.kind);
           setCodeState("");
           if (storageKey != null) clearPendingLogin(storageKey);
