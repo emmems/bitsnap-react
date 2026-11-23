@@ -149,6 +149,8 @@ describe("shared login helpers", () => {
       "alreadySent",
       "deliveryFailed",
       "deliveryUnavailable",
+      "wrongShop",
+      "sendRefused",
       "network",
       "unknown",
     ] as const) {
@@ -377,6 +379,28 @@ describe("code step", () => {
     assert.match(doc().querySelector('p[role="status"]:not(.sr-only)')?.className ?? "", /emerald/);
     assert.match(resend().textContent ?? "", /Wyślij ponownie za (59|60)\ss/);
     assert.equal(resend().disabled, true);
+  });
+
+  it("says sign-in is unavailable when a resend is refused, and offers no further resend", async () => {
+    sendOutcome = { ok: true, retryIn: 1, challengeId: "ch-1" };
+    await mount();
+    await toCodeStep();
+    await settle(1300);
+    const resend = () => buttonWith(texts.resend)!;
+    assert.equal(resend().disabled, false);
+
+    sendOutcome = { ok: false, kind: "sendRefused" };
+    await React.act(async () => resend().click());
+    await settle();
+    assert.equal(sendCalls.at(-1)?.resend, true);
+    assert.equal(alertText(), texts.sendRefused);
+    assert.notEqual(alertText(), texts.wrongShop);
+    assert.equal(buttonWith(texts.resendNew), undefined, "no new-code button");
+    assert.equal(resend().disabled, true, "resending cannot help");
+    const calls = sendCalls.length;
+    await React.act(async () => resend().click());
+    await settle();
+    assert.equal(sendCalls.length, calls, "no resend loop");
   });
 
   it("goes back with Zmień and keeps the typed address", async () => {

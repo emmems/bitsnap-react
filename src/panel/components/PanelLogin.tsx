@@ -120,6 +120,7 @@ const PanelLoginForm = ({
             ok: false,
             kind: panelFailureKind(
               response.result.case === "failure" ? response.result.value : 0,
+              "send",
             ),
           };
         } catch (cause) {

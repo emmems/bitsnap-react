@@ -84,7 +84,10 @@ the code, so the buyer token is scoped to that shop. The all-shops panel
 another shop, or a shop that refuses the sign-in, now shows a clear message
 (new text `wrongShop`, Polish and English, overridable through `texts`: "Ten
 kod logowania jest do innego sklepu. Poproś o nowy kod na tej stronie.") and
-offers a new code, instead of the generic one. The shared texts of the other
+offers a new code, instead of the generic one. A shop that refuses the code
+request itself shows another new text, `sendRefused` ("Logowanie na tej
+stronie jest teraz niedostępne. Skontaktuj się ze sklepem."), and no new-code
+button, since asking again would fail the same way. The shared texts of the other
 e-mail-code logins (`BitsnapReturns`, notifications) gain the same key. No
 change is needed in a shop's code.
 

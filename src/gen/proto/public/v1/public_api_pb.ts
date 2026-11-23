@@ -2811,7 +2811,9 @@ export type UserPanelLoginRequest = Message<"public_api.v1.UserPanelLoginRequest
   turnstileToken: string;
 
   /**
-   * Hashed id of the shop whose panel asks for the code.
+   * Hashed id of the shop whose page asks for the code. The server binds the code to it
+   * (the e-mail names the shop) when the page's origin or its Turnstile hostname belongs to
+   * that shop; a first-party page may omit it (a code for the whole account).
    *
    * @generated from field: optional string project_id = 5;
    */

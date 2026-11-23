@@ -163,6 +163,12 @@ describe("panel failure mapping", () => {
       assert.equal(panelFailureKind(Number(value)), kind, FailureMessage[Number(value)]);
     }
   });
+
+  it("tells a refusal at send time from a refusal of a code", () => {
+    assert.equal(panelFailureKind(FailureMessage.UNAUTHORIZED, "send"), "sendRefused");
+    assert.equal(panelFailureKind(FailureMessage.UNAUTHORIZED, "verify"), "wrongShop");
+    assert.equal(panelFailureKind(FailureMessage.RATE_LIMITED, "send"), "rateLimited");
+  });
 });
 
 describe("PanelLogin", () => {
@@ -276,10 +282,39 @@ describe("PanelLogin", () => {
     assert.equal(codeInput().disabled, true);
   });
 
-  it("says it in English with an English locale, and also for a refused code request", async () => {
+  it("says sign-in is unavailable when the code request itself is refused, with no new-code offer", async () => {
+    loginResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount();
+    await requestCode();
+    assert.equal(
+      alertText(),
+      "Logowanie na tej stronie jest teraz niedostępne. Skontaktuj się ze sklepem.",
+    );
+    assert.equal(alertText(), texts.sendRefused);
+    assert.notEqual(alertText(), texts.wrongShop);
+    assert.equal(buttonWith(texts.resendNew), undefined);
+    assert.ok(emailInput(), "still on the e-mail step");
+    assert.equal(codeRequests.length, 0);
+  });
+
+  it("says both in English with an English locale", async () => {
     loginResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
     await mount({ locale: "en" });
     await requestCode();
+    assert.equal(
+      alertText(),
+      "Signing in on this page is not available right now. Please contact the shop.",
+    );
+    await React.act(async () => roots.splice(0).forEach((root) => root.unmount()));
+    doc().body.innerHTML = "";
+    page.win.sessionStorage.clear();
+
+    loginResult = { case: "success", value: { retryIn: 60, challengeId: "challenge-7" } };
+    codeResult = { case: "failure", value: FailureMessage.UNAUTHORIZED };
+    await mount({ locale: "en" });
+    await requestCode();
+    await type(codeInput(), "123456");
+    await settle();
     assert.equal(
       alertText(),
       "This sign-in code is for another shop. Request a new code on this page.",
