@@ -249,10 +249,20 @@ export function createHlsSource(args: {
   };
 }
 
-/** True when the element plays HLS itself (Safari, iOS); no user-agent sniffing. */
+/**
+ * True when the element should play HLS itself: only where there is no Media
+ * Source support (older iPhones) and the element says it can. Where Media
+ * Source exists, hls.js plays, like the course `VideoPlayer`: Chrome answers
+ * "maybe" to `canPlayType` for HLS and then fails to parse the stream
+ * (DEMUXER_ERROR_COULD_NOT_PARSE). No user-agent sniffing.
+ */
 export function prefersNativeHls(
   video: Pick<HTMLMediaElement, "canPlayType">,
+  mediaSource: boolean = hasMediaSource(),
 ): boolean {
+  if (mediaSource) {
+    return false;
+  }
   try {
     return video.canPlayType("application/vnd.apple.mpegurl") !== "";
   } catch (e) {

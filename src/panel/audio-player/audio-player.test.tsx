@@ -517,19 +517,37 @@ describe("lazy hls.js", () => {
 });
 
 describe("native HLS decision", () => {
-  it("uses canPlayType, not the user agent", () => {
+  it("without Media Source, uses canPlayType, not the user agent", () => {
     // Chrome and Edge user agents contain "Safari/" and must not matter here.
     assert.equal(
-      prefersNativeHls({ canPlayType: () => "maybe" } as never),
+      prefersNativeHls({ canPlayType: () => "maybe" } as never, false),
       true,
     );
-    assert.equal(prefersNativeHls({ canPlayType: () => "" } as never), false);
     assert.equal(
-      prefersNativeHls({
-        canPlayType: () => {
-          throw new Error("no media element");
-        },
-      } as never),
+      prefersNativeHls({ canPlayType: () => "" } as never, false),
+      false,
+    );
+    assert.equal(
+      prefersNativeHls(
+        {
+          canPlayType: () => {
+            throw new Error("no media element");
+          },
+        } as never,
+        false,
+      ),
+      false,
+    );
+  });
+
+  it("prefers hls.js wherever Media Source exists, even when canPlayType says maybe", () => {
+    // Chrome 158 answers "maybe" for HLS and then cannot parse the segments.
+    assert.equal(
+      prefersNativeHls({ canPlayType: () => "maybe" } as never, true),
+      false,
+    );
+    assert.equal(
+      prefersNativeHls({ canPlayType: () => "probably" } as never, true),
       false,
     );
   });
