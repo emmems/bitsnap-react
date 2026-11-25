@@ -41,6 +41,44 @@ export type CourseTexts = {
   lessonNavigation?: string;
   mobilePrev?: string;
   mobileNext?: string;
+  // Course shell (header, outline rail, drawer, overview)
+  courseOverview?: string;
+  backToLesson?: string;
+  hideOutline?: string;
+  showOutline?: string;
+  theaterMode?: string;
+  outlineTitle?: string;
+  /** Placeholders `{done}` and `{total}`. */
+  outlineButton?: string;
+  close?: string;
+  /** Placeholders `{percent}`, `{done}` and `{total}`. */
+  progressCompact?: string;
+  previewNote?: string;
+  previewQuestionsNote?: string;
+  /** Placeholder `{test}`. */
+  goToTest?: string;
+  ratingTab?: string;
+  completeAndNext?: string;
+  nextLesson?: string;
+  /** Placeholder `{time}`. */
+  resumeFrom?: string;
+  hubStart?: string;
+  /** Placeholder `{title}`. */
+  hubContinue?: string;
+  hubRestart?: string;
+  /** Placeholder `{n}`. */
+  hubModule?: string;
+  hubFinal?: string;
+  hubSolveTest?: string;
+  /** Placeholders `{done}` and `{total}`. */
+  hubModuleProgress?: string;
+  /** Placeholder `{percent}`. */
+  testChipThreshold?: string;
+  /** Placeholder `{count}`. */
+  testChipAttempts?: string;
+  testChipUnlimited?: string;
+  testChipRequired?: string;
+  testContinue?: string;
   // Lesson
   markComplete: string;
   markedComplete: string;
@@ -126,8 +164,8 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     continueCourse: "Kontynuuj kurs",
     noItem: "Wybierz lekcję z listy.",
     lessonsTab: "Lekcje",
-    descriptionTab: "Opis",
-    filesTab: "Pliki",
+    descriptionTab: "Treść",
+    filesTab: "Załączniki",
     questionsTab: "Pytania",
     upNext: "Następna lekcja: {title}",
     openNext: "Przejdź dalej",
@@ -135,6 +173,35 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     lessonNavigation: "Nawigacja lekcji",
     mobilePrev: "Wstecz",
     mobileNext: "Dalej",
+    courseOverview: "Przegląd kursu",
+    backToLesson: "Wróć do lekcji",
+    hideOutline: "Ukryj program",
+    showOutline: "Pokaż program",
+    theaterMode: "Tryb kinowy",
+    outlineTitle: "Program kursu",
+    outlineButton: "Program ({done}/{total})",
+    close: "Zamknij",
+    progressCompact: "{percent}% · {done}/{total}",
+    previewNote:
+      "Podgląd sprzedawcy: postęp, oceny, odpowiedzi w testach i pytania nie są zapisywane.",
+    previewQuestionsNote: "W podglądzie nie można wysyłać pytań.",
+    goToTest: "Przejdź do testu: {test}",
+    ratingTab: "Ocena",
+    completeAndNext: "Ukończ i przejdź dalej",
+    nextLesson: "Następna lekcja",
+    resumeFrom: "Wznawiasz od {time}",
+    hubStart: "Rozpocznij kurs",
+    hubContinue: "Kontynuuj: {title}",
+    hubRestart: "Zacznij od początku",
+    hubModule: "Moduł {n}",
+    hubFinal: "Na zakończenie",
+    hubSolveTest: "Rozwiąż test",
+    hubModuleProgress: "{done}/{total} lekcji",
+    testChipThreshold: "Próg {percent}%",
+    testChipAttempts: "Próby: {count}",
+    testChipUnlimited: "Próby: bez limitu",
+    testChipRequired: "Wymagany",
+    testContinue: "Przejdź dalej",
     markComplete: "Oznacz jako ukończoną",
     markedComplete: "Lekcja ukończona",
     prevItem: "Poprzednia",
@@ -209,8 +276,8 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     continueCourse: "Continue the course",
     noItem: "Pick a lesson from the list.",
     lessonsTab: "Lessons",
-    descriptionTab: "Description",
-    filesTab: "Files",
+    descriptionTab: "Content",
+    filesTab: "Attachments",
     questionsTab: "Questions",
     upNext: "Next lesson: {title}",
     openNext: "Continue",
@@ -218,6 +285,35 @@ export const COURSE_TEXT_TABLES: LocaleTables<keyof CourseTexts> = {
     lessonNavigation: "Lesson navigation",
     mobilePrev: "Previous",
     mobileNext: "Next",
+    courseOverview: "Course overview",
+    backToLesson: "Back to the lesson",
+    hideOutline: "Hide outline",
+    showOutline: "Show outline",
+    theaterMode: "Theater mode",
+    outlineTitle: "Course outline",
+    outlineButton: "Outline ({done}/{total})",
+    close: "Close",
+    progressCompact: "{percent}% · {done}/{total}",
+    previewNote:
+      "Seller preview: progress, ratings, test answers and questions are not saved.",
+    previewQuestionsNote: "Questions cannot be sent in the preview.",
+    goToTest: "Go to the test: {test}",
+    ratingTab: "Rating",
+    completeAndNext: "Complete and continue",
+    nextLesson: "Next lesson",
+    resumeFrom: "Resuming at {time}",
+    hubStart: "Start the course",
+    hubContinue: "Continue: {title}",
+    hubRestart: "Start again",
+    hubModule: "Module {n}",
+    hubFinal: "To finish",
+    hubSolveTest: "Take the test",
+    hubModuleProgress: "{done}/{total} lessons",
+    testChipThreshold: "Pass mark {percent}%",
+    testChipAttempts: "Attempts: {count}",
+    testChipUnlimited: "Attempts: unlimited",
+    testChipRequired: "Required",
+    testContinue: "Continue",
     markComplete: "Mark as completed",
     markedComplete: "Lesson completed",
     prevItem: "Previous",
@@ -277,4 +373,13 @@ export function getCourseTexts(
   locale: string = getLocale(),
 ): CourseTexts {
   return resolveTexts(COURSE_TEXT_TABLES, locale, overrides);
+}
+
+/**
+ * A string that is optional in `CourseTexts` (added after the first release),
+ * with the default of the library's locale when a complete custom texts
+ * object predates it.
+ */
+export function courseText(texts: CourseTexts, key: keyof CourseTexts): string {
+  return texts[key] ?? getCourseTexts()[key] ?? "";
 }

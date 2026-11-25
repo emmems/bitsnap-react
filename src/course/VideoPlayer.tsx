@@ -241,10 +241,16 @@ export function VideoPlayer({
   }, [src, attempt]);
 
   return (
-    <div className={cn("relative overflow-hidden rounded-xl bg-black", className)}>
+    <div
+      data-course-stage
+      className={cn(
+        "relative aspect-video w-full overflow-hidden rounded-xl bg-neutral-950 ring-1 ring-black/5 dark:ring-white/10",
+        className,
+      )}
+    >
       <video
         ref={videoRef}
-        className="aspect-video w-full"
+        className="size-full bg-neutral-950 object-contain"
         poster={poster}
         controls
         playsInline
@@ -254,7 +260,7 @@ export function VideoPlayer({
       {failed && (
         <div
           role="alert"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-4 text-center text-sm text-white"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950 p-4 text-center text-sm text-white"
         >
           <p>{texts.videoError}</p>
           <Button

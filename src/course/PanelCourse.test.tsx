@@ -93,6 +93,8 @@ describe("course lesson controls", () => {
       completed?: boolean;
       video?: boolean;
       autoplay?: boolean;
+      position?: number;
+      preview?: boolean;
     } = {},
   ) {
     const container = dom.window.document.getElementById("root")!;
@@ -127,7 +129,7 @@ describe("course lesson controls", () => {
         },
       ],
       completed: options.completed ?? false,
-      positionSeconds: 0,
+      positionSeconds: options.position ?? 0,
       myRating: 0,
       averageRating: 0,
       ratingCount: 0,
@@ -154,6 +156,7 @@ describe("course lesson controls", () => {
           initialCourse={course}
           itemId={options.itemId ?? "l2"}
           onItemChange={(id) => navigated.push(id)}
+          preview={options.preview}
           locale="en"
         />,
       ),
@@ -168,13 +171,14 @@ describe("course lesson controls", () => {
     return { container, root, saved, navigated, click, unmount };
   }
 
-  it("offsets panel lesson controls and content above mobile panel navigation only", async () => {
+  it("offsets the lesson action bar above mobile panel navigation only", async () => {
     for (const panel of [false, true]) {
       const view = await mount({ panel });
       try {
-        const bar = view.container.querySelector('[data-lesson-navigation="mobile"]')!;
+        const bar = view.container.querySelector('[data-lesson-navigation="bar"]')!;
         const article = view.container.querySelector("article")!;
         assert.ok(bar.classList.contains("bottom-[var(--course-mobile-bottom,0px)]"));
+        assert.ok(bar.classList.contains("lg:sticky"), "sticky at the bottom on desktop");
         assert.ok(article.classList.contains("pb-[calc(5rem+env(safe-area-inset-bottom)+var(--course-mobile-bottom,0px))]"));
         assert.ok(article.classList.contains("lg:pb-0"));
         const wrapper = view.container.querySelector('[class*="--course-mobile-bottom:calc"]');
@@ -189,21 +193,36 @@ describe("course lesson controls", () => {
     }
   });
 
-  it("offers a mobile contents toggle on video tests and locked items", async () => {
-    for (const itemId of ["t1", "l3"]) {
+  it("opens the outline in a mobile bottom sheet and closes it with Escape, the backdrop or a pick", async () => {
+    for (const itemId of ["l2", "t1", "l3"]) {
       const view = await mount({ itemId, locked: true });
       try {
-        const toggle = view.container.querySelector<HTMLButtonElement>('button[aria-controls][aria-expanded]');
+        const toggle = view.container.querySelector<HTMLButtonElement>("[data-course-drawer-toggle]")!;
         assert.ok(toggle);
+        assert.match(toggle.textContent ?? "", /Outline \(1\/4\)/);
         assert.equal(toggle.getAttribute("aria-expanded"), "false");
-        const outline = dom.window.document.getElementById(toggle.getAttribute("aria-controls")!)!;
-        assert.ok(outline.classList.contains("hidden"));
+        assert.equal(view.container.querySelector('[role="dialog"]'), null);
+
         await view.click(toggle);
-        assert.equal(toggle.getAttribute("aria-expanded"), "true");
-        assert.ok(!outline.classList.contains("hidden"));
-        assert.ok(outline.classList.contains("lg:hidden"));
-        await view.click(outline.querySelector('[data-item-id="l1"]'));
+        let drawer = view.container.querySelector('[role="dialog"]')!;
+        assert.equal(drawer.id, toggle.getAttribute("aria-controls"));
+        assert.equal(drawer.getAttribute("aria-modal"), "true");
+        await React.act(async () => {
+          dom.window.document.dispatchEvent(
+            new dom.window.KeyboardEvent("keydown", { key: "Escape" }),
+          );
+        });
+        assert.equal(view.container.querySelector('[role="dialog"]'), null);
+
+        await view.click(toggle);
+        await view.click(view.container.querySelector("[data-course-drawer-backdrop]"));
+        assert.equal(view.container.querySelector('[role="dialog"]'), null);
+
+        await view.click(toggle);
+        drawer = view.container.querySelector('[role="dialog"]')!;
+        await view.click(drawer.querySelector('[data-item-id="l1"]'));
         assert.deepEqual(view.navigated, ["l1"]);
+        assert.equal(view.container.querySelector('[role="dialog"]'), null);
         assert.equal(toggle.getAttribute("aria-expanded"), "false");
       } finally {
         await view.unmount();
@@ -211,7 +230,27 @@ describe("course lesson controls", () => {
     }
   });
 
-  it("renders mobile tabs, switches panels, and supports arrow keys", async () => {
+  it("collapses the outline rail for a wider lesson and remembers it", async () => {
+    const view = await mount();
+    try {
+      const toggle = view.container.querySelector<HTMLButtonElement>("[data-course-rail-toggle]")!;
+      assert.ok(view.container.querySelector("[data-course-rail]"));
+      assert.equal(toggle.getAttribute("aria-expanded"), "true");
+      assert.match(toggle.textContent ?? "", /Theater mode/);
+      await view.click(toggle);
+      assert.equal(view.container.querySelector("[data-course-rail]"), null);
+      assert.equal(toggle.getAttribute("aria-expanded"), "false");
+      assert.match(toggle.textContent ?? "", /Show outline/);
+      assert.equal(dom.window.localStorage.getItem("bitsnap-course-outline"), "0");
+      await view.click(toggle);
+      assert.ok(view.container.querySelector("[data-course-rail]"));
+    } finally {
+      dom.window.localStorage.removeItem("bitsnap-course-outline");
+      await view.unmount();
+    }
+  });
+
+  it("renders underline tabs with counts, switches panels, and supports arrow keys", async () => {
     const view = await mount();
     try {
       const tabs = [
@@ -219,42 +258,45 @@ describe("course lesson controls", () => {
       ];
       assert.deepEqual(
         tabs.map((tab) => tab.textContent),
-        ["Lessons", "Description", "Files", "Questions"],
+        ["Content", "Attachments (1)", "Questions", "Rating"],
       );
       assert.equal(tabs[0].getAttribute("aria-selected"), "true");
-      await view.click(tabs[2]);
-      assert.equal(tabs[2].getAttribute("aria-selected"), "true");
-      assert.equal(
-        view.container
-          .querySelector(`[id="${tabs[2].getAttribute("aria-controls")}"]`)
-          ?.classList.contains("hidden"),
-        false,
-      );
+      await view.click(tabs[1]);
+      assert.equal(tabs[1].getAttribute("aria-selected"), "true");
+      const files = view.container.querySelector(
+        `[id="${tabs[1].getAttribute("aria-controls")}"]`,
+      )!;
+      assert.equal(files.classList.contains("hidden"), false);
+      const attachment = files.querySelector("[data-course-attachment]")!;
+      assert.match(attachment.textContent ?? "", /PDF/);
+      assert.match(attachment.textContent ?? "", /1\.0 KB/);
       await React.act(async () =>
-        tabs[2].dispatchEvent(
+        tabs[1].dispatchEvent(
           new dom.window.KeyboardEvent("keydown", {
             key: "ArrowRight",
             bubbles: true,
           }),
         ),
       );
-      assert.equal(tabs[3].getAttribute("aria-selected"), "true");
-      assert.equal(dom.window.document.activeElement, tabs[3]);
+      assert.equal(tabs[2].getAttribute("aria-selected"), "true");
+      assert.equal(dom.window.document.activeElement, tabs[2]);
     } finally {
       await view.unmount();
     }
   });
 
-  it("uses the sticky bar handlers and reveals up next and completion feedback", async () => {
+  it("completes the lesson and moves on with one click from the sticky bar", async () => {
     const view = await mount();
     try {
       assert.equal(view.container.querySelector("[data-course-up-next]"), null);
-      const buttons = view.container.querySelectorAll(
-        '[data-lesson-navigation="mobile"] button',
-      );
-      await view.click(buttons[0]);
+      const bar = () =>
+        view.container.querySelector('[data-lesson-navigation="bar"]')!;
+      await view.click(bar().querySelectorAll("button")[0]);
       assert.deepEqual(view.navigated, ["l1"]);
-      await view.click(buttons[1]);
+
+      const complete = bar().querySelector<HTMLButtonElement>("[data-course-complete]")!;
+      assert.match(complete.textContent ?? "", /Complete and continue/);
+      await view.click(complete);
       assert.equal(view.saved.length, 1);
       assert.deepEqual(view.saved[0], {
         lessonId: "l2",
@@ -262,7 +304,7 @@ describe("course lesson controls", () => {
         positionSeconds: 0,
         durationSeconds: 0,
       });
-      assert.equal((buttons[1] as HTMLButtonElement).disabled, true);
+      assert.deepEqual(view.navigated, ["l1", "l3"]);
       assert.match(
         view.container.querySelector('[aria-live="polite"]')?.textContent ?? "",
         /Lesson completed/,
@@ -271,39 +313,48 @@ describe("course lesson controls", () => {
         view.container.querySelector("header")?.textContent ?? "",
         /Course completed/,
       );
-      assert.match(
-        view.container.querySelector("[data-course-up-next]")?.textContent ??
-          "",
-        /Next lesson: Lesson l3/,
-      );
-      await view.click(buttons[2]);
-      await view.click(
-        view.container.querySelector("[data-course-up-next] button"),
-      );
+
+      // The owner kept the lesson open: it now reads as done, with a next button.
+      assert.equal(bar().querySelector("[data-course-complete]"), null);
+      assert.match(bar().querySelector("[data-course-completed]")?.textContent ?? "", /Completed/);
+      const next = bar().querySelector<HTMLButtonElement>("[data-course-next]")!;
+      assert.match(next.textContent ?? "", /Next lesson/);
+      await view.click(next);
       assert.deepEqual(view.navigated, ["l1", "l3", "l3"]);
     } finally {
       await view.unmount();
     }
   });
 
-  it("keeps a locked next item disabled in both navigation and up next", async () => {
-    const view = await mount({ locked: true, completed: true });
+  it("completes without moving on when the next item is locked, and offers the gating test", async () => {
+    const view = await mount({ locked: true });
     try {
-      const upNext = view.container.querySelector("[data-course-up-next]");
-      assert.ok(upNext);
+      const bar = view.container.querySelector('[data-lesson-navigation="bar"]')!;
+      const complete = bar.querySelector<HTMLButtonElement>("[data-course-complete]")!;
+      assert.match(complete.textContent ?? "", /Mark as completed/);
+      await view.click(complete);
+      assert.deepEqual(view.navigated, []);
+      const upNext = view.container.querySelector("[data-course-up-next]")!;
       assert.match(upNext.textContent ?? "", /Pass the test/);
-      const button = upNext.querySelector("button")!;
-      assert.equal(button.disabled, true);
       assert.equal(
-        (
-          view.container.querySelector(
-            '[data-lesson-navigation="mobile"] button:last-child',
-          ) as HTMLButtonElement
-        ).disabled,
+        bar.querySelector<HTMLButtonElement>("[data-course-next]")!.disabled,
         true,
       );
+      await view.click(upNext.querySelector("button"));
+      assert.deepEqual(view.navigated, ["t1"]);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  it("jumps from a locked lesson straight to its gating test", async () => {
+    const view = await mount({ itemId: "l3", locked: true });
+    try {
+      const button = view.container.querySelector<HTMLButtonElement>("[data-locked-go-to-test]")!;
+      assert.ok(button);
+      assert.match(button.textContent ?? "", /Go to the test: Test t1/);
       await view.click(button);
-      assert.deepEqual(view.navigated, []);
+      assert.deepEqual(view.navigated, ["t1"]);
     } finally {
       await view.unmount();
     }
@@ -314,6 +365,8 @@ describe("course lesson controls", () => {
       for (const locked of [false, true]) {
         const view = await mount({ video: true, autoplay, locked });
         try {
+          const toggle = view.container.querySelector('[role="switch"]')!;
+          assert.equal(toggle.getAttribute("aria-checked"), String(autoplay));
           const video = view.container.querySelector("video")!;
           Object.defineProperty(video, "duration", {
             value: 100,
@@ -326,15 +379,12 @@ describe("course lesson controls", () => {
           await React.act(async () => {
             video.dispatchEvent(new dom.window.Event("ended"));
           });
-          assert.ok(view.container.querySelector("[data-course-up-next]"));
+          const upNext = view.container.querySelector("[data-course-up-next]")!;
+          assert.ok(upNext);
           assert.deepEqual(view.navigated, autoplay && !locked ? ["l3"] : []);
-          assert.equal(
-            (
-              view.container.querySelector(
-                "[data-course-up-next] button",
-              ) as HTMLButtonElement
-            ).disabled,
-            locked,
+          assert.match(
+            upNext.querySelector("button")?.textContent ?? "",
+            locked ? /Go to the test/ : /Continue/,
           );
         } finally {
           await view.unmount();
@@ -343,10 +393,28 @@ describe("course lesson controls", () => {
     }
   });
 
+  it("shows the video bar with duration, resume point and an autoplay switch", async () => {
+    const view = await mount({ video: true, position: 42 });
+    try {
+      const bar = view.container.querySelector("[data-course-video-bar]")!;
+      assert.match(bar.textContent ?? "", /Current lesson/);
+      assert.match(bar.textContent ?? "", /1:40/);
+      assert.match(bar.querySelector("[data-course-resume]")?.textContent ?? "", /Resuming at 0:42/);
+      const toggle = bar.querySelector<HTMLButtonElement>('[role="switch"]')!;
+      assert.equal(toggle.getAttribute("aria-checked"), "false");
+      await view.click(toggle);
+      assert.equal(toggle.getAttribute("aria-checked"), "true");
+      assert.equal(dom.window.localStorage.getItem("bitsnap-course-autoplay"), "1");
+      assert.ok(view.container.querySelector("[data-course-stage]")?.classList.contains("bg-neutral-950"));
+    } finally {
+      await view.unmount();
+    }
+  });
+
   it("opens the current section by default and toggles sections with aria-expanded", async () => {
     const view = await mount();
     try {
-      const outline = view.container.querySelector('[role="tabpanel"] nav')!;
+      const outline = view.container.querySelector("[data-course-rail] nav")!;
       const current = outline.querySelector(
         '[data-section-id="m1"] h3 button',
       )!;
@@ -361,6 +429,192 @@ describe("course lesson controls", () => {
         outline.querySelector('[data-section-id="m2"] [hidden]'),
         null,
       );
+    } finally {
+      await view.unmount();
+    }
+  });
+});
+
+describe("course overview and preview", () => {
+  async function render(props: Record<string, unknown> = {}) {
+    const container = dom.window.document.getElementById("root")!;
+    const root = createRoot(container);
+    const navigated: string[] = [];
+    const course = sampleCourse({
+      description: "Everything about the thing.",
+      coverUrl: "https://course.test/cover.jpg",
+    });
+    course.sections[0].description = "Start here.";
+    const source = {
+      ...dataSource,
+      getLesson: async (id: string) => ({
+        id,
+        sectionId: "m1",
+        title: `Lesson ${id}`,
+        description: "",
+        contentHtml: "",
+        attachments: [],
+        completed: false,
+        positionSeconds: 0,
+        myRating: 0,
+        averageRating: 0,
+        ratingCount: 0,
+      }),
+      listQuestions: async () => [],
+    } as CourseDataSource;
+    await React.act(async () =>
+      root.render(
+        <PanelCourse
+          dataSource={source}
+          initialCourse={course}
+          locale="en"
+          onItemChange={(id) => navigated.push(id)}
+          {...props}
+        />,
+      ),
+    );
+    const click = async (element: Element | null | undefined) => {
+      assert.ok(element);
+      await React.act(async () => (element as HTMLElement).click());
+    };
+    return {
+      container,
+      navigated,
+      click,
+      unmount: () => React.act(async () => root.unmount()),
+    };
+  }
+
+  it("opens the course overview with cover, description, modules and a continue button", async () => {
+    const view = await render();
+    try {
+      assert.equal(view.container.querySelector("[data-course-hub]"), null, "the lesson opens first");
+      const toggle = view.container.querySelector("[data-course-overview-toggle]")!;
+      await view.click(toggle);
+      const hub = view.container.querySelector("[data-course-hub]")!;
+      assert.ok(hub);
+      assert.equal(toggle.getAttribute("aria-pressed"), "true");
+      assert.equal(
+        hub.querySelector("[data-course-cover]")?.getAttribute("src"),
+        "https://course.test/cover.jpg",
+      );
+      assert.match(hub.querySelector("[data-course-description]")?.textContent ?? "", /Everything about the thing/);
+      assert.match(hub.textContent ?? "", /Start here\./);
+      assert.match(hub.textContent ?? "", /Module 1/);
+      assert.match(hub.textContent ?? "", /1\/2 lessons/);
+      assert.equal(hub.querySelector('[data-hub-section-id="m2"]')?.getAttribute("data-locked"), "true");
+
+      const cta = hub.querySelector("[data-course-hub-cta]")!;
+      assert.match(cta.textContent ?? "", /Continue: Lesson l2/);
+      await view.click(cta);
+      assert.deepEqual(view.navigated, ["l2"]);
+      assert.equal(view.container.querySelector("[data-course-hub]"), null);
+
+      await view.click(toggle);
+      await view.click(view.container.querySelector('[data-hub-solve-test="t1"]'));
+      assert.deepEqual(view.navigated, ["l2", "t1"]);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  it("starts a fresh course from the overview and falls back to a typographic cover", async () => {
+    const course = sampleCourse({ completedLessons: 0, progressPercent: 0, coverUrl: undefined });
+    course.sections[0].items[0].completed = false;
+    const view = await render({ initialCourse: course });
+    try {
+      await view.click(view.container.querySelector("[data-course-overview-toggle]"));
+      const hub = view.container.querySelector("[data-course-hub]")!;
+      assert.equal(hub.querySelector("[data-course-cover]"), null);
+      assert.match(hub.querySelector("[data-course-hub-cta]")?.textContent ?? "", /Start the course/);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  it("flags a partly locked module and a locked final test with the reason", async () => {
+    const course = sampleCourse();
+    // Only one lesson of the module waits for the test.
+    course.sections[1].items[1] = { ...course.sections[1].items[1], locked: false, lockReason: undefined };
+    course.finalItems[0] = {
+      ...course.finalItems[0],
+      locked: true,
+      lockReason: { gatingTestId: "t1", gatingTestTitle: "Test t1" },
+    };
+    const view = await render({ initialCourse: course });
+    try {
+      await view.click(view.container.querySelector("[data-course-overview-toggle]"));
+      const hub = view.container.querySelector("[data-course-hub]")!;
+      const module2 = hub.querySelector('[data-hub-section-id="m2"]')!;
+      assert.equal(module2.getAttribute("data-locked"), "true");
+      assert.ok(module2.querySelector('[data-hub-solve-test="t1"]'));
+      assert.match(
+        module2.querySelector('[data-hub-item-id="l3"] [data-hub-lock-text]')?.textContent ?? "",
+        /Test t1/,
+      );
+      assert.equal(module2.querySelector('[data-hub-item-id="l4"] [data-hub-lock-text]'), null);
+
+      const final = hub.querySelector('[data-hub-section-id="final"]')!;
+      assert.ok(final.querySelector("[data-hub-locked-banner]"));
+      assert.match(final.querySelector('[data-hub-item-id="t2"]')?.getAttribute("title") ?? "", /Test t1/);
+      await view.click(final.querySelector('[data-hub-solve-test="t1"]'));
+      assert.deepEqual(view.navigated, ["t1"]);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  it("leaves the overview when the owner selects another item", async () => {
+    const container = dom.window.document.getElementById("root")!;
+    const root = createRoot(container);
+    function Page() {
+      const [itemId, setItemId] = React.useState<string>();
+      return (
+        <>
+          <button id="pick" onClick={() => setItemId("l1")} />
+          <PanelCourse
+            dataSource={dataSource}
+            initialCourse={sampleCourse()}
+            locale="en"
+            itemId={itemId}
+            onItemChange={setItemId}
+          />
+        </>
+      );
+    }
+    await React.act(async () => root.render(<Page />));
+    try {
+      await React.act(async () =>
+        (container.querySelector("[data-course-overview-toggle]") as HTMLElement).click(),
+      );
+      assert.ok(container.querySelector("[data-course-hub]"));
+      await React.act(async () => (container.querySelector("#pick") as HTMLElement).click());
+      assert.equal(container.querySelector("[data-course-hub]"), null);
+      assert.equal(
+        container.querySelector("[aria-current]")?.getAttribute("data-item-id"),
+        "l1",
+      );
+    } finally {
+      await React.act(async () => root.unmount());
+    }
+  });
+
+  it("shows the preview banner and never lets the preview send a question", async () => {
+    const view = await render({ preview: true });
+    try {
+      assert.match(
+        view.container.querySelector("[data-course-preview]")?.textContent ?? "",
+        /Preview.*not saved/,
+      );
+      await React.act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const form = view.container.querySelector("form")!;
+      assert.equal(form.querySelector("textarea")?.disabled, true);
+      assert.equal(form.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
+      assert.ok(view.container.querySelector("[data-course-preview-note]"));
+      // The preview cannot complete a lesson either: the bar only moves on.
+      const bar = view.container.querySelector('[data-lesson-navigation="bar"]')!;
+      assert.equal(bar.querySelector("[data-course-complete]"), null);
+      assert.ok(bar.querySelector("[data-course-next]"));
     } finally {
       await view.unmount();
     }

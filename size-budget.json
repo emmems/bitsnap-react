@@ -49,7 +49,7 @@
       "forbidStatic": [
         "node_modules/hls.js/"
       ],
-      "jsGzipKB": 114.0
+      "jsGzipKB": 121.0
     },
     "models": {
       "jsGzipKB": 16.9
@@ -63,8 +63,8 @@
   },
   "css": {
     "dist/cart.css": 4.5,
-    "dist/index.css": 24.5
+    "dist/index.css": 26.0
   },
   "maxDependencies": 27,
-  "tarballBytes": 1930000
+  "tarballBytes": 1980000
 }

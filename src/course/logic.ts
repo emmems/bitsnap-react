@@ -318,3 +318,9 @@ export function describeAnswer(
   }
   return "";
 }
+
+/** Upper-case extension of a file name (`PDF`, `ZIP`), empty when it has none. */
+export function fileExtension(name: string): string {
+  const match = /\.([a-z0-9]{1,5})$/i.exec(name.trim());
+  return match ? match[1]!.toUpperCase() : "";
+}

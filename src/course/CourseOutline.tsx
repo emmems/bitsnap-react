@@ -10,6 +10,7 @@ import { cn } from "../lib/utils";
 import { useCourseView } from "./context";
 import { fillTemplate, formatDuration } from "./logic";
 import type { Course, CourseItem } from "./types";
+import { ACCENT_WASH } from "./ui";
 
 type CourseOutlineProps = {
   course: Course;
@@ -83,14 +84,14 @@ function OutlineItem({
         className={cn(
           "flex min-h-11 w-full items-start gap-3 rounded-lg p-2 text-left text-sm outline-none transition focus-visible:ring-[3px] focus-visible:ring-ring/50",
           selected
-            ? "bg-neutral-200 dark:bg-neutral-700"
-            : "hover:bg-neutral-100 dark:hover:bg-neutral-800",
+            ? cn(ACCENT_WASH, "font-medium")
+            : "hover:bg-neutral-100 dark:hover:bg-neutral-800/70",
           item.locked &&
             "cursor-not-allowed opacity-60 hover:bg-transparent dark:hover:bg-transparent",
         )}
       >
         {variant === "playlist" && item.kind === "lesson" && (
-          <span className="relative aspect-video w-24 shrink-0 overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800">
+          <span className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-neutral-200 dark:bg-neutral-800">
             {item.thumbnailUrl && (
               <img
                 src={item.thumbnailUrl}
@@ -101,7 +102,7 @@ function OutlineItem({
               />
             )}
             {item.durationSeconds > 0 && (
-              <span className="absolute right-1 bottom-1 rounded bg-black/75 px-1 text-[10px] text-white">
+              <span className="absolute right-1 bottom-1 rounded bg-black/75 px-1 text-[10px] text-white tabular-nums">
                 {formatDuration(item.durationSeconds)}
               </span>
             )}
@@ -179,7 +180,7 @@ export function CourseOutline({
     <nav
       ref={rootRef}
       aria-label={texts.contents}
-      className={cn("space-y-4", className)}
+      className={cn("flex flex-col gap-4", className)}
     >
       {course.sections.map((section) => {
         const lessons = section.items.filter((i) => i.kind === "lesson");
@@ -203,7 +204,7 @@ export function CourseOutline({
               >
                 <span className="break-words">{section.title}</span>
                 {lessons.length > 0 && (
-                  <span className="shrink-0 text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                  <span className="shrink-0 text-xs font-normal tabular-nums text-neutral-500 dark:text-neutral-400">
                     {done}/{lessons.length}
                   </span>
                 )}

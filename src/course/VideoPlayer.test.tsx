@@ -119,4 +119,30 @@ describe("video player", () => {
       { positionSeconds: 42, durationSeconds: 120, reason: "leave" },
     ]);
   });
+
+  it("plays on a dark 16:9 stage without a card shadow", async () => {
+    const container = dom.window.document.getElementById("root")!;
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <CourseViewProvider
+          value={{
+            dataSource: {} as never,
+            texts: getCourseTexts(undefined, "en"),
+            preview: false,
+          }}
+        >
+          <VideoPlayer src="https://stream.test/lesson.m3u8" />
+        </CourseViewProvider>,
+      );
+    });
+    const stage = container.querySelector("[data-course-stage]")!;
+    assert.ok(stage.classList.contains("bg-neutral-950"));
+    assert.ok(stage.classList.contains("aspect-video"));
+    assert.doesNotMatch(stage.className, /shadow/);
+    assert.ok(stage.querySelector("video"));
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

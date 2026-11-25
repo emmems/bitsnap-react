@@ -7,6 +7,7 @@ import {
   countUnanswered,
   describeAnswer,
   emptyAnswer,
+  fileExtension,
   fillTemplate,
   findItem,
   flattenItems,
@@ -173,6 +174,14 @@ describe("formatting", () => {
     assert.equal(formatDuration(3600), "1:00:00");
     assert.equal(formatDuration(3725.9), "1:02:05");
     assert.equal(formatDuration(-4), "0:00");
+  });
+
+  it("reads file extensions for attachment badges", () => {
+    assert.equal(fileExtension("Notes.pdf"), "PDF");
+    assert.equal(fileExtension("archive.tar.zip "), "ZIP");
+    assert.equal(fileExtension("Budget.xlsx"), "XLSX");
+    assert.equal(fileExtension("README"), "");
+    assert.equal(fileExtension("weird.name.toolongext"), "");
   });
 
   it("formats sizes", () => {

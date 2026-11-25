@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { useCourseTrack } from "./analytics";
 import { useCourseView } from "./context";
 import { fillTemplate } from "./logic";
+import { courseText } from "./texts";
 import { RatingStars } from "./RatingStars";
 import type { LessonQuestion, LessonRating } from "./types";
-import { ACCENT_BUTTON, ErrorBox, errorMessage } from "./ui";
+import { ACCENT_BUTTON, ErrorBox, MUTED, errorMessage } from "./ui";
 import { useAsyncResource } from "./useAsyncResource";
 
 /** Star rating of a lesson with an optional comment. */
@@ -41,8 +43,8 @@ export function LessonRatingBox({
   }
 
   return (
-    <section aria-labelledby={`rate-${lessonId}`} className="space-y-3">
-      <h3 id={`rate-${lessonId}`} className="text-lg font-semibold">
+    <section aria-labelledby={`rate-${lessonId}`} className="flex flex-col gap-3">
+      <h3 id={`rate-${lessonId}`} className="text-base font-semibold">
         {texts.rateTitle}
       </h3>
       <RatingStars
@@ -62,7 +64,7 @@ export function LessonRatingBox({
         </p>
       )}
       {!preview && score > 0 && (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Textarea
             value={comment}
             maxLength={1000}
@@ -74,7 +76,7 @@ export function LessonRatingBox({
           />
           <Button
             size="sm"
-            className={ACCENT_BUTTON}
+            className={cn(ACCENT_BUTTON, "self-start")}
             disabled={state === "saving"}
             onClick={save}
           >
@@ -100,13 +102,29 @@ function formatDate(date: Date | undefined): string {
   return date == null ? "" : date.toLocaleDateString();
 }
 
-/** Questions of the students about a lesson with the ask form. */
-export function LessonQuestions({ lessonId }: { lessonId: string }) {
+/**
+ * Questions of the students about a lesson with the ask form. The creator
+ * preview shows the questions but cannot send one.
+ */
+export function LessonQuestions({
+  lessonId,
+  onCount,
+}: {
+  lessonId: string;
+  /** The number of questions, once they are loaded (for the tab label). */
+  onCount?: (count: number) => void;
+}) {
   const { dataSource, texts, preview } = useCourseView();
   const questions = useAsyncResource<LessonQuestion[]>(
     () => dataSource.listQuestions(lessonId),
     [dataSource, lessonId],
   );
+  const count =
+    questions.status === "success" ? questions.data.length : undefined;
+  useEffect(() => {
+    if (count != null) onCount?.(count);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
   const [content, setContent] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
@@ -115,7 +133,7 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
 
   async function ask() {
     const text = content.trim();
-    if (text === "") return;
+    if (text === "" || preview) return;
     setState("sending");
     try {
       const created = await dataSource.askQuestion(lessonId, text);
@@ -129,13 +147,22 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
   }
 
   return (
-    <section aria-labelledby={`qa-${lessonId}`} className="space-y-4">
-      <h3 id={`qa-${lessonId}`} className="text-lg font-semibold">
+    <section aria-labelledby={`qa-${lessonId}`} className="flex flex-col gap-4">
+      <h3 id={`qa-${lessonId}`} className="text-base font-semibold">
         {texts.questionsTitle}
       </h3>
 
+      {preview && (
+        <p
+          data-course-preview-note
+          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          {courseText(texts, "previewQuestionsNote")}
+        </p>
+      )}
+
       <form
-        className="space-y-2"
+        className="flex flex-col gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           void ask();
@@ -146,6 +173,7 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
           maxLength={2000}
           placeholder={texts.questionPlaceholder}
           aria-label={texts.questionPlaceholder}
+          disabled={preview}
           onChange={(e) => {
             setContent(e.target.value);
             setState("idle");
@@ -154,8 +182,8 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
         <Button
           type="submit"
           size="sm"
-          className={ACCENT_BUTTON}
-          disabled={state === "sending" || content.trim() === ""}
+          className={cn(ACCENT_BUTTON, "self-start")}
+          disabled={preview || state === "sending" || content.trim() === ""}
         >
           {texts.questionSubmit}
         </Button>
@@ -172,7 +200,7 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
       </form>
 
       {questions.status === "loading" && (
-        <p role="status" className="text-sm text-neutral-500">
+        <p role="status" className={cn("text-sm", MUTED)}>
           {texts.loading}
         </p>
       )}
@@ -185,11 +213,11 @@ export function LessonQuestions({ lessonId }: { lessonId: string }) {
             {texts.questionsEmpty}
           </p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="flex flex-col gap-3">
             {questions.data.map((question) => (
               <li
                 key={question.id}
-                className="rounded-lg bg-neutral-100 p-3 text-sm dark:bg-neutral-800"
+                className="rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800"
               >
                 <p className="mb-1 text-xs text-neutral-500 dark:text-neutral-400">
                   {question.isMine ? texts.questionMine : question.authorName}

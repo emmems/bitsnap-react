@@ -127,15 +127,9 @@ describe("course analytics", () => {
     assert.equal(seen.named("lesson_started")[0].page_type, "course");
   });
 
-  it("reports completing, rating and a test submission", async () => {
+  it("reports rating, completing (which moves on to the test) and a test submission", async () => {
     const seen = collector();
     const container = await open({ analytics: { onEvent: seen.onEvent } });
-
-    await press(buttonWithText(container, texts().markComplete));
-    await settle();
-    assert.deepEqual(seen.named("lesson_completed").map((e) => e.props), [
-      { course_id: "course-1", lesson_id: "l2", position: 2 },
-    ]);
 
     await press(container.querySelectorAll('[role="radio"]')[3]);
     await press(buttonWithText(container, texts().rateSubmit));
@@ -144,25 +138,42 @@ describe("course analytics", () => {
       { course_id: "course-1", lesson_id: "l2", rating: 4 },
     ]);
 
-    await press(container.querySelector('[data-item-id="t1"]'));
+    await press(buttonWithText(container, texts().completeAndNext!));
     await settle();
+    assert.deepEqual(seen.named("lesson_completed").map((e) => e.props), [
+      { course_id: "course-1", lesson_id: "l2", position: 2 },
+    ]);
+    // One click completed the lesson and opened the next item, the test.
+    assert.ok(container.querySelector('[data-test-id="t1"]'));
     assert.deepEqual(seen.named("lesson_started").map((e) => (e.props as { lesson_id: string }).lesson_id), ["l2"]);
+
     await press(container.querySelector('input[type="radio"], input[type="checkbox"]'));
     await press(buttonWithText(container, texts().testSubmit));
     await settle();
     assert.deepEqual(seen.named("test_submitted").map((e) => e.props), [
       { course_id: "course-1", lesson_id: "t1", score_bucket: "75-99" },
     ]);
+    assert.ok(container.querySelector('[data-test-result="passed"]'));
     assert.deepEqual(findPII(seen.events), []);
   });
 
-  it("does not repeat the completion when it was already saved", async () => {
+  it("does not repeat the completion when the lesson is opened again", async () => {
     const seen = collector();
-    const container = await open({ analytics: { onEvent: seen.onEvent } });
-    await press(buttonWithText(container, texts().markComplete));
+    const done = new Set<string>();
+    const source = dataSource({
+      getLesson: async (id: string) => ({ ...lesson(id), completed: done.has(id) }),
+      saveProgress: async (input) => {
+        done.add(input.lessonId);
+        return { completed: true, completedLessons: 2, progressPercent: 50 };
+      },
+    });
+    const container = await open({ dataSource: source, analytics: { onEvent: seen.onEvent } });
+    await press(buttonWithText(container, texts().completeAndNext!));
     await settle();
-    await press(buttonWithText(container, texts().markedComplete));
+    await press(container.querySelector('[data-course-rail] [data-item-id="l2"]'));
     await settle();
+    assert.equal(container.querySelector("[data-course-complete]"), null);
+    assert.ok(container.querySelector("[data-course-completed]"));
     assert.equal(seen.named("lesson_completed").length, 1);
   });
 
