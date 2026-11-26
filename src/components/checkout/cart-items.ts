@@ -18,6 +18,23 @@ export function findProductForCartItem<T extends MatchableProduct>(
   );
 }
 
+/**
+ * The id a requested product is kept under in the cart. A bare product id
+ * (`prodv2_<hash>`, no variant) names its default variant, and the backend
+ * answers with that variant's id (`prodv2_<hash>_default`): the line is stored
+ * under the id the backend knows. Any other id stays as it is.
+ */
+export function cartProductID(
+  requested: string,
+  resolved: { productID: string }[],
+): string {
+  if (resolved.some((el) => el.productID === requested)) return requested;
+  const defaultVariant = `${requested}_default`;
+  return resolved.some((el) => el.productID === defaultVariant)
+    ? defaultVariant
+    : requested;
+}
+
 /** Requested product IDs that the backend did not resolve. */
 export function findMissingProductIDs(
   requested: string[],

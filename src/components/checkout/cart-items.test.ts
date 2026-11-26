@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   cartItemURL,
+  cartProductID,
   findMissingProductIDs,
   findProductForCartItem,
 } from "./cart-items";
@@ -66,4 +67,14 @@ test("cartItemURL drops empty, unsafe and unresolvable links", () => {
   assert.equal(cartItemURL("JavaScript:alert(1)", "https://a.example"), undefined);
   assert.equal(cartItemURL("data:text/html,x"), undefined);
   assert.equal(cartItemURL("/p/a"), undefined);
+});
+
+test("cartProductID keeps a bare product id under its default variant", () => {
+  const resolved = [{ productID: "prodv2_b_default" }, { productID: "prodv2_c_red" }];
+  assert.equal(cartProductID("prodv2_b", resolved), "prodv2_b_default");
+  assert.equal(cartProductID("prodv2_b_default", resolved), "prodv2_b_default");
+  assert.equal(cartProductID("prodv2_c_red", resolved), "prodv2_c_red");
+  // A product without a default variant stays missing under the id that was asked for.
+  assert.equal(cartProductID("prodv2_c", resolved), "prodv2_c");
+  assert.deepEqual(findMissingProductIDs([cartProductID("prodv2_b", resolved)], resolved), []);
 });

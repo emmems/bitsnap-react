@@ -22,6 +22,7 @@ import { buildURL } from "./helper.methods";
 import { Err, isErr } from "./lib/err";
 import {
   cartItemURL,
+  cartProductID,
   findMissingProductIDs,
   findProductForCartItem,
 } from "./cart-items";
@@ -776,6 +777,11 @@ async function addProducts(projectID: string, products: CartProduct[]) {
     writeSnapshot: false,
   });
   if (isErr(latestProducts)) return latestProducts;
+  // A bare product id is kept under its default variant, the id the backend answered with.
+  products = products.map((el) => ({
+    ...el,
+    productID: cartProductID(el.productID, latestProducts),
+  }));
   const missingIDs = findMissingProductIDs(
     products.map((el) => el.productID),
     latestProducts,
