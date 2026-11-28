@@ -182,6 +182,8 @@ let catalog = initialCatalog();
 type ProductsMode = "ok" | "fail" | "pending";
 let productsMode: ProductsMode = "ok";
 let buyMode: "pending" | "fail" = "pending";
+/** `GetCartDiscountContext`; unset answers 404 like an older server. */
+let discountAnswer: unknown;
 const roots: Array<{ unmount: () => void }> = [];
 const offenders = new Map<string, string>();
 const originalError = console.error;
@@ -197,6 +199,7 @@ beforeEach(() => {
   catalog = initialCatalog();
   productsMode = "ok";
   buyMode = "pending";
+  discountAnswer = undefined;
   page.win.localStorage.clear();
   page.win.localStorage.setItem("checkout", JSON.stringify({ products: [] }));
   snapshotModule.resetCartSnapshotState();
@@ -247,6 +250,7 @@ beforeEach(() => {
         { status: 200, headers: { "Content-Type": "application/proto" } },
       );
     }
+    if (url.endsWith("/GetCartDiscountContext") && discountAnswer != null) return json(discountAnswer);
     if (init?.method === "POST" && url.endsWith("/e")) return new Response(null, { status: 202 });
     return new Response("{}", { status: 404 });
   }) as typeof fetch;
@@ -369,6 +373,40 @@ describe("cart class graph", () => {
       assert.ok($('[data-bitsnap-checkout-slot="countryTrigger"]'), "the country picker renders");
       assert.equal(trigger().closest("[data-bitsnap-checkout]"), null, "the trigger is outside the root");
       collect(`full ${presentation}`);
+    });
+
+    it(`renders the discount lines, the at-checkout note and the sign-in hint (${presentation})`, async () => {
+      // 2 × 25,00 + 49,90 = 99,90 zł.
+      discountAnswer = {
+        currency: "PLN",
+        itemsSubtotalMinor: "9990",
+        authenticated: true,
+        discountOutcome: {
+          applied: [{ kind: "customer", minor: "999", bp: 1000 }],
+          struck: [{ kind: "coupon", minor: "500", code: "lato" }],
+          customerWon: true,
+        },
+        productsAfterDiscountsMinor: "8991",
+      };
+      await mount({ presentation, appearance: { elements: merchantElements() } });
+      await add("var1", 2);
+      await add("prod2", 1);
+      await open();
+      await settle(60);
+      assert.ok($('[data-bitsnap-checkout-slot="discounts"].merchant-discounts'), "the discount block renders with its slot class");
+      assert.ok($('[data-bitsnap-checkout-discount="applied"]'), "the applied line renders");
+      assert.ok($('[data-bitsnap-checkout-discount="struck"] s'), "the struck line renders");
+      assert.ok($('[data-bitsnap-checkout-notice="discount-struck-reason"]'), "the reason renders");
+      assert.ok($('[data-bitsnap-checkout-notice="customer-discount-at-checkout"]'), "the at-checkout note renders");
+      collect(`discounts ${presentation}`);
+      await unmountAll();
+
+      discountAnswer = { currency: "", itemsSubtotalMinor: "0", customerDiscountsAvailable: true, productsAfterDiscountsMinor: "0" };
+      await mount({ presentation });
+      await open();
+      await settle(60);
+      assert.ok($('[data-bitsnap-checkout-notice="customer-discount-sign-in"]'), "the sign-in hint renders");
+      collect(`discount hint ${presentation}`);
     });
 
     it(`renders the loading, failed and empty states (${presentation})`, async () => {
@@ -675,9 +713,15 @@ describe("cart class graph, static backstop", () => {
     ]) {
       assert.ok(names.includes(expected), `the graph misses ${expected}`);
     }
-    // The entry does not reach the rest of the SDK, apart from three small shared helpers
-    // (the host list and the cookie reader of analytics, and the panel's host setting).
-    const sharedHelpers = ["src/consent/core/hosts.ts", "src/consent/core/cookie.ts", "src/panel/config.ts"];
+    // The entry does not reach the rest of the SDK, apart from four small shared helpers
+    // (the host list and the cookie reader of analytics, the panel's host setting, and the
+    // panel session reader the drawer uses to show a signed-in buyer's discounts).
+    const sharedHelpers = [
+      "src/consent/core/hosts.ts",
+      "src/consent/core/cookie.ts",
+      "src/panel/config.ts",
+      "src/panel/session-storage.ts",
+    ];
     const outside = names.filter(
       (name) =>
         (/^src\/(panel|returns|course|chat|consent|catalog|viewer3d|ui)\//.test(name) ||

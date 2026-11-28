@@ -154,6 +154,11 @@ export const CHECKOUT_SLOT_NAMES = [
   "options",
   /** The footer: total, note, checkout button and its hint and error. Always visible. */
   "footer",
+  /**
+   * The buyer's discounts above the total: the ones that apply, the ones that
+   * lost (struck through, with the reason). Only when the server sent them.
+   */
+  "discounts",
   "summary",
   "totalLabel",
   "totalValue",

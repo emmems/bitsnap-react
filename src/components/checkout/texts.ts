@@ -89,6 +89,28 @@ export type CheckoutTexts = {
   coupon: string;
   /** Note under the cart total. */
   extrasCalculatedNext: string;
+  /** Note under the cart total when the discounts are already shown in the cart. */
+  shippingTaxesNext: string;
+  /** Customer discount line; `{percent}` is its percentage. */
+  discountCustomer: string;
+  /** Customer discount line when its percentage is not known. */
+  discountCustomerNoPercent: string;
+  /** Club discount line. */
+  discountClub: string;
+  /** Club discount line with the club's name, `{name}`. */
+  discountClubNamed: string;
+  /** Coupon discount line. */
+  discountCoupon: string;
+  /** Coupon discount line with its code, `{code}`. */
+  discountCouponNamed: string;
+  /** Read by screen readers after a struck discount amount. */
+  discountNotApplied: string;
+  /** Under the struck discounts: why they do not apply. */
+  discountStruckReason: string;
+  /** For a buyer who is not signed in, in a shop with customer discounts. */
+  customerDiscountSignInHint: string;
+  /** By the checkout button when the customer discount applies (no express buttons then). */
+  customerDiscountAtCheckout: string;
   /** Error shown when the products of the cart could not be loaded. */
   loadFailed: string;
   /** Button that loads the cart again. */
@@ -185,6 +207,18 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     coupon: "Coupon",
     extrasCalculatedNext:
       "Discounts, shipping and taxes are calculated at the next step",
+    shippingTaxesNext: "Shipping and taxes are calculated at the next step",
+    discountCustomer: "Your discount −{percent}%",
+    discountCustomerNoPercent: "Your discount",
+    discountClub: "Club discount",
+    discountClubNamed: "Club discount · {name}",
+    discountCoupon: "Discount code",
+    discountCouponNamed: "Code {code}",
+    discountNotApplied: "not applied",
+    discountStruckReason: "Doesn't combine — we picked the better discount",
+    customerDiscountSignInHint:
+      "Have a regular customer discount? You can sign in at checkout.",
+    customerDiscountAtCheckout: "We'll apply your discount at checkout.",
     loadFailed: "Could not load your cart.",
     retry: "Try again",
     paymentMethodLegend: "How would you like to pay?",
@@ -265,6 +299,18 @@ export const CHECKOUT_TEXT_TABLES: LocaleTables<CheckoutTextKey> = {
     paymentForCart: "Płatność za koszyk",
     coupon: "Kupon",
     extrasCalculatedNext: "Rabaty, dostawa i podatki w następnym kroku",
+    shippingTaxesNext: "Dostawa i podatki w następnym kroku",
+    discountCustomer: "Rabat dla Ciebie −{percent}%",
+    discountCustomerNoPercent: "Rabat dla Ciebie",
+    discountClub: "Rabat klubowy",
+    discountClubNamed: "Rabat klubowy · {name}",
+    discountCoupon: "Kod rabatowy",
+    discountCouponNamed: "Kod {code}",
+    discountNotApplied: "nie naliczono",
+    discountStruckReason: "Nie łączy się — wybraliśmy korzystniejszy rabat",
+    customerDiscountSignInHint:
+      "Masz rabat stałego klienta? Zalogujesz się w kasie.",
+    customerDiscountAtCheckout: "Rabat dla Ciebie naliczymy w kasie.",
     loadFailed: "Nie udało się wczytać koszyka.",
     retry: "Spróbuj ponownie",
     paymentMethodLegend: "Jak chcesz zapłacić?",

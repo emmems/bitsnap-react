@@ -1,5 +1,6 @@
 import React from "react";
 import { useCheckoutSlot } from "./appearance.context";
+import type { CartDiscountLine, CartDiscountsView } from "./cart-discounts";
 import { useCartController } from "./cart-controller";
 import { catalogUnitPrice } from "./cart-view";
 import CountrySelector from "./CountrySelector";
@@ -228,6 +229,7 @@ export function CartFooter({
       isCheckingOut,
       canCheckout,
       error: shownError,
+      discounts,
     },
     shown,
   } = useCheckoutBlock();
@@ -248,6 +250,9 @@ export function CartFooter({
   const countryRequiredText = useCheckoutText("countryRequired");
   const extrasCalculatedNextText = useCheckoutText("extrasCalculatedNext");
   const reviewPricesText = useCheckoutText("reviewPrices");
+  const shippingTaxesNextText = useCheckoutText("shippingTaxesNext");
+  const signInHintText = useCheckoutText("customerDiscountSignInHint");
+  const discountAtCheckoutText = useCheckoutText("customerDiscountAtCheckout");
 
   if (status === "loading") {
     return <FooterSkeleton footer={footer} skeleton={skeleton} />;
@@ -262,6 +267,9 @@ export function CartFooter({
       className={cx("bsc-footer", footer.className)}
       style={footer.style}
     >
+      {discounts?.outcome != null && (
+        <CartDiscountLines discounts={discounts} currency={currency} locale={locale} />
+      )}
       <div
         data-bitsnap-checkout-slot="summary"
         className={cx("bsc-summary", summary.className)}
@@ -279,15 +287,26 @@ export function CartFooter({
           className={cx("bsc-total-value", totalValue.className)}
           style={totalValue.style}
         >
-          {totalComplete ? formatCurrency(total, currency, locale) : "…"}
+          {discounts?.outcome != null
+            ? discounts.pending
+              ? "…"
+              : formatCurrency(discounts.totalAfterDiscounts, currency, locale)
+            : totalComplete
+              ? formatCurrency(total, currency, locale)
+              : "…"}
         </p>
         <p
           data-bitsnap-checkout-slot="summaryNote"
           className={cx("bsc-note", summaryNote.className)}
           style={summaryNote.style}
         >
-          {extrasCalculatedNextText}
+          {discounts?.outcome != null ? shippingTaxesNextText : extrasCalculatedNextText}
         </p>
+        {discounts?.signInHint === true && (
+          <p data-bitsnap-checkout-notice="customer-discount-sign-in" className="bsc-discount-note">
+            {signInHintText}
+          </p>
+        )}
       </div>
       {showReviewPrices && (
         <p
@@ -312,6 +331,11 @@ export function CartFooter({
         {isCheckingOut && <span className="bsc-spinner" aria-hidden="true" />}
         <span className="bsc-cta-label">{nextStepText}</span>
       </button>
+      {discounts?.outcome?.customerWon === true && (
+        <p data-bitsnap-checkout-notice="customer-discount-at-checkout" className="bsc-hint">
+          {discountAtCheckoutText}
+        </p>
+      )}
       {onContinueShopping != null && (
         <button
           type="button"
@@ -336,6 +360,102 @@ export function CartFooter({
           style={error.style}
         >
           {shownError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Basis points as a percentage: 1000 → "10", 1250 → "12,5" (Polish), "12.5" (English). */
+function formatPercent(bp: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(bp / 100);
+  } catch {
+    return String(bp / 100);
+  }
+}
+
+/**
+ * The buyer's discounts above the total, as the Bitsnap checkout shows them
+ * (C5): the customer discount never adds to the club or the coupon, the better
+ * one applies. The ones that apply take their amount off; the ones that lost
+ * are struck through and muted, a screen reader hears "not applied", and one
+ * line says why. While a newer cart is asked, the amounts show "…".
+ */
+function CartDiscountLines({
+  discounts,
+  currency,
+  locale,
+}: {
+  discounts: CartDiscountsView;
+  currency: string;
+  locale: string;
+}) {
+  const slot = useCheckoutSlot("discounts");
+  const customerText = useCheckoutText("discountCustomer");
+  const customerNoPercentText = useCheckoutText("discountCustomerNoPercent");
+  const clubText = useCheckoutText("discountClub");
+  const clubNamedText = useCheckoutText("discountClubNamed");
+  const couponText = useCheckoutText("discountCoupon");
+  const couponNamedText = useCheckoutText("discountCouponNamed");
+  const notAppliedText = useCheckoutText("discountNotApplied");
+  const struckReasonText = useCheckoutText("discountStruckReason");
+
+  const outcome = discounts.outcome;
+  if (outcome == null) {
+    return null;
+  }
+  const label = (line: CartDiscountLine) =>
+    line.kind === "customer"
+      ? line.bp != null
+        ? customerText.replace("{percent}", formatPercent(line.bp, locale))
+        : customerNoPercentText
+      : line.kind === "club"
+        ? line.name != null
+          ? clubNamedText.replace("{name}", line.name)
+          : clubText
+        : line.code != null
+          ? couponNamedText.replace("{code}", line.code.toUpperCase())
+          : couponText;
+  const amount = (line: CartDiscountLine) =>
+    discounts.pending ? "…" : `\u2212${formatCurrency(line.minor, currency, locale)}`;
+
+  return (
+    <div
+      data-bitsnap-checkout-slot="discounts"
+      className={cx("bsc-discounts", slot.className)}
+      style={slot.style}
+    >
+      <ul>
+        {outcome.applied.map((line, i) => (
+          <li
+            key={`applied-${line.kind}-${i}`}
+            data-bitsnap-checkout-discount="applied"
+            data-bitsnap-checkout-discount-kind={line.kind}
+            className="bsc-discount"
+          >
+            <span>{label(line)}</span>
+            <span className="bsc-line-price bsc-discount-sale">{amount(line)}</span>
+          </li>
+        ))}
+        {outcome.struck.map((line, i) => (
+          <li
+            key={`struck-${line.kind}-${i}`}
+            data-bitsnap-checkout-discount="struck"
+            data-bitsnap-checkout-discount-kind={line.kind}
+            className="bsc-discount bsc-discount-struck"
+          >
+            <span>{label(line)}</span>
+            <span className="bsc-line-price">
+              <s className="bsc-price-regular">{amount(line)}</s>
+              <span data-bitsnap-checkout-part="sr"> ({notAppliedText})</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {outcome.struck.length > 0 && (
+        <p data-bitsnap-checkout-notice="discount-struck-reason" className="bsc-discount-note">
+          {struckReasonText}
         </p>
       )}
     </div>

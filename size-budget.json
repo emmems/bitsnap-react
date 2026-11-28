@@ -9,7 +9,7 @@
         "node_modules/dompurify/",
         "node_modules/zod/"
       ],
-      "jsGzipKB": 180.1
+      "jsGzipKB": 181.1
     },
     "cart-main-ns": {
       "forbidStatic": [
@@ -62,7 +62,7 @@
     }
   },
   "css": {
-    "dist/cart.css": 4.5,
+    "dist/cart.css": 4.52,
     "dist/index.css": 26.0
   },
   "maxDependencies": 27,

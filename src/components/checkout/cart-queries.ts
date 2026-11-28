@@ -1,4 +1,10 @@
 import { keepPreviousData } from "@tanstack/react-query";
+import {
+  fetchCartDiscountContext,
+  shortHash,
+  type CartDiscountContext,
+  type CartDiscountRequest,
+} from "./cart-discounts";
 import { fetchCartProducts, type CartProductsAnswer } from "./CartProvider";
 import type { Err } from "./lib/err";
 import { normalizeLocale, getLocale } from "./locale";
@@ -92,6 +98,41 @@ export function cartPaymentMethodsQuery(
     queryFn: (): Promise<PaymentMethodChoice | null> =>
       fetchChoice().catch(() => null),
     staleTime: 60_000,
+    retry: false,
+  } as const;
+}
+
+/** How long the buyer's discounts count as fresh (reopen, focus). */
+export const CART_DISCOUNTS_STALE_MS = 30_000;
+
+/**
+ * The buyer's discounts for the cart (`GetCartDiscountContext`). The key
+ * follows the project, the lines (ids, quantities, pay-what-you-want amounts),
+ * the coupon, a short fingerprint of the stored panel session and the locale.
+ * A failure is `null` (the footer as before), never retried: the next change
+ * of the key asks again.
+ */
+export function cartDiscountsQuery(
+  request: CartDiscountRequest | undefined,
+) {
+  return {
+    queryKey: [
+      "cart-discounts",
+      request?.host,
+      request?.projectID,
+      request?.items
+        .map((item) => `${item.productId}:${item.quantity}:${item.amount ?? ""}`)
+        .join(","),
+      request?.couponCode ?? "",
+      request?.panelSession != null
+        ? `${request.panelSession.host}:${shortHash(request.panelSession.token)}`
+        : "",
+      normalizeLocale(request?.locale) ?? getLocale(),
+    ],
+    queryFn: (): Promise<CartDiscountContext | null> =>
+      request == null ? Promise.resolve(null) : fetchCartDiscountContext(request),
+    enabled: request != null,
+    staleTime: CART_DISCOUNTS_STALE_MS,
     retry: false,
   } as const;
 }

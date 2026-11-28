@@ -755,10 +755,11 @@ built-in styles):
 | `paymentMethodLogos` | Row of logos in a payment method card (only when the server sent logos for it) |
 | `paymentMethodLogo`  | One logo in that row; `.bsc-method-logo-chip` when it sits on a white tile |
 | `footer`             | Total, note and checkout button; always visible |
+| `discounts`          | The buyer's discounts above the total (see below); only when the server sent them |
 | `summary`            | Total row                                   |
 | `totalLabel`         | "Total" label                               |
-| `totalValue`         | Total amount                                |
-| `summaryNote`        | "Discounts, delivery and taxes in the next step" |
+| `totalValue`         | Total amount (the products after discounts while `discounts` shows) |
+| `summaryNote`        | "Discounts, delivery and taxes in the next step"; "Delivery and taxes in the next step" while `discounts` shows |
 | `checkoutButton`     | "Go to checkout" button                     |
 | `continueShopping`   | "Continue shopping" under the checkout button (dialog only) |
 | `retryButton`        | "Try again" after a failed load             |
@@ -767,6 +768,22 @@ built-in styles):
 | `error`              | Checkout error message                      |
 | `skeleton`           | Loading placeholder                         |
 | `deliveryText`, `countryDropdown`, `countrySearch`, `countryOption` | Accepted, render nothing since 1.32.0 |
+
+**The buyer's discounts.** When the buyer has a discount before checkout (a
+customer discount, a club or the cart's coupon), the footer lists it in the
+`discounts` slot as the Bitsnap checkout does: a customer discount never adds
+to the club or the coupon, the better one applies and the other is struck
+through, with a line that says why. Each line is an `li` with
+`data-bitsnap-checkout-discount="applied" | "struck"` and
+`data-bitsnap-checkout-discount-kind="customer" | "club" | "coupon"`; the
+reason is `[data-bitsnap-checkout-notice="discount-struck-reason"]`. The total
+then shows the products after discounts and `summaryNote` switches to
+"Delivery and taxes in the next step". While the customer discount applies,
+the express buttons are not shown (they would charge without it) and
+`[data-bitsnap-checkout-notice="customer-discount-at-checkout"]` says the
+discount applies at checkout. A buyer who is not signed in, in a shop with
+customer discounts, sees `[data-bitsnap-checkout-notice="customer-discount-sign-in"]`
+under the total. On any failure the footer stays as before.
 
 The same names are rendered as `data-bitsnap-checkout-slot` attributes, and the
 checkout root carries `data-bitsnap-checkout`, so you can also target the slots
@@ -861,6 +878,7 @@ reset on the elements listed above):
 | `paymentMethodLogos`, `paymentMethodLogo` | layout, `gap`, `margin-top`, `height`; hidden when empty; the chip tile's `padding`, `border-radius`, `background-color`, `box-shadow`; the image's `width`, `height`, `max-width`, `object-fit` |
 | `paymentButtons` | `flex`, `min-width`; hidden when empty |
 | `footer`, `summary`, `totalLabel`, `totalValue`, `summaryNote` | layout, `padding`, `border-top`, `background-color`; `font-size`, `font-weight`, `color`, `text-align` of the texts |
+| `discounts` | layout, `gap`, `margin-bottom`; each line's `font-size`; `color` and `font-weight` of an applied amount; `color` of a struck line and its reason |
 | `checkoutButton` | layout, `width`, `min-height`, `margin`, `padding`, `border-radius`, `background-color`, `color`, `font-size`, `font-weight`, `cursor`; `background-color` on hover, `outline` on keyboard focus, `opacity` and `cursor` when disabled or busy |
 | `retryButton`, `emptyAction` | layout, `min-height`, `padding`, `border`, `border-radius`, `color`, `font-size`, `font-weight`; `background-color` on hover, `outline` on keyboard focus |
 | `emptyState`, `error` | `font-size`, `line-height`, `color`, `text-align` |

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import React from "react";
 import { useInstrumentContext } from "@/src/analytics/instrument";
 import { buyErrorText } from "./buy-error";
@@ -8,10 +13,23 @@ import {
   readLocalCartLines,
   readLocalCartSignature,
   useCartProvider,
+  getCheckoutSelection,
   warmWalletAvailability,
   type LocalCartLine,
 } from "./CartProvider";
-import { cartCountriesQuery, cartPaymentMethodsQuery } from "./cart-queries";
+import {
+  cartDiscountsView,
+  findPanelSession,
+  MAX_DISCOUNT_ITEMS,
+  MAX_DISCOUNT_QUANTITY,
+  type CartDiscountItem,
+  type CartDiscountsView,
+} from "./cart-discounts";
+import {
+  cartCountriesQuery,
+  cartDiscountsQuery,
+  cartPaymentMethodsQuery,
+} from "./cart-queries";
 import {
   catalogUnitPrice,
   hasPayWhatYouWantLine,
@@ -19,6 +37,7 @@ import {
   type CartViewLine,
   type WalletItem,
 } from "./cart-view";
+import { HOST } from "./constants";
 import { sendAnalyticEvent } from "./frontent.analytics";
 import { isErr } from "./lib/err";
 import { getLocale } from "./locale";
@@ -87,9 +106,21 @@ export type CartController = {
   /** Some price changed: the buyer checks the total and clicks again. */
   showReviewPrices: boolean;
 
+  /**
+   * The buyer's discounts before checkout (`GetCartDiscountContext`): the lines
+   * that apply and the ones that lost, the products after discounts, or a hint
+   * to sign in at checkout. `null` (any failure, an answer about another cart)
+   * shows the footer as before.
+   */
+  discounts: CartDiscountsView | null;
+
   /** Express buttons (D12, N1, N2). */
   wallets: {
-    /** Mounted once the server confirmed the cart; kept until it is empty or the drawer closes. */
+    /**
+     * Mounted once the server confirmed the cart; kept until it is empty or the
+     * drawer closes. Not mounted while the customer discount applies: the
+     * express path would charge the price without it.
+     */
     mounted: boolean;
     /** No click or key starts a wallet while a line is unconfirmed or price-marked. */
     inert: boolean;
@@ -313,6 +344,102 @@ function useCartControllerState(
   const paymentMethodsRef = React.useRef<HTMLDivElement>(null);
 
   const countries = isErr(availableCountries) ? [] : availableCountries;
+
+  // The buyer's discounts (customer, club, coupon), asked once the drawer is
+  // open with lines the server can price. The panel session is read
+  // synchronously at each opening, so a signed-in buyer is never asked
+  // anonymously first and the express buttons are held from the first render.
+  // The lines follow quantity changes with the same delay as the payment
+  // methods; until the new answer, the last one keeps its labels and shows "…"
+  // for its amounts.
+  const panelSession = React.useMemo(
+    () =>
+      open === false || projectID == null
+        ? undefined
+        : findPanelSession(projectID, HOST),
+    [open, projectID],
+  );
+  const couponCode = getCheckoutSelection().couponCode || undefined;
+  const discountItems: CartDiscountItem[] = view.lines.map((item) => {
+    // The amount `/buy` sends: the buyer's own, else the shown suggested price.
+    const amount =
+      item.payWhatYouWant === "amount"
+        ? item.line.amount
+        : item.payWhatYouWant === "suggested"
+          ? item.unitPrice
+          : undefined;
+    return {
+      productId: item.line.productID,
+      quantity: item.line.quantity,
+      ...(amount != null ? { amount } : {}),
+    };
+  });
+  const discountItemsSignature =
+    open !== false &&
+    cart.unavailable.length === 0 &&
+    discountItems.length > 0 &&
+    discountItems.length <= MAX_DISCOUNT_ITEMS &&
+    discountItems.every(
+      (item) => item.quantity >= 1 && item.quantity <= MAX_DISCOUNT_QUANTITY,
+    )
+      ? JSON.stringify(discountItems)
+      : undefined;
+  const [askedDiscountItems] = useDebounced(
+    discountItemsSignature,
+    PAYMENT_METHODS_DEBOUNCE_MS,
+  );
+  const { data: discountData, isPlaceholderData: isDiscountPlaceholder } =
+    useQuery({
+      ...cartDiscountsQuery(
+        askedDiscountItems != null && projectID != null
+          ? {
+              host: HOST,
+              projectID,
+              locale,
+              items: JSON.parse(askedDiscountItems) as CartDiscountItem[],
+              ...(couponCode != null ? { couponCode } : {}),
+              ...(panelSession != null ? { panelSession } : {}),
+            }
+          : undefined,
+      ),
+      placeholderData: keepPreviousData,
+    });
+  // The previous answer stands in for a new one only within one opening: a
+  // reopened drawer (maybe with another cart) waits for its own first answer.
+  const discountsAnswered = React.useRef(false);
+  const discountsOpen = React.useRef(open);
+  if (discountsOpen.current !== open) {
+    discountsOpen.current = open;
+    discountsAnswered.current = false;
+  }
+  if (discountData !== undefined && !isDiscountPlaceholder) {
+    discountsAnswered.current = true;
+  }
+  const discountContext =
+    isDiscountPlaceholder && !discountsAnswered.current
+      ? undefined
+      : discountData;
+  const discounts =
+    discountItemsSignature == null
+      ? null
+      : cartDiscountsView(discountContext, {
+          currency: view.currency,
+          total: view.sum,
+          totalComplete: view.sumComplete,
+          pending:
+            isDiscountPlaceholder || askedDiscountItems !== discountItemsSignature,
+        });
+  // A signed-in buyer's express buttons wait for this opening's first answer
+  // (any failure is an answer), so they do not show and then vanish when the
+  // customer discount applies. The server's word on the customer discount
+  // holds them even when its amounts are not this cart's (the footer then
+  // shows the cart's own amounts): the express path would charge without it.
+  const holdExpressButtons =
+    (discountItemsSignature != null &&
+      discountContext?.outcome?.customerWon === true) ||
+    (panelSession != null &&
+      discountItemsSignature != null &&
+      discountContext === undefined);
 
   const lines = view.lines;
   const itemCount = lines.reduce((sum, item) => sum + item.line.quantity, 0);
@@ -673,8 +800,9 @@ function useCartControllerState(
     priceWas: cart.priceWas,
     isRefreshing: cart.isRefreshing,
     showReviewPrices: showReviewPrices && lines.length > 0,
+    discounts,
     wallets: {
-      mounted: walletsMounted.current,
+      mounted: walletsMounted.current && !holdExpressButtons,
       inert: cart.walletsInert || unavailable.length > 0,
       oneClick,
       items: walletItems(view),

@@ -1079,7 +1079,8 @@
     background-color: var(--bsc-bg);
 }
 
-[data-bitsnap-checkout] .bsc-summary {
+[data-bitsnap-checkout] .bsc-summary,
+[data-bitsnap-checkout] .bsc-discount {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: baseline;
@@ -1100,11 +1101,35 @@
     white-space: nowrap;
 }
 
-[data-bitsnap-checkout] .bsc-note {
+[data-bitsnap-checkout] .bsc-note,
+[data-bitsnap-checkout] .bsc-discount-note,
+[data-bitsnap-checkout] .bsc-discount-struck {
     grid-column: 1 / -1;
     font-size: var(--bsc-t13);
     line-height: 1.4;
     color: var(--bsc-muted);
+}
+
+/* The buyer's discounts above the total, in its columns (each line on the
+ * summary's grid, rule above; amounts in
+ * `.bsc-line-price`): applied in the sale colour; the ones that lost muted
+ * like the note (rule above) and struck like a regular price
+ * (`.bsc-price-regular`); the reason under them as a `.bsc-discount-note`,
+ * which stays on a landscape phone, unlike the note. */
+[data-bitsnap-checkout] .bsc-discounts,
+[data-bitsnap-checkout] .bsc-discounts :where(ul) {
+    display: grid;
+    gap: 4px;
+}
+
+[data-bitsnap-checkout] .bsc-discounts {
+    margin-bottom: 4px;
+    font-size: var(--bsc-t13);
+}
+
+[data-bitsnap-checkout] .bsc-discount-sale {
+    font-weight: 600;
+    color: var(--bsc-sale);
 }
 
 /* A landscape phone (at most 500 px high): the footer gives the lines its
